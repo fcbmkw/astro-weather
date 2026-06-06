@@ -1174,8 +1174,8 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
 </style>""", unsafe_allow_html=True)
 
-    # Nav row 1: [← Đêm trước] [date dropdown] [Đêm kế tiếp →]
-    nav1, nav2, nav4 = st.columns([0.55, 1.20, 0.65])
+    # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
+    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.36, 0.72, 0.40, 1.50, 0.26])
     with nav1:
         if st.button("⬅️ Đêm trước", use_container_width=True, key="btn_prev"):
             if st.session_state.day_offset > 0:
@@ -1194,9 +1194,6 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             if st.session_state.day_offset < 6:
                 st.session_state.day_offset += 1
                 st.rerun()
-
-    # Nav row 2: [location dropdown] [LPM]
-    nav3, nav_lpm = st.columns([1.0, 0.18])
     with nav3:
         loc_opts = list(LOCATION_DATABASE.keys())
         if st.session_state.is_custom_point:
