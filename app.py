@@ -657,8 +657,9 @@ desired_slots = [
 # Filter out slots that are already in the past (only for tonight, day_offset=0)
 _now_naive = _now_jst.replace(tzinfo=None)
 def _slot_is_future(yr, mo, dy, hr):
-    slot_dt = datetime(yr, mo, dy, hr, 0)
-    return slot_dt >= _now_naive
+    # Include the current hour slot (e.g. 20:01 → still show 20:00 row)
+    slot_dt = datetime(yr, mo, dy, hr, 0) + timedelta(hours=1)
+    return slot_dt > _now_naive
 
 if st.session_state.day_offset == 0:
     desired_slots = [(yr,mo,dy,hr,lbl,dpfx) for yr,mo,dy,hr,lbl,dpfx in desired_slots
@@ -985,9 +986,9 @@ st.markdown("""
         [data-testid="stTable"] td:nth-child(5), [data-testid="stTable"] th:nth-child(5) { width: 35% !important; }
     </style>
 """, unsafe_allow_html=True)
-col_left, col_right = st.columns([1.1, 2.5])
+col_left, col_right = st.columns([2.5, 1.1])
 
-with col_left:
+with col_right:
     # Bortle
     st.markdown(f"""
     <div class="metric-card">
@@ -1135,7 +1136,7 @@ with col_left:
         st.markdown(_forecast_html, unsafe_allow_html=True)
 
 
-with col_right:
+with col_left:
     # Inject CSS:
     # 1. Orange styling for date selectbox (nav2)
     # 2. Compact styling for location selectbox (nav3) — smaller font, tighter padding
@@ -1253,9 +1254,9 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
                 icon, col = '\U0001f325\ufe0f', '#94a3b8'
             else:
                 icon, col = '\u2601\ufe0f', '#64748b'
-            return (f'<div style="display:flex;align-items:center;gap:5px;">'
-                    f'<span style="font-size:18px;line-height:1;">{icon}</span>'
-                    f'<span style="font-size:12px;color:{col};font-weight:600;">{pct_str}</span>'
+            return (f'<div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">'
+                    f'<span style="font-size:15px;line-height:1;">{icon}</span>'
+                    f'<span style="font-size:11px;color:{col};font-weight:600;">{pct_str}</span>'
                     f'</div>')
 
         def _wind_icon(ws_str):
@@ -1275,24 +1276,24 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             stars      = row['📸']
             rows_html += (
                 f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
-                f'<td style="padding:8px 12px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
-                f'<td style="padding:8px 12px;width:140px;max-width:140px;">{cloud_cell}</td>'
-                f'<td style="padding:8px 12px;color:#fb923c;">{humid_val}</td>'
-                f'<td style="padding:8px 12px;color:#fb923c;">{wind_cell}</td>'
-                f'<td style="padding:8px 12px;font-size:16px;letter-spacing:2px;">{stars}</td>'
+                f'<td style="padding:8px 8px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
+                f'<td style="padding:8px 8px;overflow:hidden;">{cloud_cell}</td>'
+                f'<td style="padding:8px 8px;color:#fb923c;">{humid_val}</td>'
+                f'<td style="padding:8px 8px;color:#fb923c;">{wind_cell}</td>'
+                f'<td style="padding:8px 8px;font-size:16px;letter-spacing:1px;">{stars}</td>'
                 f'</tr>'
             )
 
         table_html = f"""
 <div style="background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;overflow:hidden;margin-bottom:8px;box-shadow:0 0 20px rgba(234,88,12,0.10);">
-  <table style="width:100%;border-collapse:collapse;font-size:14px;font-family:'Segoe UI',sans-serif;">
+  <table style="width:100%;border-collapse:collapse;font-size:14px;font-family:'Segoe UI',sans-serif;table-layout:fixed;">
     <thead>
       <tr style="background:linear-gradient(90deg,rgba(154,52,18,0.90),rgba(120,40,10,0.75));border-bottom:2px solid rgba(234,88,12,0.55);">
-        <th style="padding:10px 12px;text-align:left;color:#fb923c;font-weight:700;">⏰</th>
-        <th style="padding:10px 12px;text-align:left;color:#fb923c;font-weight:700;width:120px;min-width:120px;max-width:140px;">🌤️</th>
-        <th style="padding:10px 12px;text-align:left;color:#fb923c;font-weight:700;">💧</th>
-        <th style="padding:10px 12px;text-align:left;color:#fb923c;font-weight:700;">💨</th>
-        <th style="padding:10px 12px;text-align:left;color:#fb923c;font-weight:700;">📸</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:14%;">⏰</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:20%;">🌤️</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:13%;">💧</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
       </tr>
     </thead>
     <tbody>{rows_html}</tbody>
