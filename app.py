@@ -1174,16 +1174,14 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
 </style>""", unsafe_allow_html=True)
 
-    # Nav controls row: [← prev] [date dropdown] [location dropdown] [LPM] [next →]
-    nav1, nav2, nav3, nav_lpm, nav4 = st.columns([0.50, 1.05, 1.70, 0.38, 0.58])
+    # Nav row 1: [← Đêm trước] [date dropdown] [Đêm kế tiếp →]
+    nav1, nav2, nav4 = st.columns([0.55, 1.20, 0.65])
     with nav1:
         if st.button("⬅️ Đêm trước", use_container_width=True, key="btn_prev"):
             if st.session_state.day_offset > 0:
                 st.session_state.day_offset -= 1
                 st.rerun()
     with nav2:
-        # Dùng dynamic key theo day_offset → Streamlit tạo widget mới mỗi khi offset thay đổi
-        # → không bao giờ hiển thị ngày cũ bị cache
         sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
                                  label_visibility="collapsed",
                                  key=f"sel_date_{st.session_state.day_offset}")
@@ -1191,6 +1189,14 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
         if new_off != st.session_state.day_offset:
             st.session_state.day_offset = new_off
             st.rerun()
+    with nav4:
+        if st.button("Đêm kế tiếp ➡️", use_container_width=True, key="btn_next"):
+            if st.session_state.day_offset < 6:
+                st.session_state.day_offset += 1
+                st.rerun()
+
+    # Nav row 2: [location dropdown] [LPM]
+    nav3, nav_lpm = st.columns([1.0, 0.18])
     with nav3:
         loc_opts = list(LOCATION_DATABASE.keys())
         if st.session_state.is_custom_point:
@@ -1218,11 +1224,6 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             f'</div>',
             unsafe_allow_html=True
         )
-    with nav4:
-        if st.button("Đêm kế tiếp ➡️", use_container_width=True, key="btn_next"):
-            if st.session_state.day_offset < 6:
-                st.session_state.day_offset += 1
-                st.rerun()
 
     # Table — custom styled HTML card
     if weather_table_data:
