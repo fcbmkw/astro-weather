@@ -591,7 +591,7 @@ _night_base_jst = _now_jst  # the calendar day whose 18:00 starts "night 0"
 # *this* coming 18:00 (same calendar day), so no shift needed.
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
-    f"Đêm {(_night_base_jst+timedelta(days=i)).strftime('%d/%m')} → {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m')}"
+    f"Đêm {(_night_base_jst+timedelta(days=i)).strftime('%d/%m')} → Sáng {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m')}"
     for i in range(7)
 ]
 
@@ -1182,9 +1182,9 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 </style>""", unsafe_allow_html=True)
 
     # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
-    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.12, 0.48, 0.12, 1.50, 0.26])
+    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.50, 1.05, 0.58, 1.70, 0.38])
     with nav1:
-        if st.button("⬅️", use_container_width=True, key="btn_prev"):
+        if st.button("⬅️ Đêm trước", use_container_width=True, key="btn_prev"):
             if st.session_state.day_offset > 0:
                 st.session_state.day_offset -= 1
                 st.rerun()
@@ -1197,7 +1197,7 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             st.session_state.day_offset = new_off
             st.rerun()
     with nav4:
-        if st.button("➡️", use_container_width=True, key="btn_next"):
+        if st.button("Đêm kế tiếp ➡️", use_container_width=True, key="btn_next"):
             if st.session_state.day_offset < 6:
                 st.session_state.day_offset += 1
                 st.rerun()
