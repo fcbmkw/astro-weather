@@ -591,7 +591,7 @@ _night_base_jst = _now_jst  # the calendar day whose 18:00 starts "night 0"
 # *this* coming 18:00 (same calendar day), so no shift needed.
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
-    f"{(_night_base_jst+timedelta(days=i)).strftime('%d/%m')} → {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m')}"
+    f"Đêm {(_night_base_jst+timedelta(days=i)).strftime('%d/%m')} → {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m')}"
     for i in range(7)
 ]
 
@@ -1142,9 +1142,16 @@ with col_left:
     # 2. Compact styling for location selectbox (nav3) — smaller font, tighter padding
     st.markdown("""
 <style>
-/* ── Date selectbox: orange highlight ── */
-[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child,
-div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] > div:first-child {
+/* ── Date selectbox: shrink to fit content ── */
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
+    width: fit-content !important;
+    min-width: 0 !important;
+}
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] {
+    width: fit-content !important;
+    min-width: 0 !important;
+}
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child {
     background: rgba(154,52,18,0.60) !important;
     border: 1.5px solid rgba(234,88,12,0.75) !important;
     box-shadow: 0 0 8px rgba(234,88,12,0.18) !important;
@@ -1175,7 +1182,7 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 </style>""", unsafe_allow_html=True)
 
     # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
-    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.12, 0.72, 0.12, 1.50, 0.26])
+    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.12, 0.48, 0.12, 1.50, 0.26])
     with nav1:
         if st.button("⬅️", use_container_width=True, key="btn_prev"):
             if st.session_state.day_offset > 0:
