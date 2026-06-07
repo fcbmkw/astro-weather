@@ -857,20 +857,52 @@ class _TileControl(MacroElement):
 
 _TileControl().add_to(m)
 
-# Inject CSS to hide all tooltip text on star markers (but keep tooltip firing for click detection)
+# Inject CSS to style image tooltips nicely
 m.get_root().html.add_child(folium.Element("""
 <style>
-.star-tip .leaflet-tooltip { 
-    background: transparent !important; border: none !important;
-    box-shadow: none !important; color: transparent !important;
-    font-size: 0 !important; padding: 0 !important;
-    pointer-events: none !important;
+.leaflet-tooltip {
+    background: white !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important;
+    padding: 6px !important;
+    max-width: 240px !important;
 }
+.leaflet-tooltip::before { display: none !important; }
 </style>
 """))
 
+# ── LOCATION IMAGE POPUP ──────────────────────────────────────────────────────
+# Ảnh đặt trong thư mục images/ với tên file = số thứ tự địa danh, ví dụ: 1.jpg, 2.png, ...
+# Hỗ trợ jpg, jpeg, png, webp. Nếu không tìm thấy ảnh thì chỉ hiện tên.
+import os, base64
+
+def _get_loc_image_b64(loc_name: str):
+    """Tìm ảnh theo số thứ tự ở đầu tên địa danh (vd: '23. Hoshinomura...' → tìm images/23.*).
+    Trả về (base64_string, mime_type) hoặc (None, None) nếu không tìm thấy."""
+    num = loc_name.split(".")[0].strip()
+    img_dir = os.path.join(os.path.dirname(__file__), "images")
+    if not os.path.isdir(img_dir):
+        return None, None
+    for ext, mime in [("jpg","image/jpeg"),("jpeg","image/jpeg"),("png","image/png"),("webp","image/webp")]:
+        path = os.path.join(img_dir, f"{num}.{ext}")
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                return base64.b64encode(f.read()).decode(), mime
+    return None, None
+
 for loc_name, loc_coords in LOCATION_DATABASE.items():
     is_sel = abs(loc_coords[0]-st.session_state.lat)<0.001 and abs(loc_coords[1]-st.session_state.lon)<0.001
+    b64, mime = _get_loc_image_b64(loc_name)
+    if b64:
+        img_html = (f'<img src="data:{mime};base64,{b64}" '
+                    f'style="width:220px;max-height:150px;object-fit:cover;border-radius:6px;'
+                    f'display:block;margin-bottom:6px;">')
+    else:
+        img_html = ""
+    tooltip_html = (f'<div style="font-family:sans-serif;font-size:13px;font-weight:600;'
+                    f'color:#1e293b;max-width:230px;line-height:1.4;">'
+                    f'{img_html}{loc_name}</div>')
     folium.Marker(
         loc_coords,
         icon=folium.DivIcon(
@@ -878,7 +910,7 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
                  f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{"drop-shadow(0 0 6px gold)" if is_sel else "none"};'
                  f'cursor:pointer;">⭐</div>',
             icon_size=(24,24), icon_anchor=(12,12)),
-        tooltip=folium.Tooltip(loc_name, sticky=False, class_name="star-tip"),
+        tooltip=folium.Tooltip(tooltip_html, sticky=True, parse_html=False),
     ).add_to(m)
 
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
@@ -938,14 +970,18 @@ if map_data:
             bname, bcoords = matched
             _tip_key = f"{bcoords[0]:.4f},{bcoords[1]:.4f}"
             if _tip_key != st.session_state._last_tip:
-                st.session_state._last_tip       = None   # reset → click lại cùng sao lần sau không bị block
+                # Nếu click sao mới → xử lý và lưu key để chặn rerun kép
+                # Nếu click lại cùng sao → _tip_key == _last_tip → skip (không cần rerun)
+                st.session_state._last_tip       = _tip_key
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
-                # KHÔNG set map_center = bcoords → key cố định, map không recreate
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.rerun()
+        else:
+            # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
+            st.session_state._last_tip = None
 
     # ── Priority 2: free-click on empty map ──────────────────────────────────
     elif lc and lc != st.session_state._last_lc:
@@ -970,10 +1006,9 @@ if map_data:
             if abs(c_lat - st.session_state.lat) > 0.0001 or abs(c_lon - st.session_state.lon) > 0.0001:
                 st.session_state.lat             = c_lat
                 st.session_state.lon             = c_lon
-                # KHÔNG set map_center — đã lưu từ _ret_center ở trên
                 st.session_state.location_name   = fetch_location_name(c_lat, c_lon)
                 st.session_state.is_custom_point = True
-                st.session_state._last_tip       = None
+                st.session_state._last_tip       = None  # reset → click sao sau đó vẫn work
                 st.rerun()
 
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
