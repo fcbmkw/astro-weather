@@ -586,9 +586,12 @@ JST = timezone(timedelta(hours=9))
 # The past-data problem (18:00-23:59 gone after midnight): we fix it by
 # skipping slots that are in the past when rendering the table.
 _now_jst        = datetime.now(JST)
-_night_base_jst = _now_jst  # the calendar day whose 18:00 starts "night 0"
-# If current hour < 18 we're in the morning-after; night 0 still means
-# *this* coming 18:00 (same calendar day), so no shift needed.
+# If 00:00~05:59 → we're still in the previous night (18:00 yesterday → 06:00 today)
+# so shift base back 1 day to keep tonight's 00:00~06:00 slots visible
+if _now_jst.hour < 6:
+    _night_base_jst = _now_jst - timedelta(days=1)
+else:
+    _night_base_jst = _now_jst
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
     f"Evening {(_night_base_jst+timedelta(days=i)).strftime('%d/%m(%a)')} → Morning {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m(%a)')}"
@@ -601,7 +604,7 @@ next_date   = target_date + timedelta(days=1)
 moon_pct, moon_text = get_moon_phase_percent(target_date)
 
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 JMA+GFS+ECMWF")
+use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 hourly_data, _, _loc_utc_offset, _ep_label = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
 
@@ -1217,9 +1220,9 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 </style>""", unsafe_allow_html=True)
 
     # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
-    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.50, 1.05, 0.58, 1.70, 0.38])
+    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.42, 1.20, 0.36, 1.30, 0.26])
     with nav1:
-        if st.button("⬅️Previous", use_container_width=True, key="btn_prev"):
+        if st.button("⬅️ Previous", use_container_width=True, key="btn_prev"):
             if st.session_state.day_offset > 0:
                 st.session_state.day_offset -= 1
                 st.rerun()
@@ -1232,7 +1235,7 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             st.session_state.day_offset = new_off
             st.rerun()
     with nav4:
-        if st.button("Next➡️", use_container_width=True, key="btn_next"):
+        if st.button("Next ➡️", use_container_width=True, key="btn_next"):
             if st.session_state.day_offset < 6:
                 st.session_state.day_offset += 1
                 st.rerun()
