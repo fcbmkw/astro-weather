@@ -1222,7 +1222,7 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
     # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
     nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.42, 1.20, 0.36, 1.30, 0.26])
     with nav1:
-        if st.button("⬅️ Previous", use_container_width=True, key="btn_prev"):
+        if st.button("⬅️Previous", use_container_width=True, key="btn_prev"):
             if st.session_state.day_offset > 0:
                 st.session_state.day_offset -= 1
                 st.rerun()
@@ -1235,7 +1235,7 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             st.session_state.day_offset = new_off
             st.rerun()
     with nav4:
-        if st.button("Next ➡️", use_container_width=True, key="btn_next"):
+        if st.button("Next➡️", use_container_width=True, key="btn_next"):
             if st.session_state.day_offset < 6:
                 st.session_state.day_offset += 1
                 st.rerun()
