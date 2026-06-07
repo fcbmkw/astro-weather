@@ -591,7 +591,7 @@ _night_base_jst = _now_jst  # the calendar day whose 18:00 starts "night 0"
 # *this* coming 18:00 (same calendar day), so no shift needed.
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
-    f"Đêm {(_night_base_jst+timedelta(days=i)).strftime('%d/%m')} → Sáng {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m')}"
+    f"Đêm {(_night_base_jst+timedelta(days=i)).strftime('%d/%m(%a)')} → Sáng {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m(%a)')}"
     for i in range(7)
 ]
 
