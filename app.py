@@ -933,14 +933,14 @@ next_date   = target_date + timedelta(days=1)
 
 moon_pct, moon_text = get_moon_phase_percent(target_date)
 
-prefer_jma = (st.session_state.weather_source not in ["GFS", "ECMWF"])
-use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp")
-use_ecmwf  = (st.session_state.weather_source == "ECMWF")
+prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
+use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
+use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 hourly_data, _, _loc_utc_offset, _ep_label = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
 
 # ── AUTO-DETECT JMA COVERAGE cho ngày được chọn ───────────────────────────────
-# Thứ tự ưu tiên: JMA → GFS → ECMWF
-# JMA MSM chỉ có ~3-4 ngày. Nếu JMA hết data → tự động dùng GFS (không nhảy sang US label cũ)
+# JMA MSM chỉ có ~3-4 ngày. Nếu user chọn JMA nhưng ngày đó JMA toàn null
+# → tự động dùng GFS thay thế (prefer_jma=False) mà không cần user đổi tay.
 def _jma_has_data_for_date(hourly, date_prefix):
     """Trả về True nếu JMA có ít nhất 1 giá trị không-None cho ngày date_prefix."""
     times = hourly.get("time", [])
@@ -950,36 +950,23 @@ def _jma_has_data_for_date(hourly, date_prefix):
             return True
     return False
 
-def _gfs_has_data_for_date(hourly, date_prefix):
-    """Trả về True nếu GFS có ít nhất 1 giá trị không-None cho ngày date_prefix."""
-    times = hourly.get("time", [])
-    cc_gfs = hourly.get("cloud_cover_gfs_seamless", [])
-    for i, t in enumerate(times):
-        if t.startswith(date_prefix) and i < len(cc_gfs) and cc_gfs[i] is not None:
-            return True
-    return False
-
-# Auto-switch: JMA → GFS → ECMWF
+# Auto-switch: luôn kiểm tra JMA coverage nếu đang ở chế độ auto (kể cả khi đang dùng GFS)
 if st.session_state._source_auto and hourly_data:
     jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
               _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
-    gfs_ok = (_gfs_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
-              _gfs_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
-    cur = st.session_state.weather_source
-    if jma_ok and cur != "JMA":
+    if jma_ok and st.session_state.weather_source != "JMA":
+        # JMA có data → switch về JMA
         st.session_state.weather_source = "JMA"
         st.rerun()
-    elif not jma_ok and gfs_ok and cur != "GFS":
-        st.session_state.weather_source = "GFS"
-        st.rerun()
-    elif not jma_ok and not gfs_ok and cur != "ECMWF":
-        st.session_state.weather_source = "ECMWF"
+    elif not jma_ok and st.session_state.weather_source == "JMA":
+        # JMA không có data → switch sang GFS
+        st.session_state.weather_source = "US (GFS)"
         st.rerun()
 
 # Sau auto-switch, cập nhật lại flags theo source hiện tại
-prefer_jma = (st.session_state.weather_source not in ["GFS", "ECMWF"])
-use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp")
-use_ecmwf  = (st.session_state.weather_source == "ECMWF")
+prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
+use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
+use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 
 # UTC offset của location hiện tại (tính bằng giây) — dùng cho moon altitude
 loc_utc_offset_h = _loc_utc_offset / 3600.0  # đổi sang giờ, ví dụ JST=+9, CST=-6
@@ -1071,10 +1058,6 @@ for yr, mo, dy, hr_local, label, date_prefix in desired_slots:
         precip_val,_    = get_val(hourly_data, "precipitation",        idx, prefer_jma)
         if src1: sources_used.add(src1)
 
-    # Humidity correction: open-meteo models tend to over-report ~10%
-    # Apply -10 percentage points (floor at 0, cap at 100)
-    humid = max(0.0, min(100.0, humid - 10.0))
-
     if len(weather_table_data) == 0:
         current_cloud_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
 
@@ -1109,12 +1092,12 @@ if use_blend:
 elif "ECMWF" in sources_used:
     active_source_label = "EU (ECMWF IFS025)"
 elif "JMA" in sources_used and "GFS" in sources_used:
-    active_source_label = "JMA + GFS"
+    active_source_label = "JMA + US (GFS)"
 elif "GFS" in sources_used and prefer_jma:
-    # User chọn JMA nhưng JMA không có data → auto-fallback sang GFS
-    active_source_label = "GFS [auto-fallback]"
+    # User chọn JMA nhưng JMA không có data → auto-fallback
+    active_source_label = "US (GFS) [auto-fallback]"
 elif "GFS" in sources_used:
-    active_source_label = "GFS"
+    active_source_label = "US (GFS)"
 elif "JMA" in sources_used:
     active_source_label = "JMA"
 else:
@@ -1292,10 +1275,10 @@ if not is_bookmark:
     ).add_to(m)
 
 # Key cố định → component không bị recreate khi map_center thay đổi
-# KHÔNG truyền center= → map giữ nguyên vị trí đang nhìn sau mỗi rerun (không nhảy về)
 _map_key = "astro_map_main"
 map_data = st_folium(m, use_container_width=True, height=600, key=_map_key,
-                     returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom"],
+                     center=st.session_state.map_center,
+                     returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom", "center"],
 )
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
@@ -1306,16 +1289,20 @@ _lpm_url = (f"https://www.lightpollutionmap.info/"
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
-    # Zoom: lưu khi thay đổi, KHÔNG rerun — chỉ để nhớ zoom level cho lần sau
+    # Zoom: lưu khi thay đổi, không rerun
     new_zoom = map_data.get("zoom")
     if new_zoom is not None and new_zoom != st.session_state.zoom:
         st.session_state.zoom = new_zoom
-        # Không st.rerun() ở đây — zoom thay đổi không cần rerun
 
-    # KHÔNG lưu center từ map về session state.
-    # Lý do: mỗi khi pan/zoom, map trả về center mới → nếu lưu vào session_state
-    # → Streamlit detect thay đổi → rerun → map rebuild → bị refresh liên tục.
-    # map_center chỉ được update khi user click chọn điểm mới (xem bên dưới).
+    # Lưu center thực tế từ map trả về → map_center phản ánh vị trí đang nhìn
+    # Quan trọng: phải lưu TRƯỚC khi xử lý click để rerun không làm nhảy map
+    _ret_center = map_data.get("center")
+    if _ret_center and isinstance(_ret_center, dict):
+        _rc = [_ret_center["lat"], _ret_center["lng"]]
+        # Chỉ cập nhật nếu khác đáng kể (tránh ghi đè không cần thiết)
+        if (abs(_rc[0] - st.session_state.map_center[0]) > 0.001 or
+                abs(_rc[1] - st.session_state.map_center[1]) > 0.001):
+            st.session_state.map_center = _rc
 
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
@@ -1418,13 +1405,8 @@ with col_right:
 
     # Weather source selectbox + source label
     # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
-    source_options = ["🔀 Tổng hợp", "JMA", "GFS", "ECMWF"]
+    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Tổng hợp (Best)"]
     cur_src = st.session_state.weather_source
-    # Migrate old source names
-    _migrate = {"US (GFS)": "GFS", "EU (ECMWF)": "ECMWF", "🔀 Tổng hợp (Best)": "🔀 Tổng hợp"}
-    if cur_src in _migrate:
-        cur_src = _migrate[cur_src]
-        st.session_state.weather_source = cur_src
     if cur_src not in source_options:
         cur_src = "JMA"
     src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('🔀','')}"
