@@ -1260,7 +1260,7 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
                  f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
                  f'cursor:pointer;line-height:1;font-family:serif;">★</div>',
             icon_size=(24,24), icon_anchor=(12,12)),
-        tooltip=folium.Tooltip(tooltip_html, sticky=True, parse_html=False),
+        tooltip=folium.Tooltip(tooltip_html, sticky=False, offset=(20, -10), parse_html=False),
     ).add_to(m)
 
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
