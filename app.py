@@ -247,7 +247,7 @@ def calculate_milkyway_altitude(lat, lon, year, month, day, hour_local, utc_offs
     gc.compute(obs)
     return round(math.degrees(float(gc.alt)), 1), round(math.degrees(float(gc.az)), 1)
 
-
+def calculate_zenith_ra_dec(lat, lon):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     d = (now - datetime(2000, 1, 1, 12, 0)).total_seconds() / 86400.0
     lst = (18.697374558 + 24.06570982441908 * d + lon / 15.0) % 24
