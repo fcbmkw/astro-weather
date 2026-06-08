@@ -166,7 +166,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
-             ("map_tile", "satellite"), ("_map_needs_center", False)]:
+             ("map_tile", "satellite")]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1274,14 +1274,12 @@ if not is_bookmark:
         tooltip=folium.Tooltip(f"📍 {st.session_state.location_name}", sticky=True)
     ).add_to(m)
 
-# Chỉ truyền center= khi user vừa click chọn địa điểm mới → map nhảy đến đó
-# Các lần khác không truyền → map tự do pan/zoom không bị rerun
-_stfolium_kwargs = dict(use_container_width=True, height=600, key=_map_key,
-                        returned_objects=["last_clicked", "last_object_clicked_tooltip"])
-if st.session_state._map_needs_center:
-    _stfolium_kwargs["center"] = st.session_state.map_center
-    st.session_state._map_needs_center = False
-map_data = st_folium(m, **_stfolium_kwargs)
+# Key cố định → component không bị recreate khi map_center thay đổi
+_map_key = "astro_map_main"
+map_data = st_folium(m, use_container_width=True, height=600, key=_map_key,
+                     center=st.session_state.map_center,
+                     returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom", "center"],
+)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
@@ -1291,10 +1289,27 @@ _lpm_url = (f"https://www.lightpollutionmap.info/"
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
+    # Zoom: lưu khi thay đổi, không rerun
+    new_zoom = map_data.get("zoom")
+    if new_zoom is not None and new_zoom != st.session_state.zoom:
+        st.session_state.zoom = new_zoom
+
+    # Lưu center thực tế từ map trả về → map_center phản ánh vị trí đang nhìn
+    # Quan trọng: phải lưu TRƯỚC khi xử lý click để rerun không làm nhảy map
+    _ret_center = map_data.get("center")
+    if _ret_center and isinstance(_ret_center, dict):
+        _rc = [_ret_center["lat"], _ret_center["lng"]]
+        # Chỉ cập nhật nếu khác đáng kể (tránh ghi đè không cần thiết)
+        if (abs(_rc[0] - st.session_state.map_center[0]) > 0.001 or
+                abs(_rc[1] - st.session_state.map_center[1]) > 0.001):
+            st.session_state.map_center = _rc
+
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
+    # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
+    # _last_tip được reset về None sau mỗi rerun thành công → click lại cùng sao vẫn hoạt động.
     if clicked_tip:
         matched = None
         for bname, bcoords in LOCATION_DATABASE.items():
@@ -1305,16 +1320,17 @@ if map_data:
             bname, bcoords = matched
             _tip_key = f"{bcoords[0]:.4f},{bcoords[1]:.4f}"
             if _tip_key != st.session_state._last_tip:
+                # Nếu click sao mới → xử lý và lưu key để chặn rerun kép
+                # Nếu click lại cùng sao → _tip_key == _last_tip → skip (không cần rerun)
                 st.session_state._last_tip       = _tip_key
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
-                st.session_state.map_center      = [bcoords[0], bcoords[1]]
-                st.session_state._map_needs_center = True
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.rerun()
         else:
+            # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
             st.session_state._last_tip = None
 
     # ── Priority 2: free-click on empty map ──────────────────────────────────
@@ -1329,23 +1345,20 @@ if map_data:
             if (abs(bcoords[0] - st.session_state.lat) > 0.0001 or
                     abs(bcoords[1] - st.session_state.lon) > 0.0001 or
                     st.session_state.is_custom_point):
-                st.session_state.lat               = bcoords[0]
-                st.session_state.lon               = bcoords[1]
-                st.session_state.map_center        = [bcoords[0], bcoords[1]]
-                st.session_state._map_needs_center = True
-                st.session_state.location_name     = bname
-                st.session_state.is_custom_point   = False
-                st.session_state._last_tip         = None
+                st.session_state.lat             = bcoords[0]
+                st.session_state.lon             = bcoords[1]
+                # KHÔNG set map_center = bcoords
+                st.session_state.location_name   = bname
+                st.session_state.is_custom_point = False
+                st.session_state._last_tip       = None
                 st.rerun()
         else:
             if abs(c_lat - st.session_state.lat) > 0.0001 or abs(c_lon - st.session_state.lon) > 0.0001:
-                st.session_state.lat               = c_lat
-                st.session_state.lon               = c_lon
-                st.session_state.map_center        = [c_lat, c_lon]
-                st.session_state._map_needs_center = True
-                st.session_state.location_name     = fetch_location_name(c_lat, c_lon)
-                st.session_state.is_custom_point   = True
-                st.session_state._last_tip         = None
+                st.session_state.lat             = c_lat
+                st.session_state.lon             = c_lon
+                st.session_state.location_name   = fetch_location_name(c_lat, c_lon)
+                st.session_state.is_custom_point = True
+                st.session_state._last_tip       = None  # reset → click sao sau đó vẫn work
                 st.rerun()
 
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
@@ -1589,10 +1602,9 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             nlat, nlon = LOCATION_DATABASE[sel_loc]
             if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
                 st.session_state.lat, st.session_state.lon = nlat, nlon
-                st.session_state.map_center        = [nlat, nlon]
-                st.session_state._map_needs_center = True
-                st.session_state.location_name     = sel_loc
-                st.session_state.is_custom_point   = False
+                # Do NOT update map_center — keep current view
+                st.session_state.location_name = sel_loc
+                st.session_state.is_custom_point = False
                 st.rerun()
     with nav_lpm:
         st.markdown(
