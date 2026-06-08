@@ -1711,36 +1711,47 @@ st.markdown("---")
 st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE")
 
 # ── Sun brightness overlay ────────────────────────────────────────────────────
-# Gradient liên tục theo Sun altitude — đậm nhất khi Sun cao, mờ dần khi Sun → -10°
 def _sun_bright_opacity(sun_alt):
-    """Opacity của dải cam theo Sun altitude. 0.0 nếu Sun <= -10°."""
     if sun_alt <= -10:
         return 0.0
-    # Linear: -10° → 0.0,  0° → 0.27,  +10° → 0.55,  +30°+ → 0.55 (clamp)
     op = (sun_alt + 10) / 20.0 * 0.55
     return round(min(max(op, 0.0), 0.55), 3)
 
-# Build per-slot rows — chỉ slot có opacity > 0
-_band_rows = []
-for _lbl, _sa in zip(hours_labels, sun_altitudes):
-    _op = _sun_bright_opacity(_sa)
-    if _op > 0.005:
-        _band_rows.append({"Khung Giờ": _lbl, "y_lo": -91.0, "y_hi": 91.0, "op": _op})
+_sun_opacities = [_sun_bright_opacity(sa) for sa in sun_altitudes]
+_n_slots = len(hours_labels)
 
-# Render: 1 layer per slot dùng mark_rect với y/y2 span full height
-_band_layers = []
-for _row in _band_rows:
-    _df1 = pd.DataFrame([_row])
-    _band_layers.append(
-        alt.Chart(_df1).mark_rect(
-            color="#fb923c",
-            opacity=float(_row["op"])
-        ).encode(
-            x=alt.X('Khung Giờ:N', sort=hours_labels),
-            y=alt.Y('y_lo:Q'),
-            y2=alt.Y2('y_hi:Q'),
-        )
+# Build HTML overlay: horizontal bar of colored cells matching chart x-axis
+# Chart has ~40px left margin (y-axis) and fills container width
+_cells_html = ""
+for _i, (_lbl, _op) in enumerate(zip(hours_labels, _sun_opacities)):
+    _bg = f"rgba(251,146,60,{_op})" if _op > 0.005 else "transparent"
+    _cells_html += (
+        f'<div style="flex:1;background:{_bg};height:100%;'
+        f'border-right:1px solid rgba(251,146,60,0.08);" title="{_lbl} Sun={sun_altitudes[_i]:+.1f}°"></div>'
     )
+
+_overlay_html = f"""
+<div style="position:relative;width:100%;margin-bottom:-14px;">
+  <div style="
+    position:relative;
+    display:flex;
+    flex-direction:row;
+    height:20px;
+    margin-left:42px;
+    margin-right:8px;
+    border-radius:4px;
+    overflow:hidden;
+    border:1px solid rgba(251,146,60,0.20);
+  ">{_cells_html}</div>
+  <div style="font-size:10px;color:#94a3b8;margin-left:42px;margin-top:2px;">
+    ☀️ Sky brightness (cam đậm = Sun cao, mờ dần → tắt khi Sun &lt; −10°)
+  </div>
+</div>
+"""
+st.markdown(_overlay_html, unsafe_allow_html=True)
+
+# Band layers for Altair = empty (dùng HTML overlay thay thế)
+_band_layers = []
 
 # Build combined dataframe
 _chart_rows = []
@@ -1755,7 +1766,7 @@ _sun_df  = chart_df[chart_df["Body"] == "☀️ Sun"]
 _mw_df   = chart_df[chart_df["Body"] == "🌌 Milky Way"]
 
 _base_x = alt.X('Khung Giờ:N', sort=hours_labels, title="Time 18:00 ~ 06:00")
-_base_y = alt.Y('Altitude (°):Q', scale=alt.Scale(zero=True), title="Altitude (°)")
+_base_y = alt.Y('Altitude (°):Q', scale=alt.Scale(), title="Altitude (°)")
 
 # ── Moon: filled area (gold) ─────────────────────────────────────────────────
 _moon_area = alt.Chart(_moon_df).mark_area(
