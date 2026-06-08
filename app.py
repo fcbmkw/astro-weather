@@ -1712,27 +1712,35 @@ st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE")
 
 # ── Sun brightness overlay ────────────────────────────────────────────────────
 # Gradient liên tục theo Sun altitude — đậm nhất khi Sun cao, mờ dần khi Sun → -10°
-# Sun > 0°: rất sáng (hoàng hôn) | 0° ~ -10°: blue hour | < -10°: tối (không tô)
 def _sun_bright_opacity(sun_alt):
-    """Opacity của dải cam theo Sun altitude. Trả về 0.0 nếu Sun <= -10°."""
+    """Opacity của dải cam theo Sun altitude. 0.0 nếu Sun <= -10°."""
     if sun_alt <= -10:
         return 0.0
-    # Linear map: sun_alt từ -10° (opacity 0) đến +10° (opacity 0.55)
-    # Clamp ở 0.55 max
+    # Linear: -10° → 0.0,  0° → 0.27,  +10° → 0.55,  +30°+ → 0.55 (clamp)
     op = (sun_alt + 10) / 20.0 * 0.55
-    return min(max(op, 0.0), 0.55)
+    return round(min(max(op, 0.0), 0.55), 3)
 
-# Build per-slot band rows với opacity gradient
+# Build per-slot rows — chỉ slot có opacity > 0
 _band_rows = []
 for _lbl, _sa in zip(hours_labels, sun_altitudes):
     _op = _sun_bright_opacity(_sa)
-    if _op > 0.01:
-        _band_rows.append({
-            "Khung Giờ": _lbl,
-            "y_dummy": 0,
-            "opacity": _op
-        })
-_band_df = pd.DataFrame(_band_rows) if _band_rows else None
+    if _op > 0.005:
+        _band_rows.append({"Khung Giờ": _lbl, "y_lo": -91.0, "y_hi": 91.0, "op": _op})
+
+# Render: 1 layer per slot dùng mark_rect với y/y2 span full height
+_band_layers = []
+for _row in _band_rows:
+    _df1 = pd.DataFrame([_row])
+    _band_layers.append(
+        alt.Chart(_df1).mark_rect(
+            color="#fb923c",
+            opacity=float(_row["op"])
+        ).encode(
+            x=alt.X('Khung Giờ:N', sort=hours_labels),
+            y=alt.Y('y_lo:Q'),
+            y2=alt.Y2('y_hi:Q'),
+        )
+    )
 
 # Build combined dataframe
 _chart_rows = []
@@ -1748,19 +1756,6 @@ _mw_df   = chart_df[chart_df["Body"] == "🌌 Milky Way"]
 
 _base_x = alt.X('Khung Giờ:N', sort=hours_labels, title="Time 18:00 ~ 06:00")
 _base_y = alt.Y('Altitude (°):Q', scale=alt.Scale(zero=True), title="Altitude (°)")
-
-# ── Background brightness bands (gradient per slot) ──────────────────────────
-_band_layers = []
-if _band_df is not None and len(_band_df) > 0:
-    for _, _row in _band_df.iterrows():
-        _band_layers.append(
-            alt.Chart(pd.DataFrame([_row])).mark_rect(
-                color="rgba(251,146,60,1.0)",
-                opacity=float(_row["opacity"])
-            ).encode(
-                x=alt.X('Khung Giờ:N', sort=hours_labels),
-            )
-        )
 
 # ── Moon: filled area (gold) ─────────────────────────────────────────────────
 _moon_area = alt.Chart(_moon_df).mark_area(
@@ -1813,9 +1808,8 @@ st.markdown(
     "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
     "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
     "<span style='color:#a78bfa;'>╌╌</span> Milky Way GC &nbsp;&nbsp;|&nbsp;&nbsp;"
-    "<span style='color:rgba(251,146,60,0.9);'>▓</span> Sky too bright (Sun &gt;-10°) &nbsp;"
-    "<span style='color:rgba(251,146,60,0.5);'>░</span> Twilight (-10°~-18°) &nbsp;&nbsp;"
-    "0° = horizon · –18° = full dark</div>",
+    "<span style='color:rgba(251,146,60,0.9);'>▓▒░</span> Sky brightness (gradient theo Sun altitude, mờ dần đến Sun &lt;-10°) &nbsp;&nbsp;"
+    "0° = horizon · –10° = dark enough</div>",
     unsafe_allow_html=True
 )
 
