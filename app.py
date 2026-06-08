@@ -1258,7 +1258,7 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
         icon=folium.DivIcon(
             html=f'<div style="font-size:{star_size};color:{star_color};'
                  f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
-                 f'cursor:pointer;">⭐</div>',
+                 f'cursor:pointer;line-height:1;font-family:serif;">★</div>',
             icon_size=(24,24), icon_anchor=(12,12)),
         tooltip=folium.Tooltip(tooltip_html, sticky=True, parse_html=False),
     ).add_to(m)
@@ -1710,26 +1710,28 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 st.markdown("---")
 st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE")
 
-# ── Sun brightness overlay: highlight hours when sun > -18° (sky not fully dark) ──
-# Dải màu gradient theo Sun altitude:
-#   > -10°: astronomical twilight chưa kết thúc / trời còn sáng → cam/đỏ đậm
-#   -10° ~ -18°: nautical/astronomical twilight → cam nhạt
-#   < -18°: trời tối hoàn toàn (chụp milkyway được) → không highlight
-def _sun_bright_color(sun_alt):
-    """Màu nền cột theo độ sáng bầu trời."""
-    if sun_alt > -10:
-        return "rgba(251,146,60,0.38)"   # cam đậm — blue hour / còn sáng nhiều
-    elif sun_alt > -18:
-        return "rgba(251,146,60,0.14)"   # cam nhạt — astronomical twilight
-    else:
-        return None                      # tối hoàn toàn → không tô
+# ── Sun brightness overlay ────────────────────────────────────────────────────
+# Gradient liên tục theo Sun altitude — đậm nhất khi Sun cao, mờ dần khi Sun → -10°
+# Sun > 0°: rất sáng (hoàng hôn) | 0° ~ -10°: blue hour | < -10°: tối (không tô)
+def _sun_bright_opacity(sun_alt):
+    """Opacity của dải cam theo Sun altitude. Trả về 0.0 nếu Sun <= -10°."""
+    if sun_alt <= -10:
+        return 0.0
+    # Linear map: sun_alt từ -10° (opacity 0) đến +10° (opacity 0.55)
+    # Clamp ở 0.55 max
+    op = (sun_alt + 10) / 20.0 * 0.55
+    return min(max(op, 0.0), 0.55)
 
-# Build shade band data for background rect marks
+# Build per-slot band rows với opacity gradient
 _band_rows = []
 for _lbl, _sa in zip(hours_labels, sun_altitudes):
-    _col = _sun_bright_color(_sa)
-    if _col:
-        _band_rows.append({"Khung Giờ": _lbl, "y_min": -90, "y_max": 90, "color": _col})
+    _op = _sun_bright_opacity(_sa)
+    if _op > 0.01:
+        _band_rows.append({
+            "Khung Giờ": _lbl,
+            "y_dummy": 0,
+            "opacity": _op
+        })
 _band_df = pd.DataFrame(_band_rows) if _band_rows else None
 
 # Build combined dataframe
@@ -1747,17 +1749,16 @@ _mw_df   = chart_df[chart_df["Body"] == "🌌 Milky Way"]
 _base_x = alt.X('Khung Giờ:N', sort=hours_labels, title="Time 18:00 ~ 06:00")
 _base_y = alt.Y('Altitude (°):Q', scale=alt.Scale(zero=True), title="Altitude (°)")
 
-# ── Background brightness bands ─────────────────────────────────────────────
+# ── Background brightness bands (gradient per slot) ──────────────────────────
 _band_layers = []
 if _band_df is not None and len(_band_df) > 0:
-    # Group consecutive same-color bands into rect marks
     for _, _row in _band_df.iterrows():
         _band_layers.append(
             alt.Chart(pd.DataFrame([_row])).mark_rect(
-                opacity=1.0
+                color="rgba(251,146,60,1.0)",
+                opacity=float(_row["opacity"])
             ).encode(
                 x=alt.X('Khung Giờ:N', sort=hours_labels),
-                color=alt.value(_row["color"])
             )
         )
 
