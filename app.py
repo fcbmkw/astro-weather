@@ -46,7 +46,7 @@ LOCATION_DATABASE = {
     "34. Oze Numata 尾瀬ヶ原, Gunma": [36.9306, 139.2150],
     "35. Tanbara Highlands 玉原高原, Gunma": [36.7833, 139.0830],
     "36. Chichibu Misotsuchi 三十槌氷柱周辺, Saitama": [35.9563, 138.9255],
-    "37. Mitsumine Shrine 三峯神社, Saitama": [35.9608, 138.9258],
+    "37. Nakatsu Gorge 中津峡, Saitama": [35.9977, 139.0124],
     "38. Kozushima Maehama 前浜海岸, Tokyo": [34.2086, 139.1358],
     "39. Mikurajima Observatory 御蔵島展望地, Tokyo": [33.8740, 139.5950],
     "40. Hachijojima Nambara 南原千畳岩海岸, Tokyo": [33.1003, 139.7706],
@@ -202,30 +202,52 @@ def get_moon_phase_percent(date_obj):
 @st.cache_data(ttl=86400, show_spinner=False)  # cache 24 giờ — quỹ đạo trăng không đổi trong ngày
 def calculate_exact_moon_altitude_ephem(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
     """Tính độ cao mặt trăng (có thể âm khi dưới đường chân trời).
-    utc_offset_h là offset của location (JST=+9, CST=-6, v.v.)"""
+    utc_offset_h là offset của location (JST=+9).
+    Dùng +30 phút để tính giữa khung giờ → chính xác hơn khi hiển thị trên chart."""
     obs = ephem.Observer()
     obs.lat, obs.lon = str(lat), str(lon)
-    obs.pressure = 0  # tắt refraction để góc âm chính xác
-    local_dt = datetime(year, month, day, hour_local, 0, 0)
+    obs.pressure = 0
+    obs.epoch = ephem.J2000
+    local_dt = datetime(year, month, day, hour_local, 30, 0)   # giữa giờ
     utc_dt   = local_dt - timedelta(hours=utc_offset_h)
-    obs.date = utc_dt.strftime('%Y/%m/%d %H:%M:%S')
+    obs.date = ephem.Date(utc_dt)
     moon = ephem.Moon(); moon.compute(obs)
     return round(math.degrees(float(moon.alt)), 1)
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def calculate_exact_sun_altitude_ephem(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
     """Tính độ cao mặt trời (có thể âm khi dưới đường chân trời = ban đêm).
-    utc_offset_h là offset của location (JST=+9, CST=-6, v.v.)"""
+    utc_offset_h là offset của location (JST=+9)."""
     obs = ephem.Observer()
     obs.lat, obs.lon = str(lat), str(lon)
-    obs.pressure = 0  # tắt refraction để góc âm chính xác
-    local_dt = datetime(year, month, day, hour_local, 0, 0)
+    obs.pressure = 0
+    obs.epoch = ephem.J2000
+    local_dt = datetime(year, month, day, hour_local, 30, 0)   # giữa giờ
     utc_dt   = local_dt - timedelta(hours=utc_offset_h)
-    obs.date = utc_dt.strftime('%Y/%m/%d %H:%M:%S')
+    obs.date = ephem.Date(utc_dt)
     sun = ephem.Sun(); sun.compute(obs)
     return round(math.degrees(float(sun.alt)), 1)
 
-def calculate_zenith_ra_dec(lat, lon):
+def calculate_milkyway_altitude(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
+    """Tính độ cao trung tâm Dải Ngân Hà (Galactic Center, Sgr A*).
+    RA = 17h45m40s, Dec = -29°00'28" (J2000)
+    Trả về (altitude_deg, azimuth_deg) — altitude < 0 = dưới chân trời."""
+    obs = ephem.Observer()
+    obs.lat, obs.lon = str(lat), str(lon)
+    obs.pressure = 0
+    obs.epoch = ephem.J2000
+    local_dt = datetime(year, month, day, hour_local, 30, 0)
+    utc_dt   = local_dt - timedelta(hours=utc_offset_h)
+    obs.date = ephem.Date(utc_dt)
+    # Galactic Center: RA 17h45m40s, Dec -29°00'28" (J2000)
+    gc = ephem.FixedBody()
+    gc._ra  = ephem.hours('17:45:40.04')
+    gc._dec = ephem.degrees('-29:00:28.1')
+    gc._epoch = ephem.J2000
+    gc.compute(obs)
+    return round(math.degrees(float(gc.alt)), 1), round(math.degrees(float(gc.az)), 1)
+
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     d = (now - datetime(2000, 1, 1, 12, 0)).total_seconds() / 86400.0
     lst = (18.697374558 + 24.06570982441908 * d + lon / 15.0) % 24
@@ -334,7 +356,7 @@ def calculate_accurate_bortle(lat, lon):
         (36.7833, 139.0830): (3.5, 21.60), # 35 Tanbara
         # ── Saitama ───────────────────────────────────────────────────────────
         (35.9563, 138.9255): (4, 21.40),   # 36 Misotsuchi
-        (35.9608, 138.9258): (4, 21.40),   # 37 Mitsumine
+        (35.9977, 139.0124): (4, 21.40),   # 37 Nakatsu Gorge (replaced Mitsumine — too close to 36)
         # ── Tokyo Islands ─────────────────────────────────────────────────────
         (34.2086, 139.1358): (3, 21.80),   # 38 Kozushima
         (33.8740, 139.5950): (2.5, 21.95), # 39 Mikurajima
@@ -980,6 +1002,7 @@ weather_table_data = []
 hours_labels = []
 moon_altitudes = []
 sun_altitudes  = []
+milkyway_altitudes = []
 current_cloud_debug = {"low": 0, "mid": 0, "high": 0, "total": 0}
 sources_used = set()
 
@@ -991,6 +1014,8 @@ for yr, mo, dy, hr_local, label, date_prefix in desired_slots:
     moon_altitudes.append(moon_alt)
     sun_alt  = calculate_exact_sun_altitude_ephem(st.session_state.lat, st.session_state.lon, yr, mo, dy, hr_local, loc_utc_offset_h)
     sun_altitudes.append(sun_alt)
+    mw_alt, _ = calculate_milkyway_altitude(st.session_state.lat, st.session_state.lon, yr, mo, dy, hr_local, loc_utc_offset_h)
+    milkyway_altitudes.append(mw_alt)
 
     if not times_list:
         continue
@@ -1204,6 +1229,20 @@ def _get_loc_image_b64(loc_name: str):
 
 for loc_name, loc_coords in LOCATION_DATABASE.items():
     is_sel = abs(loc_coords[0]-st.session_state.lat)<0.001 and abs(loc_coords[1]-st.session_state.lon)<0.001
+    # Location 1-27: cyan (địa điểm hay đi), 28-100: orange
+    try:
+        loc_num = int(loc_name.split(".")[0].strip())
+    except ValueError:
+        loc_num = 99
+    is_frequent = (loc_num <= 27)
+    if is_sel:
+        star_color = "#00FFFF" if is_frequent else "#FFD700"
+        star_glow  = "drop-shadow(0 0 7px cyan)" if is_frequent else "drop-shadow(0 0 6px gold)"
+        star_size  = "22px"
+    else:
+        star_color = "#22D3EE" if is_frequent else "#FFA500"   # cyan-400 vs orange
+        star_glow  = "none"
+        star_size  = "16px"
     b64, mime = _get_loc_image_b64(loc_name)
     if b64:
         img_html = (f'<img src="data:{mime};base64,{b64}" '
@@ -1217,8 +1256,8 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
     folium.Marker(
         loc_coords,
         icon=folium.DivIcon(
-            html=f'<div style="font-size:{"22px" if is_sel else "16px"};color:{"#FFD700" if is_sel else "#FFA500"};'
-                 f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{"drop-shadow(0 0 6px gold)" if is_sel else "none"};'
+            html=f'<div style="font-size:{star_size};color:{star_color};'
+                 f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
                  f'cursor:pointer;">⭐</div>',
             icon_size=(24,24), icon_anchor=(12,12)),
         tooltip=folium.Tooltip(tooltip_html, sticky=True, parse_html=False),
@@ -1667,27 +1706,62 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             st.cache_data.clear()
             st.rerun()
 
-# ── MOON + SUN ALTITUDE CHART ────────────────────────────────────────────────
+# ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
-st.markdown("### 📊 MOON & SUN ALTITUDE")
+st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE")
+
+# ── Sun brightness overlay: highlight hours when sun > -18° (sky not fully dark) ──
+# Dải màu gradient theo Sun altitude:
+#   > -10°: astronomical twilight chưa kết thúc / trời còn sáng → cam/đỏ đậm
+#   -10° ~ -18°: nautical/astronomical twilight → cam nhạt
+#   < -18°: trời tối hoàn toàn (chụp milkyway được) → không highlight
+def _sun_bright_color(sun_alt):
+    """Màu nền cột theo độ sáng bầu trời."""
+    if sun_alt > -10:
+        return "rgba(251,146,60,0.38)"   # cam đậm — blue hour / còn sáng nhiều
+    elif sun_alt > -18:
+        return "rgba(251,146,60,0.14)"   # cam nhạt — astronomical twilight
+    else:
+        return None                      # tối hoàn toàn → không tô
+
+# Build shade band data for background rect marks
+_band_rows = []
+for _lbl, _sa in zip(hours_labels, sun_altitudes):
+    _col = _sun_bright_color(_sa)
+    if _col:
+        _band_rows.append({"Khung Giờ": _lbl, "y_min": -90, "y_max": 90, "color": _col})
+_band_df = pd.DataFrame(_band_rows) if _band_rows else None
 
 # Build combined dataframe
 _chart_rows = []
-for _lbl, _m, _s in zip(hours_labels, moon_altitudes, sun_altitudes):
+for _lbl, _m, _s, _mw in zip(hours_labels, moon_altitudes, sun_altitudes, milkyway_altitudes):
     _chart_rows.append({"Khung Giờ": _lbl, "Altitude (°)": _m,  "Body": "🌙 Moon"})
     _chart_rows.append({"Khung Giờ": _lbl, "Altitude (°)": _s,  "Body": "☀️ Sun"})
+    _chart_rows.append({"Khung Giờ": _lbl, "Altitude (°)": _mw, "Body": "🌌 Milky Way"})
 chart_df = pd.DataFrame(_chart_rows)
 
-# Moon: filled area (gold), Sun: line only (cyan-blue)
 _moon_df = chart_df[chart_df["Body"] == "🌙 Moon"]
 _sun_df  = chart_df[chart_df["Body"] == "☀️ Sun"]
+_mw_df   = chart_df[chart_df["Body"] == "🌌 Milky Way"]
 
-_base_x = alt.X('Khung Giờ:N', sort=hours_labels,
-                 title="Time 18:00 ~ 06:00")
-_base_y = alt.Y('Altitude (°):Q',
-                scale=alt.Scale(zero=True),
-                title="Altitude (°)")
+_base_x = alt.X('Khung Giờ:N', sort=hours_labels, title="Time 18:00 ~ 06:00")
+_base_y = alt.Y('Altitude (°):Q', scale=alt.Scale(zero=True), title="Altitude (°)")
 
+# ── Background brightness bands ─────────────────────────────────────────────
+_band_layers = []
+if _band_df is not None and len(_band_df) > 0:
+    # Group consecutive same-color bands into rect marks
+    for _, _row in _band_df.iterrows():
+        _band_layers.append(
+            alt.Chart(pd.DataFrame([_row])).mark_rect(
+                opacity=1.0
+            ).encode(
+                x=alt.X('Khung Giờ:N', sort=hours_labels),
+                color=alt.value(_row["color"])
+            )
+        )
+
+# ── Moon: filled area (gold) ─────────────────────────────────────────────────
 _moon_area = alt.Chart(_moon_df).mark_area(
     line={'color': '#fbbf24', 'size': 2.5},
     color=alt.Gradient(gradient='linear',
@@ -1696,20 +1770,40 @@ _moon_area = alt.Chart(_moon_df).mark_area(
         x1=1, y1=1, x2=1, y2=0),
 ).encode(x=_base_x, y=_base_y,
          tooltip=[alt.Tooltip('Khung Giờ:N', title='Time'),
-                  alt.Tooltip('Altitude (°):Q', title='Moon Alt')])
+                  alt.Tooltip('Altitude (°):Q', title='Moon Alt (°)')])
 
+# ── Sun: dashed cyan-blue line ───────────────────────────────────────────────
 _sun_line = alt.Chart(_sun_df).mark_line(
     color='#38bdf8', size=2.5, strokeDash=[6, 3]
 ).encode(x=_base_x, y=_base_y,
          tooltip=[alt.Tooltip('Khung Giờ:N', title='Time'),
-                  alt.Tooltip('Altitude (°):Q', title='Sun Alt')])
+                  alt.Tooltip('Altitude (°):Q', title='Sun Alt (°)')])
 
-# Horizon zero rule
+# ── Milky Way GC: dashed purple line ─────────────────────────────────────────
+_mw_line = alt.Chart(_mw_df).mark_line(
+    color='#a78bfa', size=2.0, strokeDash=[3, 3]
+).encode(x=_base_x, y=_base_y,
+         tooltip=[alt.Tooltip('Khung Giờ:N', title='Time'),
+                  alt.Tooltip('Altitude (°):Q', title='MW GC Alt (°)')])
+
+# ── Horizon rule ─────────────────────────────────────────────────────────────
 _horizon = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(
     color='#475569', strokeDash=[4, 4], size=1
 ).encode(y='y:Q')
 
-moon_chart = (_moon_area + _sun_line + _horizon).properties(height=480).resolve_scale(y='shared')
+# ── -10° rule (blue hour boundary) ───────────────────────────────────────────
+_minus10 = alt.Chart(pd.DataFrame({'y': [-10]})).mark_rule(
+    color='rgba(251,146,60,0.50)', strokeDash=[3, 5], size=1
+).encode(y='y:Q')
+
+# ── -18° rule (astronomical twilight boundary) ───────────────────────────────
+_minus18 = alt.Chart(pd.DataFrame({'y': [-18]})).mark_rule(
+    color='rgba(251,146,60,0.25)', strokeDash=[2, 6], size=1
+).encode(y='y:Q')
+
+# Combine all layers
+_all_layers = _band_layers + [_horizon, _minus10, _minus18, _moon_area, _sun_line, _mw_line]
+moon_chart = alt.layer(*_all_layers).properties(height=480).resolve_scale(y='shared')
 st.altair_chart(moon_chart, use_container_width=True)
 
 # Legend note
@@ -1717,7 +1811,10 @@ st.markdown(
     "<div style='text-align:center;font-size:12px;color:#94a3b8;margin-top:-8px;'>"
     "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
     "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
-    "Values below 0° = below horizon</div>",
+    "<span style='color:#a78bfa;'>╌╌</span> Milky Way GC &nbsp;&nbsp;|&nbsp;&nbsp;"
+    "<span style='color:rgba(251,146,60,0.9);'>▓</span> Sky too bright (Sun &gt;-10°) &nbsp;"
+    "<span style='color:rgba(251,146,60,0.5);'>░</span> Twilight (-10°~-18°) &nbsp;&nbsp;"
+    "0° = horizon · –18° = full dark</div>",
     unsafe_allow_html=True
 )
 
