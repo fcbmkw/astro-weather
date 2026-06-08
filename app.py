@@ -1275,10 +1275,10 @@ if not is_bookmark:
     ).add_to(m)
 
 # Key cố định → component không bị recreate khi map_center thay đổi
+# KHÔNG truyền center= → map tự quản lý vị trí, không trigger rerun khi pan/zoom
 _map_key = "astro_map_main"
 map_data = st_folium(m, use_container_width=True, height=600, key=_map_key,
-                     center=st.session_state.map_center,
-                     returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom", "center"],
+                     returned_objects=["last_clicked", "last_object_clicked_tooltip"],
 )
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
@@ -1289,21 +1289,6 @@ _lpm_url = (f"https://www.lightpollutionmap.info/"
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
-    # Zoom: lưu khi thay đổi, không rerun
-    new_zoom = map_data.get("zoom")
-    if new_zoom is not None and new_zoom != st.session_state.zoom:
-        st.session_state.zoom = new_zoom
-
-    # Lưu center thực tế từ map trả về → map_center phản ánh vị trí đang nhìn
-    # Quan trọng: phải lưu TRƯỚC khi xử lý click để rerun không làm nhảy map
-    _ret_center = map_data.get("center")
-    if _ret_center and isinstance(_ret_center, dict):
-        _rc = [_ret_center["lat"], _ret_center["lng"]]
-        # Chỉ cập nhật nếu khác đáng kể (tránh ghi đè không cần thiết)
-        if (abs(_rc[0] - st.session_state.map_center[0]) > 0.001 or
-                abs(_rc[1] - st.session_state.map_center[1]) > 0.001):
-            st.session_state.map_center = _rc
-
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
 
