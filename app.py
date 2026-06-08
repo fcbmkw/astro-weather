@@ -1710,119 +1710,112 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 st.markdown("---")
 st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE")
 
-# ── Sun brightness overlay ────────────────────────────────────────────────────
+import plotly.graph_objects as go
+
+# ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
+# Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
 def _sun_bright_opacity(sun_alt):
-    if sun_alt <= -10:
+    if sun_alt <= -13:
         return 0.0
-    op = (sun_alt + 10) / 20.0 * 0.55
-    return round(min(max(op, 0.0), 0.55), 3)
+    op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
+    return round(min(max(op, 0.0), 0.50), 3)
 
-_sun_opacities = [_sun_bright_opacity(sa) for sa in sun_altitudes]
-_n_slots = len(hours_labels)
+fig = go.Figure()
 
-# Build HTML overlay: horizontal bar of colored cells matching chart x-axis
-# Chart has ~40px left margin (y-axis) and fills container width
-_cells_html = ""
-for _i, (_lbl, _op) in enumerate(zip(hours_labels, _sun_opacities)):
-    _bg = f"rgba(251,146,60,{_op})" if _op > 0.005 else "transparent"
-    _cells_html += (
-        f'<div style="flex:1;background:{_bg};height:100%;'
-        f'border-right:1px solid rgba(251,146,60,0.08);" title="{_lbl} Sun={sun_altitudes[_i]:+.1f}°"></div>'
-    )
+# ── Background brightness bands (vrect per slot) ─────────────────────────────
+_x_positions = list(range(len(hours_labels)))
+for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
+    _op = _sun_bright_opacity(_sa)
+    if _op > 0.005:
+        fig.add_vrect(
+            x0=_i - 0.5, x1=_i + 0.5,
+            fillcolor="rgba(251,146,60,1.0)",
+            opacity=_op,
+            layer="below",
+            line_width=0,
+        )
 
-_overlay_html = f"""
-<div style="position:relative;width:100%;margin-bottom:-14px;">
-  <div style="
-    position:relative;
-    display:flex;
-    flex-direction:row;
-    height:20px;
-    margin-left:42px;
-    margin-right:8px;
-    border-radius:4px;
-    overflow:hidden;
-    border:1px solid rgba(251,146,60,0.20);
-  ">{_cells_html}</div>
-  <div style="font-size:10px;color:#94a3b8;margin-left:42px;margin-top:2px;">
-    ☀️ Sky brightness (cam đậm = Sun cao, mờ dần → tắt khi Sun &lt; −10°)
-  </div>
-</div>
-"""
-st.markdown(_overlay_html, unsafe_allow_html=True)
+# ── Moon: filled area ─────────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=moon_altitudes,
+    mode='lines',
+    name='🌙 Moon',
+    line=dict(color='#fbbf24', width=2.5),
+    fill='tozeroy',
+    fillcolor='rgba(251,191,36,0.20)',
+    hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
 
-# Band layers for Altair = empty (dùng HTML overlay thay thế)
-_band_layers = []
+# ── Sun: dashed blue line ─────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=sun_altitudes,
+    mode='lines',
+    name='☀️ Sun',
+    line=dict(color='#38bdf8', width=2.5, dash='dash'),
+    hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
 
-# Build combined dataframe
-_chart_rows = []
-for _lbl, _m, _s, _mw in zip(hours_labels, moon_altitudes, sun_altitudes, milkyway_altitudes):
-    _chart_rows.append({"Khung Giờ": _lbl, "Altitude (°)": _m,  "Body": "🌙 Moon"})
-    _chart_rows.append({"Khung Giờ": _lbl, "Altitude (°)": _s,  "Body": "☀️ Sun"})
-    _chart_rows.append({"Khung Giờ": _lbl, "Altitude (°)": _mw, "Body": "🌌 Milky Way"})
-chart_df = pd.DataFrame(_chart_rows)
+# ── Milky Way GC: dashed purple ───────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=milkyway_altitudes,
+    mode='lines',
+    name='🌌 MW GC',
+    line=dict(color='#a78bfa', width=2.0, dash='dot'),
+    hovertemplate='%{customdata}<br>MW GC: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
 
-_moon_df = chart_df[chart_df["Body"] == "🌙 Moon"]
-_sun_df  = chart_df[chart_df["Body"] == "☀️ Sun"]
-_mw_df   = chart_df[chart_df["Body"] == "🌌 Milky Way"]
+# ── Horizon rule ──────────────────────────────────────────────────────────────
+fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
 
-_base_x = alt.X('Khung Giờ:N', sort=hours_labels, title="Time 18:00 ~ 06:00")
-_base_y = alt.Y('Altitude (°):Q', scale=alt.Scale(), title="Altitude (°)")
+# ── -13° rule ─────────────────────────────────────────────────────────────────
+fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
+              annotation_text="−13° full dark", annotation_font_color="rgba(251,146,60,0.7)",
+              annotation_position="bottom right")
 
-# ── Moon: filled area (gold) ─────────────────────────────────────────────────
-_moon_area = alt.Chart(_moon_df).mark_area(
-    line={'color': '#fbbf24', 'size': 2.5},
-    color=alt.Gradient(gradient='linear',
-        stops=[alt.GradientStop(color='rgba(251,191,36,0.55)', offset=0),
-               alt.GradientStop(color='rgba(30,41,59,0.0)',    offset=1)],
-        x1=1, y1=1, x2=1, y2=0),
-).encode(x=_base_x, y=_base_y,
-         tooltip=[alt.Tooltip('Khung Giờ:N', title='Time'),
-                  alt.Tooltip('Altitude (°):Q', title='Moon Alt (°)')])
+# ── Layout ────────────────────────────────────────────────────────────────────
+fig.update_layout(
+    height=480,
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(15,23,42,0.0)',
+    font=dict(color='#94a3b8', size=12),
+    xaxis=dict(
+        tickmode='array',
+        tickvals=_x_positions,
+        ticktext=hours_labels,
+        gridcolor='rgba(71,85,105,0.3)',
+        title='Time 18:00 ~ 06:00',
+        title_font_color='#94a3b8',
+    ),
+    yaxis=dict(
+        gridcolor='rgba(71,85,105,0.3)',
+        title='Altitude (°)',
+        title_font_color='#94a3b8',
+        zeroline=False,
+    ),
+    legend=dict(
+        orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
+        font=dict(color='#cbd5e1'),
+        bgcolor='rgba(0,0,0,0)',
+    ),
+    margin=dict(l=50, r=20, t=40, b=40),
+    hovermode='x unified',
+)
 
-# ── Sun: dashed cyan-blue line ───────────────────────────────────────────────
-_sun_line = alt.Chart(_sun_df).mark_line(
-    color='#38bdf8', size=2.5, strokeDash=[6, 3]
-).encode(x=_base_x, y=_base_y,
-         tooltip=[alt.Tooltip('Khung Giờ:N', title='Time'),
-                  alt.Tooltip('Altitude (°):Q', title='Sun Alt (°)')])
-
-# ── Milky Way GC: dashed purple line ─────────────────────────────────────────
-_mw_line = alt.Chart(_mw_df).mark_line(
-    color='#a78bfa', size=2.0, strokeDash=[3, 3]
-).encode(x=_base_x, y=_base_y,
-         tooltip=[alt.Tooltip('Khung Giờ:N', title='Time'),
-                  alt.Tooltip('Altitude (°):Q', title='MW GC Alt (°)')])
-
-# ── Horizon rule ─────────────────────────────────────────────────────────────
-_horizon = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(
-    color='#475569', strokeDash=[4, 4], size=1
-).encode(y='y:Q')
-
-# ── -10° rule (blue hour boundary) ───────────────────────────────────────────
-_minus10 = alt.Chart(pd.DataFrame({'y': [-10]})).mark_rule(
-    color='rgba(251,146,60,0.50)', strokeDash=[3, 5], size=1
-).encode(y='y:Q')
-
-# ── -18° rule (astronomical twilight boundary) ───────────────────────────────
-_minus18 = alt.Chart(pd.DataFrame({'y': [-18]})).mark_rule(
-    color='rgba(251,146,60,0.25)', strokeDash=[2, 6], size=1
-).encode(y='y:Q')
-
-# Combine all layers
-_all_layers = _band_layers + [_horizon, _minus10, _minus18, _moon_area, _sun_line, _mw_line]
-moon_chart = alt.layer(*_all_layers).properties(height=480).resolve_scale(y='shared')
-st.altair_chart(moon_chart, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
 # Legend note
 st.markdown(
     "<div style='text-align:center;font-size:12px;color:#94a3b8;margin-top:-8px;'>"
     "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
     "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
-    "<span style='color:#a78bfa;'>╌╌</span> Milky Way GC &nbsp;&nbsp;|&nbsp;&nbsp;"
-    "<span style='color:rgba(251,146,60,0.9);'>▓▒░</span> Sky brightness (gradient theo Sun altitude, mờ dần đến Sun &lt;-10°) &nbsp;&nbsp;"
-    "0° = horizon · –10° = dark enough</div>",
+    "<span style='color:#a78bfa;'>·····</span> Milky Way GC &nbsp;&nbsp;|&nbsp;&nbsp;"
+    "<span style='color:rgba(251,146,60,0.8);'>▓▒░</span> Sky brightness gradient (tắt khi Sun &lt;−13°)</div>",
     unsafe_allow_html=True
 )
+
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
