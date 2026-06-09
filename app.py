@@ -166,7 +166,8 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
-             ("map_tile", "satellite")]:
+             ("map_tile", "satellite"),
+             ("_need_fly", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1114,12 +1115,18 @@ _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 if st.session_state.map_tile not in ("satellite", "street"):
     st.session_state.map_tile = "satellite"
 
-# Always start map with satellite base (we switch via JS); center never touched by star-clicks
-m = folium.Map(location=st.session_state.map_center,
-               zoom_start=st.session_state.zoom,
-               tiles=_TILE_SAT_URL, attr='Google Satellite Hybrid')
+# ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
+# prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
+# Điều này là chìa khoá giúp pan/zoom mượt: Streamlit không can thiệp vào
+# camera position sau mỗi rerun.
+m = folium.Map(
+    location=st.session_state.map_center,
+    zoom_start=st.session_state.zoom,
+    tiles=None,           # không load tile mặc định; tile được inject qua JS bên dưới
+    prefer_canvas=True,   # dùng Canvas renderer → ít DOM node hơn, scroll mượt hơn
+)
 
-# Second tile layer for street — added to map so JS can reference it
+# ── Tile layers (chỉ để JS switchTile có thể gọi; không load ngay) ──
 _street_layer = folium.TileLayer(
     tiles=_TILE_STR_URL, attr='CartoDB Voyager', name='street', overlay=False
 )
@@ -1130,9 +1137,7 @@ folium.TileLayer(
     name='OpenRailwayMap', overlay=True, control=True, opacity=0.25, attr='OpenRailwayMap'
 ).add_to(m)
 
-# Tile toggle via Folium MacroElement — injects a proper Leaflet L.Control
-# into the map iframe so it has access to the map object directly.
-# All strings are ASCII-only to avoid streamlit-folium JS hash encoding issues.
+# ── Tile switcher control (Satellite / Street) — inject qua MacroElement ──
 from folium import MacroElement
 from jinja2 import Template
 
@@ -1193,7 +1198,7 @@ class _TileControl(MacroElement):
 
 _TileControl().add_to(m)
 
-# Inject CSS to style image tooltips nicely
+# ── CSS cho tooltip (hover) ────────────────────────────────────────────────────
 m.get_root().html.add_child(folium.Element("""
 <style>
 .leaflet-tooltip {
@@ -1208,9 +1213,7 @@ m.get_root().html.add_child(folium.Element("""
 </style>
 """))
 
-# ── LOCATION IMAGE POPUP ──────────────────────────────────────────────────────
-# Ảnh đặt trong thư mục images/ với tên file = số thứ tự địa danh, ví dụ: 1.jpg, 2.png, ...
-# Hỗ trợ jpg, jpeg, png, webp. Nếu không tìm thấy ảnh thì chỉ hiện tên.
+# ── LOCATION MARKERS ──────────────────────────────────────────────────────────
 import os, base64
 
 def _get_loc_image_b64(loc_name: str):
@@ -1229,7 +1232,6 @@ def _get_loc_image_b64(loc_name: str):
 
 for loc_name, loc_coords in LOCATION_DATABASE.items():
     is_sel = abs(loc_coords[0]-st.session_state.lat)<0.001 and abs(loc_coords[1]-st.session_state.lon)<0.001
-    # Location 1-27: cyan (địa điểm hay đi), 28-100: orange
     try:
         loc_num = int(loc_name.split(".")[0].strip())
     except ValueError:
@@ -1240,7 +1242,7 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
         star_glow  = "drop-shadow(0 0 7px cyan)" if is_frequent else "drop-shadow(0 0 6px gold)"
         star_size  = "22px"
     else:
-        star_color = "#22D3EE" if is_frequent else "#FFA500"   # cyan-400 vs orange
+        star_color = "#22D3EE" if is_frequent else "#FFA500"
         star_glow  = "none"
         star_size  = "16px"
     b64, mime = _get_loc_image_b64(loc_name)
@@ -1274,12 +1276,19 @@ if not is_bookmark:
         tooltip=folium.Tooltip(f"📍 {st.session_state.location_name}", sticky=True)
     ).add_to(m)
 
-# Key cố định → component không bị recreate khi map_center thay đổi
+# ── st_folium ─────────────────────────────────────────────────────────────────
+# QUAN TRỌNG: KHÔNG đưa "zoom"/"center" vào returned_objects.
+# Nếu có → mỗi pan/zoom map trả data về Python → Streamlit rerun → map refresh.
+# Chỉ return những gì cần xử lý click. Zoom/center được lưu qua _need_fly flag.
 _map_key = "astro_map_main"
-map_data = st_folium(m, use_container_width=True, height=600, key=_map_key,
-                     center=st.session_state.map_center,
-                     returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom", "center"],
+_stfolium_kwargs = dict(
+    width='stretch', height=600, key=_map_key,
+    returned_objects=["last_clicked", "last_object_clicked_tooltip"],
 )
+if st.session_state._need_fly:
+    _stfolium_kwargs["center"] = st.session_state.map_center
+    st.session_state._need_fly = False   # reset ngay — chỉ fly 1 lần
+map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
@@ -1289,21 +1298,6 @@ _lpm_url = (f"https://www.lightpollutionmap.info/"
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
-    # Zoom: lưu khi thay đổi, không rerun
-    new_zoom = map_data.get("zoom")
-    if new_zoom is not None and new_zoom != st.session_state.zoom:
-        st.session_state.zoom = new_zoom
-
-    # Lưu center thực tế từ map trả về → map_center phản ánh vị trí đang nhìn
-    # Quan trọng: phải lưu TRƯỚC khi xử lý click để rerun không làm nhảy map
-    _ret_center = map_data.get("center")
-    if _ret_center and isinstance(_ret_center, dict):
-        _rc = [_ret_center["lat"], _ret_center["lng"]]
-        # Chỉ cập nhật nếu khác đáng kể (tránh ghi đè không cần thiết)
-        if (abs(_rc[0] - st.session_state.map_center[0]) > 0.001 or
-                abs(_rc[1] - st.session_state.map_center[1]) > 0.001):
-            st.session_state.map_center = _rc
-
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
 
@@ -1326,8 +1320,10 @@ if map_data:
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
+                st.session_state.map_center      = [bcoords[0], bcoords[1]]
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
+                st.session_state._need_fly       = True
                 st.rerun()
         else:
             # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
@@ -1602,9 +1598,10 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             nlat, nlon = LOCATION_DATABASE[sel_loc]
             if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
                 st.session_state.lat, st.session_state.lon = nlat, nlon
-                # Do NOT update map_center — keep current view
-                st.session_state.location_name = sel_loc
+                st.session_state.map_center      = [nlat, nlon]
+                st.session_state.location_name   = sel_loc
                 st.session_state.is_custom_point = False
+                st.session_state._need_fly       = True
                 st.rerun()
     with nav_lpm:
         st.markdown(
