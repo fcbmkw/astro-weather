@@ -1562,24 +1562,29 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 
     # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
     nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.42, 1.20, 0.36, 1.30, 0.26])
+
+    def _go_prev():
+        if st.session_state.day_offset > 0:
+            st.session_state.day_offset -= 1
+            st.session_state.sel_date = date_options[st.session_state.day_offset]
+
+    def _go_next():
+        if st.session_state.day_offset < 6:
+            st.session_state.day_offset += 1
+            st.session_state.sel_date = date_options[st.session_state.day_offset]
+
     with nav1:
-        if st.button("⬅️Previous", use_container_width=True, key="btn_prev"):
-            if st.session_state.day_offset > 0:
-                st.session_state.day_offset -= 1
-                st.rerun()
+        st.button("⬅️Previous", use_container_width=True, key="btn_prev", on_click=_go_prev)
     with nav2:
         sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
                                  label_visibility="collapsed",
-                                 key=f"sel_date_{st.session_state.day_offset}")
+                                 key="sel_date")
         new_off = date_options.index(sel_label)
         if new_off != st.session_state.day_offset:
             st.session_state.day_offset = new_off
             st.rerun()
     with nav4:
-        if st.button("Next➡️", use_container_width=True, key="btn_next"):
-            if st.session_state.day_offset < 6:
-                st.session_state.day_offset += 1
-                st.rerun()
+        st.button("Next➡️", use_container_width=True, key="btn_next", on_click=_go_next)
     with nav3:
         loc_opts = list(LOCATION_DATABASE.keys())
         if st.session_state.is_custom_point:
