@@ -903,26 +903,6 @@ def get_val_blended(hourly, field, idx, day_offset):
     blended = sum(weights[k] * v for k, v in avail.items()) / total_w
     return round(blended, 1), "Blend"
 
-def calc_tcc(low_pct, mid_pct, high_pct):
-    """
-    Tính Total Cloud Cover (TCC) từ 3 tầng mây bằng công thức xác suất che phủ:
-        TCC = 1 - (1 - Low) × (1 - Mid) × (1 - High)
-    Input: giá trị % (0–100). Output: % (0–100), làm tròn 1 chữ số.
-
-    Lý do dùng công thức này thay vì lấy cloud_cover thẳng từ API:
-    · Mô hình đôi khi tổng hợp cloud_cover không nhất quán với 3 tầng con.
-    · Công thức xác suất giả định 3 tầng mây độc lập và cho kết quả
-      "tỉ lệ bầu trời thực sự bị che" — phù hợp hơn cho đánh giá quan sát sao.
-    · Sai số lớn nhất xảy ra khi mây cirrus (high) dày — cirrus mỏng thường
-      không chặn ánh sáng hoàn toàn; nếu muốn tinh chỉnh sau này có thể
-      nhân high_pct bằng hệ số opacity (0.5–0.8) trước khi đưa vào công thức.
-    """
-    low  = max(0.0, min(100.0, low_pct))  / 100.0
-    mid  = max(0.0, min(100.0, mid_pct))  / 100.0
-    high = max(0.0, min(100.0, high_pct)) / 100.0
-    tcc  = 1.0 - (1.0 - low) * (1.0 - mid) * (1.0 - high)
-    return round(tcc * 100.0, 1)
-
 # ── COMPUTED STATE ────────────────────────────────────────────────────────────
 bortle_class, sqm_val = calculate_accurate_bortle(st.session_state.lat, st.session_state.lon)
 ra_val, dec_val = calculate_zenith_ra_dec(st.session_state.lat, st.session_state.lon)
@@ -1064,17 +1044,17 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
             continue
 
         if _use_blend:
-            _api_cloud, src1 = get_val_blended(hourly, "cloud_cover",          idx, _day_offset_proxy)
-            low_c,      _    = get_val_blended(hourly, "cloud_cover_low",       idx, _day_offset_proxy)
-            mid_c,      _    = get_val_blended(hourly, "cloud_cover_mid",       idx, _day_offset_proxy)
-            high_c,     _    = get_val_blended(hourly, "cloud_cover_high",      idx, _day_offset_proxy)
-            humid,      _    = get_val_blended(hourly, "relative_humidity_2m",  idx, _day_offset_proxy)
-            wind_speed, _    = get_val_blended(hourly, "wind_speed_10m",        idx, _day_offset_proxy)
-            temp_val,   _    = get_val_blended(hourly, "temperature_2m",        idx, _day_offset_proxy)
-            precip_val, _    = get_val_blended(hourly, "precipitation",         idx, _day_offset_proxy)
+            avg_cloud, src1 = get_val_blended(hourly, "cloud_cover",          idx, _day_offset_proxy)
+            low_c,     _    = get_val_blended(hourly, "cloud_cover_low",       idx, _day_offset_proxy)
+            mid_c,     _    = get_val_blended(hourly, "cloud_cover_mid",       idx, _day_offset_proxy)
+            high_c,    _    = get_val_blended(hourly, "cloud_cover_high",      idx, _day_offset_proxy)
+            humid,     _    = get_val_blended(hourly, "relative_humidity_2m",  idx, _day_offset_proxy)
+            wind_speed,_    = get_val_blended(hourly, "wind_speed_10m",        idx, _day_offset_proxy)
+            temp_val,  _    = get_val_blended(hourly, "temperature_2m",        idx, _day_offset_proxy)
+            precip_val,_    = get_val_blended(hourly, "precipitation",         idx, _day_offset_proxy)
             if src1: out_srcs.add(src1)
         elif _use_ecmwf:
-            _api_cloud = _get_raw(hourly, "cloud_cover",          "_ecmwf_ifs025", idx) or 0.0
+            avg_cloud  = _get_raw(hourly, "cloud_cover",          "_ecmwf_ifs025", idx) or 0.0
             low_c      = _get_raw(hourly, "cloud_cover_low",       "_ecmwf_ifs025", idx) or 0.0
             mid_c      = _get_raw(hourly, "cloud_cover_mid",       "_ecmwf_ifs025", idx) or 0.0
             high_c     = _get_raw(hourly, "cloud_cover_high",      "_ecmwf_ifs025", idx) or 0.0
@@ -1085,29 +1065,18 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
             src1 = "ECMWF"
             out_srcs.add("ECMWF")
         else:
-            _api_cloud, src1 = get_val(hourly, "cloud_cover",          idx, _prefer_jma)
-            low_c,      _    = get_val(hourly, "cloud_cover_low",      idx, _prefer_jma)
-            mid_c,      _    = get_val(hourly, "cloud_cover_mid",      idx, _prefer_jma)
-            high_c,     _    = get_val(hourly, "cloud_cover_high",     idx, _prefer_jma)
-            humid,      _    = get_val(hourly, "relative_humidity_2m", idx, _prefer_jma)
-            wind_speed, _    = get_val(hourly, "wind_speed_10m",       idx, _prefer_jma)
-            temp_val,   _    = get_val(hourly, "temperature_2m",       idx, _prefer_jma)
-            precip_val, _    = get_val(hourly, "precipitation",        idx, _prefer_jma)
+            avg_cloud, src1 = get_val(hourly, "cloud_cover",          idx, _prefer_jma)
+            low_c,     _    = get_val(hourly, "cloud_cover_low",      idx, _prefer_jma)
+            mid_c,     _    = get_val(hourly, "cloud_cover_mid",      idx, _prefer_jma)
+            high_c,    _    = get_val(hourly, "cloud_cover_high",     idx, _prefer_jma)
+            humid,     _    = get_val(hourly, "relative_humidity_2m", idx, _prefer_jma)
+            wind_speed,_    = get_val(hourly, "wind_speed_10m",       idx, _prefer_jma)
+            temp_val,  _    = get_val(hourly, "temperature_2m",       idx, _prefer_jma)
+            precip_val,_    = get_val(hourly, "precipitation",        idx, _prefer_jma)
             if src1: out_srcs.add(src1)
 
-        # ── TCC từ 3 tầng mây (công thức xác suất che phủ) ──────────────────
-        # Thay thế cloud_cover tổng hợp sẵn của API bằng giá trị tự tính.
-        # _api_cloud giữ lại để so sánh / debug khi cần.
-        avg_cloud = calc_tcc(low_c, mid_c, high_c)
-
         if len(out_table) == 0:
-            out_debug = {
-                "low":       int(low_c),
-                "mid":       int(mid_c),
-                "high":      int(high_c),
-                "total":     int(avg_cloud),      # TCC tính từ 3 tầng
-                "api_cloud": int(_api_cloud),     # cloud_cover gốc từ API (để so sánh)
-            }
+            out_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
 
         score = 100 - avg_cloud
         if score >= 92:   stars = "⭐⭐⭐⭐"
@@ -1783,51 +1752,7 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
   </table>
 </div>"""
         st.markdown(table_html, unsafe_allow_html=True)
-
-        # ── DEBUG: TCC vs API cloud + Himawari comparison placeholder ──────────
-        _dbg = current_cloud_debug
-        _tcc_val  = _dbg.get("total", 0)
-        _api_val  = _dbg.get("api_cloud", _tcc_val)   # fallback nếu key chưa có
-        _low_val  = _dbg.get("low",  0)
-        _mid_val  = _dbg.get("mid",  0)
-        _high_val = _dbg.get("high", 0)
-        _diff     = _tcc_val - _api_val
-        _diff_str = f"+{_diff}%" if _diff > 0 else (f"{_diff}%" if _diff < 0 else "±0%")
-        _diff_col = "#f97316" if _diff > 5 else ("#60a5fa" if _diff < -5 else "#94a3b8")
-
-        _src_tag = active_source_label.split("(")[0].strip()
-        _debug_html = f"""
-<div style="background:rgba(15,23,42,0.85);border:1px solid #1e3a5f;border-radius:10px;
-            padding:10px 14px;margin-bottom:8px;font-size:12px;font-family:'Segoe UI',sans-serif;">
-  <div style="color:#60a5fa;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">
-    🧮 CLOUD ANALYSIS · 1st slot · {_src_tag}
-  </div>
-  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:baseline;">
-    <span style="color:#94a3b8;">Low: <b style="color:#7dd3fc;">{_low_val}%</b></span>
-    <span style="color:#94a3b8;">Mid: <b style="color:#93c5fd;">{_mid_val}%</b></span>
-    <span style="color:#94a3b8;">High: <b style="color:#bae6fd;">{_high_val}%</b></span>
-    <span style="color:#94a3b8;border-left:1px solid #334155;padding-left:14px;">
-      TCC (tính): <b style="color:#34d399;">{_tcc_val}%</b>
-    </span>
-    <span style="color:#94a3b8;">
-      API cloud: <b style="color:#fbbf24;">{_api_val}%</b>
-    </span>
-    <span style="color:#94a3b8;">
-      Δ: <b style="color:{_diff_col};">{_diff_str}</b>
-    </span>
-  </div>
-  <div style="margin-top:8px;border-top:1px solid #1e3a5f;padding-top:7px;
-              color:#475569;font-size:11px;line-height:1.6;">
-    📡 <b style="color:#64748b;">Himawari-9 (JAXA)</b> ·
-    So sánh thực tế: hook vào
-    <code style="color:#6366f1;font-size:10px;">
-      https://www.eorc.jaxa.jp/ptree/
-    </code>
-    → Band 13 (10.4µm IR) hoặc Cloud Mask product (CLM).
-    <span style="color:#374151;">Fetch theo giờ UTC, convert sang JST, crop bbox lat/lon ±0.5° → tính mean CLM.</span>
-  </div>
-</div>"""
-        st.markdown(_debug_html, unsafe_allow_html=True)
+    else:
         st.markdown("""
 <div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
     <div style="font-size:18px;font-weight:700;color:#ef4444;margin-bottom:8px;">
