@@ -229,6 +229,7 @@ def calculate_exact_sun_altitude_ephem(lat, lon, year, month, day, hour_local, u
     sun = ephem.Sun(); sun.compute(obs)
     return round(math.degrees(float(sun.alt)), 1)
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def calculate_milkyway_altitude(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
     """Tính độ cao trung tâm Dải Ngân Hà (Galactic Center, Sgr A*).
     RA = 17h45m40s, Dec = -29°00'28" (J2000)
@@ -997,93 +998,154 @@ if st.session_state.day_offset == 0:
     desired_slots = [(yr,mo,dy,hr,lbl,dpfx) for yr,mo,dy,hr,lbl,dpfx in desired_slots
                      if _slot_is_future(yr,mo,dy,hr)]
 
-weather_table_data = []
-hours_labels = []
-moon_altitudes = []
-sun_altitudes  = []
-milkyway_altitudes = []
-current_cloud_debug = {"low": 0, "mid": 0, "high": 0, "total": 0}
-sources_used = set()
+@st.cache_data(ttl=1800, show_spinner=False)
+def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_utc_offset_h):
+    """Cache toàn bộ vòng lặp tính weather table + moon/sun/MW altitudes.
+    Key cache = (lat, lon, slots, source) — chỉ recompute khi thực sự đổi ngày/địa điểm/source."""
+    # hourly_data_frozen là tuple-of-items để hashable
+    hourly = dict(hourly_data_frozen) if hourly_data_frozen else {}
 
-times_list = hourly_data.get("time", []) if hourly_data else []
+    _prefer_jma = weather_source not in ["US (GFS)", "EU (ECMWF)"]
+    _use_blend  = weather_source == "🔀 Tổng hợp (Best)"
+    _use_ecmwf  = weather_source == "EU (ECMWF)"
 
-for yr, mo, dy, hr_local, label, date_prefix in desired_slots:
-    hours_labels.append(label)
-    moon_alt = calculate_exact_moon_altitude_ephem(st.session_state.lat, st.session_state.lon, yr, mo, dy, hr_local, loc_utc_offset_h)
-    moon_altitudes.append(moon_alt)
-    sun_alt  = calculate_exact_sun_altitude_ephem(st.session_state.lat, st.session_state.lon, yr, mo, dy, hr_local, loc_utc_offset_h)
-    sun_altitudes.append(sun_alt)
-    mw_alt, _ = calculate_milkyway_altitude(st.session_state.lat, st.session_state.lon, yr, mo, dy, hr_local, loc_utc_offset_h)
-    milkyway_altitudes.append(mw_alt)
+    # day_offset chỉ ảnh hưởng blend weight — dùng slot index 0 làm proxy
+    _day_offset_proxy = 0
+    if slots:
+        yr0, mo0, dy0 = slots[0][0], slots[0][1], slots[0][2]
+        from datetime import date as _date
+        _today = _date.today()
+        _day_offset_proxy = (_date(yr0, mo0, dy0) - _today).days
+        _day_offset_proxy = max(0, min(6, _day_offset_proxy))
 
-    if not times_list:
-        continue
+    out_table  = []
+    out_hours  = []
+    out_moon   = []
+    out_sun    = []
+    out_mw     = []
+    out_debug  = {"low": 0, "mid": 0, "high": 0, "total": 0}
+    out_srcs   = set()
 
-    target_ts = f"{date_prefix}T{hr_local:02d}:00"
-    idx = next((i for i, t in enumerate(times_list) if t.startswith(target_ts)), -1)
-    if idx == -1:
-        continue
+    times_list = hourly.get("time", [])
 
-    if use_blend:
-        avg_cloud, src1 = get_val_blended(hourly_data, "cloud_cover",          idx, st.session_state.day_offset)
-        low_c,     _    = get_val_blended(hourly_data, "cloud_cover_low",       idx, st.session_state.day_offset)
-        mid_c,     _    = get_val_blended(hourly_data, "cloud_cover_mid",       idx, st.session_state.day_offset)
-        high_c,    _    = get_val_blended(hourly_data, "cloud_cover_high",      idx, st.session_state.day_offset)
-        humid,     _    = get_val_blended(hourly_data, "relative_humidity_2m",  idx, st.session_state.day_offset)
-        wind_speed,_    = get_val_blended(hourly_data, "wind_speed_10m",        idx, st.session_state.day_offset)
-        temp_val,  _    = get_val_blended(hourly_data, "temperature_2m",        idx, st.session_state.day_offset)
-        precip_val,_    = get_val_blended(hourly_data, "precipitation",         idx, st.session_state.day_offset)
-        if src1: sources_used.add(src1)
-    elif use_ecmwf:
-        # ECMWF IFS025
-        avg_cloud  = _get_raw(hourly_data, "cloud_cover",          "_ecmwf_ifs025", idx) or 0.0
-        low_c      = _get_raw(hourly_data, "cloud_cover_low",       "_ecmwf_ifs025", idx) or 0.0
-        mid_c      = _get_raw(hourly_data, "cloud_cover_mid",       "_ecmwf_ifs025", idx) or 0.0
-        high_c     = _get_raw(hourly_data, "cloud_cover_high",      "_ecmwf_ifs025", idx) or 0.0
-        humid      = _get_raw(hourly_data, "relative_humidity_2m",  "_ecmwf_ifs025", idx) or 0.0
-        wind_speed = _get_raw(hourly_data, "wind_speed_10m",        "_ecmwf_ifs025", idx) or 0.0
-        temp_val   = _get_raw(hourly_data, "temperature_2m",        "_ecmwf_ifs025", idx) or 0.0
-        precip_val = _get_raw(hourly_data, "precipitation",         "_ecmwf_ifs025", idx) or 0.0
-        src1 = "ECMWF"
-        sources_used.add("ECMWF")
-    else:
-        avg_cloud, src1 = get_val(hourly_data, "cloud_cover",          idx, prefer_jma)
-        low_c,     _    = get_val(hourly_data, "cloud_cover_low",      idx, prefer_jma)
-        mid_c,     _    = get_val(hourly_data, "cloud_cover_mid",      idx, prefer_jma)
-        high_c,    _    = get_val(hourly_data, "cloud_cover_high",     idx, prefer_jma)
-        humid,     _    = get_val(hourly_data, "relative_humidity_2m", idx, prefer_jma)
-        wind_speed,_    = get_val(hourly_data, "wind_speed_10m",       idx, prefer_jma)
-        temp_val,  _    = get_val(hourly_data, "temperature_2m",       idx, prefer_jma)
-        precip_val,_    = get_val(hourly_data, "precipitation",        idx, prefer_jma)
-        if src1: sources_used.add(src1)
+    for yr, mo, dy, hr_local, label, date_prefix in slots:
+        out_hours.append(label)
+        out_moon.append(calculate_exact_moon_altitude_ephem(lat, lon, yr, mo, dy, hr_local, loc_utc_offset_h))
+        out_sun.append(calculate_exact_sun_altitude_ephem(lat, lon, yr, mo, dy, hr_local, loc_utc_offset_h))
+        mw_alt, _ = calculate_milkyway_altitude(lat, lon, yr, mo, dy, hr_local, loc_utc_offset_h)
+        out_mw.append(mw_alt)
 
-    if len(weather_table_data) == 0:
-        current_cloud_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
+        if not times_list:
+            continue
 
-    # Đánh giá CHỈ dựa vào avg_cloud — hoàn toàn tương ứng với % hiển thị trên bảng
-    # → không bao giờ mâu thuẫn: cloud cao hơn = sao ít hơn hoặc bằng
-    # Ngưỡng:  cloud <= 8%  → 4 sao
-    #          cloud <= 25% → 3 sao
-    #          cloud <= 50% → 2 sao
-    #          cloud <= 80% → 1 sao
-    #          cloud >  80% → 0 sao
-    score = 100 - avg_cloud  # 1-to-1 với % mây
+        target_ts = f"{date_prefix}T{hr_local:02d}:00"
+        idx = next((i for i, t in enumerate(times_list) if t.startswith(target_ts)), -1)
+        if idx == -1:
+            continue
 
-    if score >= 92:   stars = "⭐⭐⭐⭐"   # cloud <= 8%
-    elif score >= 75: stars = "⭐⭐⭐☆"   # cloud <= 25%
-    elif score >= 50: stars = "⭐⭐☆☆"   # cloud <= 50%
-    elif score >= 20: stars = "⭐☆☆☆"   # cloud <= 80%
-    else:             stars = "☆☆☆☆"    # cloud > 80%
+        if _use_blend:
+            avg_cloud, src1 = get_val_blended(hourly, "cloud_cover",          idx, _day_offset_proxy)
+            low_c,     _    = get_val_blended(hourly, "cloud_cover_low",       idx, _day_offset_proxy)
+            mid_c,     _    = get_val_blended(hourly, "cloud_cover_mid",       idx, _day_offset_proxy)
+            high_c,    _    = get_val_blended(hourly, "cloud_cover_high",      idx, _day_offset_proxy)
+            humid,     _    = get_val_blended(hourly, "relative_humidity_2m",  idx, _day_offset_proxy)
+            wind_speed,_    = get_val_blended(hourly, "wind_speed_10m",        idx, _day_offset_proxy)
+            temp_val,  _    = get_val_blended(hourly, "temperature_2m",        idx, _day_offset_proxy)
+            precip_val,_    = get_val_blended(hourly, "precipitation",         idx, _day_offset_proxy)
+            if src1: out_srcs.add(src1)
+        elif _use_ecmwf:
+            avg_cloud  = _get_raw(hourly, "cloud_cover",          "_ecmwf_ifs025", idx) or 0.0
+            low_c      = _get_raw(hourly, "cloud_cover_low",       "_ecmwf_ifs025", idx) or 0.0
+            mid_c      = _get_raw(hourly, "cloud_cover_mid",       "_ecmwf_ifs025", idx) or 0.0
+            high_c     = _get_raw(hourly, "cloud_cover_high",      "_ecmwf_ifs025", idx) or 0.0
+            humid      = _get_raw(hourly, "relative_humidity_2m",  "_ecmwf_ifs025", idx) or 0.0
+            wind_speed = _get_raw(hourly, "wind_speed_10m",        "_ecmwf_ifs025", idx) or 0.0
+            temp_val   = _get_raw(hourly, "temperature_2m",        "_ecmwf_ifs025", idx) or 0.0
+            precip_val = _get_raw(hourly, "precipitation",         "_ecmwf_ifs025", idx) or 0.0
+            src1 = "ECMWF"
+            out_srcs.add("ECMWF")
+        else:
+            avg_cloud, src1 = get_val(hourly, "cloud_cover",          idx, _prefer_jma)
+            low_c,     _    = get_val(hourly, "cloud_cover_low",      idx, _prefer_jma)
+            mid_c,     _    = get_val(hourly, "cloud_cover_mid",      idx, _prefer_jma)
+            high_c,    _    = get_val(hourly, "cloud_cover_high",     idx, _prefer_jma)
+            humid,     _    = get_val(hourly, "relative_humidity_2m", idx, _prefer_jma)
+            wind_speed,_    = get_val(hourly, "wind_speed_10m",       idx, _prefer_jma)
+            temp_val,  _    = get_val(hourly, "temperature_2m",       idx, _prefer_jma)
+            precip_val,_    = get_val(hourly, "precipitation",        idx, _prefer_jma)
+            if src1: out_srcs.add(src1)
 
-    weather_table_data.append({
-        "⏰": label,
-        "☁️": f"{int(avg_cloud)}%",
-        "💧": f"{int(humid)}%",
-        "💨": f"{round(wind_speed,1)}m/s",
-        "📸": stars,
-        "_temp": temp_val,
-        "_precip": precip_val,
-    })
+        if len(out_table) == 0:
+            out_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
+
+        score = 100 - avg_cloud
+        if score >= 92:   stars = "⭐⭐⭐⭐"
+        elif score >= 75: stars = "⭐⭐⭐☆"
+        elif score >= 50: stars = "⭐⭐☆☆"
+        elif score >= 20: stars = "⭐☆☆☆"
+        else:             stars = "☆☆☆☆"
+
+        out_table.append({
+            "⏰": label,
+            "☁️": f"{int(avg_cloud)}%",
+            "💧": f"{int(humid)}%",
+            "💨": f"{round(wind_speed,1)}m/s",
+            "📸": stars,
+            "_temp": temp_val,
+            "_precip": precip_val,
+        })
+
+    return out_table, out_hours, out_moon, out_sun, out_mw, out_debug, out_srcs
+
+# Chuyển hourly_data sang dạng hashable để cache key hoạt động
+_hourly_frozen = tuple(
+    (k, tuple(v) if isinstance(v, list) else v)
+    for k, v in (hourly_data.items() if hourly_data else [])
+)
+
+# ── PREFETCH TẤT CẢ 7 ĐÊM ngay sau khi có hourly_data ────────────────────────
+# Mục đích: warm up cache cho toàn bộ 7 ngày ngay khi chọn location.
+# Khi user bấm Next/Prev → _build_night_data đã có cache → gần như instant.
+# Chạy tuần tự (không thread) vì @st.cache_data không thread-safe khi write.
+def _make_slots_for_offset(base_jst, day_off):
+    td = (base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+    nd = td + timedelta(days=1)
+    return tuple([
+        (td.year, td.month, td.day, 18, "18:00", td.strftime("%Y-%m-%d")),
+        (td.year, td.month, td.day, 19, "19:00", td.strftime("%Y-%m-%d")),
+        (td.year, td.month, td.day, 20, "20:00", td.strftime("%Y-%m-%d")),
+        (td.year, td.month, td.day, 21, "21:00", td.strftime("%Y-%m-%d")),
+        (td.year, td.month, td.day, 22, "22:00", td.strftime("%Y-%m-%d")),
+        (td.year, td.month, td.day, 23, "23:00", td.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  0, "00:00", nd.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  1, "01:00", nd.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  2, "02:00", nd.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  3, "03:00", nd.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  4, "04:00", nd.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  5, "05:00", nd.strftime("%Y-%m-%d")),
+        (nd.year, nd.month, nd.day,  6, "06:00", nd.strftime("%Y-%m-%d")),
+    ])
+
+# Prefetch các ngày KHÁC ngày hiện tại (ngày hiện tại sẽ được tính ngay bên dưới)
+for _poff in range(7):
+    if _poff != st.session_state.day_offset:
+        _build_night_data(
+            st.session_state.lat, st.session_state.lon,
+            _make_slots_for_offset(_night_base_jst, _poff),
+            _hourly_frozen,
+            st.session_state.weather_source,
+            loc_utc_offset_h,
+        )
+
+(weather_table_data, hours_labels, moon_altitudes, sun_altitudes,
+ milkyway_altitudes, current_cloud_debug, sources_used) = _build_night_data(
+    st.session_state.lat, st.session_state.lon,
+    tuple(desired_slots),
+    _hourly_frozen,
+    st.session_state.weather_source,
+    loc_utc_offset_h,
+)
+sources_used = set(sources_used)  # trả về từ cache là frozenset hoặc set, đảm bảo là set
 
 # Label thực tế đã dùng — phân biệt auto-fallback với user chọn tay
 if use_blend:
