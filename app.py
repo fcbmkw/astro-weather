@@ -956,13 +956,11 @@ if st.session_state._source_auto and hourly_data:
     jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
               _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
     if jma_ok and st.session_state.weather_source != "JMA":
-        # JMA có data → switch về JMA
+        # JMA có data → switch về JMA (KHÔNG rerun: tránh double-rerun khi bấm Prev/Next)
         st.session_state.weather_source = "JMA"
-        st.rerun()
     elif not jma_ok and st.session_state.weather_source == "JMA":
-        # JMA không có data → switch sang GFS
+        # JMA không có data → switch sang GFS (KHÔNG rerun)
         st.session_state.weather_source = "US (GFS)"
-        st.rerun()
 
 # Sau auto-switch, cập nhật lại flags theo source hiện tại
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
