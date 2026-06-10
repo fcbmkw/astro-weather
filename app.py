@@ -79,7 +79,7 @@ LOCATION_DATABASE = {
     "67. Daikanbo 大観峰, Kumamoto": [32.99963, 131.0671],
     "68. Ikitsuki Island 生月島, Nagasaki": [33.3720, 129.3988],
     "69. Yobuko Cape Hado 波戸岬, Saga": [33.5878, 129.8780],
-    "70. Takachiho Amaterasu Railway 高千穂, Miyazaki": [32.7092, 131.3086],
+    "70. Takachiho Amaterasu Railway 高千穂, Miyazaki": [32.7147, 131.3083],
     "71. Cape Toi 都井岬, Miyazaki": [31.3750, 131.3450],
     "72. Kaimondake 開聞岳周辺, Kagoshima": [31.1805, 130.5284],
     "73. Yoron Island 百合ヶ浜, Kagoshima": [27.0452, 128.4246],
