@@ -1378,6 +1378,7 @@ if map_data:
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
+                st.session_state.map_center      = [bcoords[0], bcoords[1]]
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.session_state._need_fly       = False
@@ -1400,6 +1401,7 @@ if map_data:
                     st.session_state.is_custom_point):
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
+                st.session_state.map_center      = [bcoords[0], bcoords[1]]
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.session_state._last_tip       = None
@@ -1408,6 +1410,7 @@ if map_data:
             if abs(c_lat - st.session_state.lat) > 0.0001 or abs(c_lon - st.session_state.lon) > 0.0001:
                 st.session_state.lat             = c_lat
                 st.session_state.lon             = c_lon
+                st.session_state.map_center      = [c_lat, c_lon]
                 st.session_state.location_name   = fetch_location_name(c_lat, c_lon)
                 st.session_state.is_custom_point = True
                 st.session_state._last_tip       = None
