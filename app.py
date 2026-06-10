@@ -903,6 +903,20 @@ def get_val_blended(hourly, field, idx, day_offset):
     blended = sum(weights[k] * v for k, v in avail.items()) / total_w
     return round(blended, 1), "Blend"
 
+def calc_tcc(low_pct, mid_pct, high_pct):
+    """
+    Công thức xác suất che phủ bầu trời từ 3 tầng mây:
+        TCC = 1 - (1 - Low) × (1 - Mid) × (1 - High)
+    Giả định 3 tầng độc lập → thường OVER-estimate so với mô hình NWP,
+    vì thực tế các tầng mây cùng hệ thống thời tiết thường chồng nhau theo cột.
+    Dùng để so sánh với API cloud và Himawari, KHÔNG dùng để tính stars rating.
+    Input: % (0–100). Output: % (0–100).
+    """
+    low  = max(0.0, min(100.0, low_pct))  / 100.0
+    mid  = max(0.0, min(100.0, mid_pct))  / 100.0
+    high = max(0.0, min(100.0, high_pct)) / 100.0
+    return round((1.0 - (1.0 - low) * (1.0 - mid) * (1.0 - high)) * 100.0, 1)
+
 # ── COMPUTED STATE ────────────────────────────────────────────────────────────
 bortle_class, sqm_val = calculate_accurate_bortle(st.session_state.lat, st.session_state.lon)
 ra_val, dec_val = calculate_zenith_ra_dec(st.session_state.lat, st.session_state.lon)
@@ -1076,7 +1090,14 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
             if src1: out_srcs.add(src1)
 
         if len(out_table) == 0:
-            out_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
+            _tcc_debug = calc_tcc(low_c, mid_c, high_c)
+            out_debug = {
+                "low":       int(low_c),
+                "mid":       int(mid_c),
+                "high":      int(high_c),
+                "total":     int(avg_cloud),      # API cloud gốc — dùng cho stars rating
+                "tcc":       int(_tcc_debug),     # TCC công thức xác suất — chỉ để so sánh
+            }
 
         score = 100 - avg_cloud
         if score >= 92:   stars = "⭐⭐⭐⭐"
@@ -1752,6 +1773,52 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
   </table>
 </div>"""
         st.markdown(table_html, unsafe_allow_html=True)
+
+        # ── Cloud debug bar: API cloud (dùng cho rating) vs TCC (so sánh) ──────
+        _dbg      = current_cloud_debug
+        _api_val  = _dbg.get("total", 0)   # API cloud gốc
+        _tcc_val  = _dbg.get("tcc",   0)   # TCC công thức xác suất
+        _low_val  = _dbg.get("low",   0)
+        _mid_val  = _dbg.get("mid",   0)
+        _high_val = _dbg.get("high",  0)
+        _delta    = _tcc_val - _api_val
+        _delta_str = f"+{_delta}%" if _delta > 0 else (f"{_delta}%" if _delta < 0 else "±0%")
+        # Màu Δ: đỏ cam = TCC >> API (mây phân tầng nhiều), xanh = TCC ≈ API, xám = nhỏ
+        _delta_col = "#f97316" if _delta > 15 else ("#60a5fa" if _delta < -5 else "#94a3b8")
+        _src_tag   = active_source_label.split("(")[0].strip()
+
+        st.markdown(f"""
+<div style="background:rgba(15,23,42,0.75);border:1px solid #1e3a5f;border-radius:9px;
+            padding:9px 13px;margin-bottom:6px;font-size:12px;font-family:'Segoe UI',sans-serif;">
+  <div style="color:#475569;font-weight:600;margin-bottom:5px;letter-spacing:0.4px;">
+    🧮 CLOUD LAYERS · 1st slot · {_src_tag}
+    <span style="font-weight:400;color:#334155;margin-left:8px;">
+      (☁️ % dùng cho rating = API cloud · TCC chỉ để tham khảo)
+    </span>
+  </div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;">
+    <span style="color:#64748b;">🔵 Low <b style="color:#7dd3fc;">{_low_val}%</b></span>
+    <span style="color:#64748b;">⚪ Mid <b style="color:#93c5fd;">{_mid_val}%</b></span>
+    <span style="color:#64748b;">🔷 High <b style="color:#bae6fd;">{_high_val}%</b></span>
+    <span style="color:#64748b;border-left:1px solid #1e3a5f;padding-left:12px;">
+      API cloud <b style="color:#fbbf24;">{_api_val}%</b>
+    </span>
+    <span style="color:#64748b;">
+      TCC(1-(1-L)(1-M)(1-H)) <b style="color:#a3e635;">{_tcc_val}%</b>
+    </span>
+    <span style="color:#64748b;">
+      Δ <b style="color:{_delta_col};">{_delta_str}</b>
+      <span style="color:#374151;font-size:10px;">
+        {"← mây nhiều tầng chồng" if _delta > 15 else ("← mây đơn tầng" if _delta < -5 else "")}
+      </span>
+    </span>
+  </div>
+  <div style="margin-top:6px;color:#334155;font-size:10px;line-height:1.5;">
+    📋 Ghi vào Excel để so với Himawari-9 sau:
+    <code style="color:#475569;">DateTime · Low · Mid · High · API_cloud · TCC · Himawari_CLM · Thực_tế</code>
+  </div>
+</div>""", unsafe_allow_html=True)
+
     else:
         st.markdown("""
 <div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
