@@ -162,7 +162,7 @@ st.markdown("""
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("map_center", [35.6895, 139.6917]), ("zoom", 9),
              ("day_offset", 0), ("location_name", "Tokyo, Japan"),
-             ("is_custom_point", True), ("weather_source", "JMA"),
+             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
@@ -890,9 +890,9 @@ def get_val_blended(hourly, field, idx, day_offset):
     gfs   = _get_raw(hourly, field, "_gfs_seamless",  idx)
 
     if day_offset <= 3:
-        weights = {"jma": 0.60, "ecmwf": 0.30, "gfs": 0.10}
+        weights = {"jma": 0.40, "ecmwf": 0.50, "gfs": 0.10}
     else:
-        weights = {"jma": 0.15, "ecmwf": 0.55, "gfs": 0.30}
+        weights = {"jma": 0.14, "ecmwf": 0.56, "gfs": 0.30}
 
     vals  = {"jma": jma, "ecmwf": ecmwf, "gfs": gfs}
     avail = {k: v for k, v in vals.items() if v is not None}
@@ -936,7 +936,7 @@ next_date   = target_date + timedelta(days=1)
 moon_pct, moon_text = get_moon_phase_percent(target_date)
 
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
+use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 hourly_data, _, _loc_utc_offset, _ep_label = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
 
@@ -952,20 +952,18 @@ def _jma_has_data_for_date(hourly, date_prefix):
             return True
     return False
 
-# Auto-switch: luôn kiểm tra JMA coverage nếu đang ở chế độ auto (kể cả khi đang dùng GFS)
+# Auto-switch: chỉ can thiệp khi đang dùng JMA đơn lẻ, không đụng Blend
 if st.session_state._source_auto and hourly_data:
-    jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
-              _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
-    if jma_ok and st.session_state.weather_source != "JMA":
-        # JMA có data → switch về JMA (KHÔNG rerun: tránh double-rerun khi bấm Prev/Next)
-        st.session_state.weather_source = "JMA"
-    elif not jma_ok and st.session_state.weather_source == "JMA":
-        # JMA không có data → switch sang GFS (KHÔNG rerun)
-        st.session_state.weather_source = "US (GFS)"
+    _cur = st.session_state.weather_source
+    if _cur not in ("🔀 Blend (JMA+ECMWF+GFS)", "US (GFS)", "EU (ECMWF)"):
+        jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
+                  _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
+        if not jma_ok:
+            st.session_state.weather_source = "US (GFS)"
 
 # Sau auto-switch, cập nhật lại flags theo source hiện tại
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
+use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 
 # UTC offset của location hiện tại (tính bằng giây) — dùng cho moon altitude
@@ -1006,7 +1004,7 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
     hourly = dict(hourly_data_frozen) if hourly_data_frozen else {}
 
     _prefer_jma = weather_source not in ["US (GFS)", "EU (ECMWF)"]
-    _use_blend  = weather_source == "🔀 Tổng hợp (Best)"
+    _use_blend  = weather_source == "🔀 Blend (JMA+ECMWF+GFS)"
     _use_ecmwf  = weather_source == "EU (ECMWF)"
 
     # day_offset chỉ ảnh hưởng blend weight — dùng slot index 0 làm proxy
@@ -1149,7 +1147,7 @@ sources_used = set(sources_used)  # trả về từ cache là frozenset hoặc s
 
 # Label thực tế đã dùng — phân biệt auto-fallback với user chọn tay
 if use_blend:
-    active_source_label = "🔀 Tổng hợp (JMA+ECMWF+GFS)"
+    active_source_label = "🔀 Blend (JMA+ECMWF+GFS)"
 elif "ECMWF" in sources_used:
     active_source_label = "EU (ECMWF IFS025)"
 elif "JMA" in sources_used and "GFS" in sources_used:
@@ -1462,7 +1460,7 @@ with col_right:
 
     # Weather source selectbox + source label
     # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
-    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Tổng hợp (Best)"]
+    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Blend (JMA+ECMWF+GFS)"]
     cur_src = st.session_state.weather_source
     if cur_src not in source_options:
         cur_src = "JMA"
