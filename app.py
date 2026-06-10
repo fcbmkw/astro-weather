@@ -70,7 +70,7 @@ LOCATION_DATABASE = {
     "58. Bisei Observatory 美星天文台, Okayama": [34.6712, 133.5483],
     "59. Hiruzen Highlands 蒜山高原, Okayama": [35.2770, 133.6740],
     "60. Tottori Sand Dunes 鳥取砂丘, Tottori": [35.5397, 134.2383],
-    "61. Misasa Onsen Observatory 三朝温泉周辺, Tottori": [35.4128, 133.8655],
+    "61. Misasa Onsen Observatory 三朝温泉周辺, Tottori": [35.4105, 133.8924],
     "62. Akiyoshidai Karst 秋吉台, Yamaguchi": [34.2576, 131.3070],
     "63. Shikoku Karst 四国カルスト, Ehime": [33.3804, 132.9536],
     "64. Ashizuri Cape 足摺岬, Kochi": [32.7196, 133.0182],
