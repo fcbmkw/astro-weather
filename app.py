@@ -58,7 +58,7 @@ LOCATION_DATABASE = {
     "46. Soni Highlands 曽爾高原, Nara": [34.5346, 136.1506],
     "47. Norikura Tatamidaira 乗鞍畳平, Gifu": [36.1068, 137.5538],
     "48. Hirayu Pass 平湯峠, Gifu": [36.1658, 137.5507],
-    "49. Shinhotaka Ropeway 新穂高, Gifu": [36.2898, 137.6462],
+    "49. Shinhotaka Ropeway 新穂高, Gifu": [36.2854, 137.5743],
     "50. Hakusan Shirakawago White Road, Ishikawa": [36.2212, 136.7928],
     "51. Chirihama Beach 千里浜なぎさドライブウェイ, Ishikawa": [36.8157, 136.7448],
     "52. Mikatagoko Rainbow Line 三方五湖, Fukui": [35.5945, 135.8824],
