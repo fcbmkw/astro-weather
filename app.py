@@ -76,7 +76,7 @@ LOCATION_DATABASE = {
     "64. Ashizuri Cape 足摺岬, Kochi": [32.7196, 133.0182],
     "65. Sata Cape 佐多岬, Kagoshima": [30.9950, 130.6583], 
     "66. Aso Kusasenri 草千里ヶ浜, Kumamoto": [32.8845, 131.0808],
-    "67. Daikanbo 大観峰, Kumamoto": [32.9733, 131.0667],
+    "67. Daikanbo 大観峰, Kumamoto": [32.99963, 131.0671],
     "68. Ikitsuki Island 生月島, Nagasaki": [33.3720, 129.3988],
     "69. Yobuko Cape Hado 波戸岬, Saga": [33.5878, 129.8780],
     "70. Takachiho Amaterasu Railway 高千穂, Miyazaki": [32.7092, 131.3086],
