@@ -1353,17 +1353,13 @@ if not is_bookmark:
     ).add_to(m)
 
 # ── st_folium ─────────────────────────────────────────────────────────────────
-# QUAN TRỌNG: KHÔNG đưa "zoom"/"center" vào returned_objects.
-# Nếu có → mỗi pan/zoom map trả data về Python → Streamlit rerun → map refresh.
-# Chỉ return những gì cần xử lý click. Zoom/center được lưu qua _need_fly flag.
+# KHÔNG đưa "zoom"/"center" vào returned_objects → tránh rerun mỗi khi pan/zoom.
+# KHÔNG inject "center" vào kwargs → map giữ nguyên view của user khi chọn địa điểm.
 _map_key = "astro_map_main"
 _stfolium_kwargs = dict(
     width='stretch', height=600, key=_map_key,
     returned_objects=["last_clicked", "last_object_clicked_tooltip"],
 )
-if st.session_state._need_fly:
-    _stfolium_kwargs["center"] = st.session_state.map_center
-    st.session_state._need_fly = False   # reset ngay — chỉ fly 1 lần
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
@@ -1390,16 +1386,13 @@ if map_data:
             bname, bcoords = matched
             _tip_key = f"{bcoords[0]:.4f},{bcoords[1]:.4f}"
             if _tip_key != st.session_state._last_tip:
-                # Nếu click sao mới → xử lý và lưu key để chặn rerun kép
-                # Nếu click lại cùng sao → _tip_key == _last_tip → skip (không cần rerun)
                 st.session_state._last_tip       = _tip_key
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
-                st.session_state.map_center      = [bcoords[0], bcoords[1]]
+                # KHÔNG set map_center / _need_fly → map giữ nguyên view hiện tại
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
-                st.session_state._need_fly       = True
                 st.rerun()
         else:
             # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
@@ -1679,10 +1672,9 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             nlat, nlon = LOCATION_DATABASE[sel_loc]
             if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
                 st.session_state.lat, st.session_state.lon = nlat, nlon
-                st.session_state.map_center      = [nlat, nlon]
+                # KHÔNG set map_center / _need_fly → map giữ nguyên view hiện tại
                 st.session_state.location_name   = sel_loc
                 st.session_state.is_custom_point = False
-                st.session_state._need_fly       = True
                 st.rerun()
     with nav_lpm:
         st.markdown(
