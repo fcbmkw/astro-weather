@@ -1191,15 +1191,17 @@ _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 if st.session_state.map_tile not in ("satellite", "street"):
     st.session_state.map_tile = "satellite"
 
-# ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
-# prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
-# Điều này là chìa khoá giúp pan/zoom mượt: Streamlit không can thiệp vào
-# camera position sau mỗi rerun.
+# ── Folium map — location/zoom CỐ ĐỊNH, không thay đổi theo session state ──
+# st_folium với key cố định giữ nguyên camera (pan/zoom) của user giữa các rerun.
+# Nếu truyền location động → folium object thay đổi → st_folium reset view.
+# → Luôn dùng tọa độ khởi tạo cố định; map_center chỉ còn dùng cho lần init đầu tiên.
+_MAP_INIT_LOC  = [35.6895, 139.6917]   # Tokyo — không thay đổi
+_MAP_INIT_ZOOM = 9
 m = folium.Map(
-    location=st.session_state.map_center,
-    zoom_start=st.session_state.zoom,
-    tiles=None,           # không load tile mặc định; tile được inject qua JS bên dưới
-    prefer_canvas=True,   # dùng Canvas renderer → ít DOM node hơn, scroll mượt hơn
+    location=_MAP_INIT_LOC,
+    zoom_start=_MAP_INIT_ZOOM,
+    tiles=None,
+    prefer_canvas=True,
 )
 
 # ── Tile layers (chỉ để JS switchTile có thể gọi; không load ngay) ──
