@@ -1355,12 +1355,16 @@ if not is_bookmark:
     ).add_to(m)
 
 # ── st_folium ─────────────────────────────────────────────────────────────────
-# KHÔNG đưa "zoom"/"center" vào returned_objects → tránh rerun mỗi khi pan/zoom.
-# KHÔNG inject "center" vào kwargs → map giữ nguyên view của user khi chọn địa điểm.
+# "zoom" và "center" trong returned_objects KHÔNG gây rerun tự động —
+# st_folium chỉ rerun khi last_clicked / last_object_clicked_tooltip thay đổi.
+# Nhưng chúng cho phép đọc view hiện tại của user khi có click,
+# để lưu lại và restore sau rerun.
 _map_key = "astro_map_main"
 _stfolium_kwargs = dict(
     width='stretch', height=600, key=_map_key,
-    returned_objects=["last_clicked", "last_object_clicked_tooltip"],
+    returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom", "center"],
+    center=st.session_state.map_center,
+    zoom=st.session_state.zoom,
 )
 map_data = st_folium(m, **_stfolium_kwargs)
 
@@ -1372,12 +1376,23 @@ _lpm_url = (f"https://www.lightpollutionmap.info/"
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
+    # Luôn lưu zoom/center hiện tại của user trước khi xử lý click.
+    # Đây là giá trị map đang hiển thị — sẽ được restore sau rerun qua
+    # center= và zoom= params của st_folium phía trên.
+    _cur_center = map_data.get("center")
+    _cur_zoom   = map_data.get("zoom")
+    if _cur_center and isinstance(_cur_center, (list, dict)):
+        if isinstance(_cur_center, dict):
+            _cur_center = [_cur_center.get("lat", st.session_state.map_center[0]),
+                           _cur_center.get("lng", st.session_state.map_center[1])]
+        st.session_state.map_center = _cur_center
+    if _cur_zoom is not None:
+        st.session_state.zoom = _cur_zoom
+
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
-    # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
-    # _last_tip được reset về None sau mỗi rerun thành công → click lại cùng sao vẫn hoạt động.
     if clicked_tip:
         matched = None
         for bname, bcoords in LOCATION_DATABASE.items():
@@ -1392,12 +1407,10 @@ if map_data:
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
-                # KHÔNG set map_center / _need_fly → map giữ nguyên view hiện tại
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.rerun()
         else:
-            # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
             st.session_state._last_tip = None
 
     # ── Priority 2: free-click on empty map ──────────────────────────────────
@@ -1414,7 +1427,6 @@ if map_data:
                     st.session_state.is_custom_point):
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
-                # KHÔNG set map_center = bcoords
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.session_state._last_tip       = None
@@ -1425,7 +1437,7 @@ if map_data:
                 st.session_state.lon             = c_lon
                 st.session_state.location_name   = fetch_location_name(c_lat, c_lon)
                 st.session_state.is_custom_point = True
-                st.session_state._last_tip       = None  # reset → click sao sau đó vẫn work
+                st.session_state._last_tip       = None
                 st.rerun()
 
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
