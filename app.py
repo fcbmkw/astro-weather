@@ -162,7 +162,7 @@ st.markdown("""
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("map_center", [35.6895, 139.6917]), ("zoom", 9),
              ("day_offset", 0), ("location_name", "Tokyo, Japan"),
-             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"),
+             ("is_custom_point", True), ("weather_source", "JMA"),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
@@ -880,8 +880,8 @@ def _get_raw(hourly, field, suffix, idx):
 def get_val_blended(hourly, field, idx, day_offset):
     """
     Weighted blend of JMA + ECMWF + GFS based on day_offset.
-    Day 0-3: ECMWF x0.50 + JMA x0.40 + GFS x0.10  (ECMWF 51-member ensemble > JMA single-run)
-    Day 4-7: ECMWF x0.56 + GFS x0.30 + JMA x0.14  (JMA MSM coverage ends ~day 3.5)
+    Day 0-3: JMA x0.60 + ECMWF x0.30 + GFS x0.10  (JMA MSM 3km grid, best short-range for Japan)
+    Day 4-7: ECMWF x0.55 + GFS x0.30 + JMA x0.15  (JMA MSM coverage ends ~day 3.5)
     Re-normalises weights if any model has missing data.
     Returns (float_value, label_string)
     """
@@ -890,9 +890,9 @@ def get_val_blended(hourly, field, idx, day_offset):
     gfs   = _get_raw(hourly, field, "_gfs_seamless",  idx)
 
     if day_offset <= 3:
-        weights = {"jma": 0.40, "ecmwf": 0.50, "gfs": 0.10}  # ECMWF ensemble > JMA single-run
+        weights = {"jma": 0.60, "ecmwf": 0.30, "gfs": 0.10}
     else:
-        weights = {"jma": 0.14, "ecmwf": 0.56, "gfs": 0.30}  # JMA MSM hết coverage ~day 3.5
+        weights = {"jma": 0.15, "ecmwf": 0.55, "gfs": 0.30}
 
     vals  = {"jma": jma, "ecmwf": ecmwf, "gfs": gfs}
     avail = {k: v for k, v in vals.items() if v is not None}
@@ -902,14 +902,6 @@ def get_val_blended(hourly, field, idx, day_offset):
     total_w = sum(weights[k] for k in avail)
     blended = sum(weights[k] * v for k, v in avail.items()) / total_w
     return round(blended, 1), "Blend"
-
-def calc_tcc(low_pct, mid_pct, high_pct):
-    """TCC = 1-(1-L)(1-M)(1-H) — công thức xác suất, CHỈ để so sánh/debug,
-    không dùng cho stars rating (API cloud tích phân 3D chính xác hơn)."""
-    l = max(0.0, min(100.0, low_pct))  / 100.0
-    m = max(0.0, min(100.0, mid_pct))  / 100.0
-    h = max(0.0, min(100.0, high_pct)) / 100.0
-    return round((1.0 - (1.0 - l) * (1.0 - m) * (1.0 - h)) * 100.0, 1)
 
 # ── COMPUTED STATE ────────────────────────────────────────────────────────────
 bortle_class, sqm_val = calculate_accurate_bortle(st.session_state.lat, st.session_state.lon)
@@ -944,7 +936,7 @@ next_date   = target_date + timedelta(days=1)
 moon_pct, moon_text = get_moon_phase_percent(target_date)
 
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
+use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 hourly_data, _, _loc_utc_offset, _ep_label = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
 
@@ -960,22 +952,20 @@ def _jma_has_data_for_date(hourly, date_prefix):
             return True
     return False
 
-# Auto-switch: chỉ áp dụng khi đang dùng JMA đơn lẻ (không can thiệp Blend)
-# Blend tự xử lý JMA missing bên trong get_val_blended (re-normalise weights).
+# Auto-switch: luôn kiểm tra JMA coverage nếu đang ở chế độ auto (kể cả khi đang dùng GFS)
 if st.session_state._source_auto and hourly_data:
-    _cur = st.session_state.weather_source
-    _blend_name = "🔀 Blend (JMA+ECMWF+GFS)"
-    if _cur not in (_blend_name, "US (GFS)", "EU (ECMWF)"):
-        # Đang ở JMA (hoặc auto chưa set) → kiểm tra JMA coverage
-        jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
-                  _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
-        if not jma_ok:
-            # JMA hết data → fallback GFS
-            st.session_state.weather_source = "US (GFS)"
+    jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
+              _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
+    if jma_ok and st.session_state.weather_source != "JMA":
+        # JMA có data → switch về JMA (KHÔNG rerun: tránh double-rerun khi bấm Prev/Next)
+        st.session_state.weather_source = "JMA"
+    elif not jma_ok and st.session_state.weather_source == "JMA":
+        # JMA không có data → switch sang GFS (KHÔNG rerun)
+        st.session_state.weather_source = "US (GFS)"
 
 # Sau auto-switch, cập nhật lại flags theo source hiện tại
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
+use_blend  = (st.session_state.weather_source == "🔀 Tổng hợp (Best)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 
 # UTC offset của location hiện tại (tính bằng giây) — dùng cho moon altitude
@@ -1016,7 +1006,7 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
     hourly = dict(hourly_data_frozen) if hourly_data_frozen else {}
 
     _prefer_jma = weather_source not in ["US (GFS)", "EU (ECMWF)"]
-    _use_blend  = weather_source == "🔀 Blend (JMA+ECMWF+GFS)"
+    _use_blend  = weather_source == "🔀 Tổng hợp (Best)"
     _use_ecmwf  = weather_source == "EU (ECMWF)"
 
     # day_offset chỉ ảnh hưởng blend weight — dùng slot index 0 làm proxy
@@ -1086,13 +1076,7 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
             if src1: out_srcs.add(src1)
 
         if len(out_table) == 0:
-            out_debug = {
-                "low":   int(low_c),
-                "mid":   int(mid_c),
-                "high":  int(high_c),
-                "total": int(avg_cloud),                        # API cloud → rating
-                "tcc":   int(calc_tcc(low_c, mid_c, high_c)),  # công thức xác suất → compare
-            }
+            out_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
 
         score = 100 - avg_cloud
         if score >= 92:   stars = "⭐⭐⭐⭐"
@@ -1165,7 +1149,7 @@ sources_used = set(sources_used)  # trả về từ cache là frozenset hoặc s
 
 # Label thực tế đã dùng — phân biệt auto-fallback với user chọn tay
 if use_blend:
-    active_source_label = "🔀 Blend (JMA+ECMWF+GFS)"
+    active_source_label = "🔀 Tổng hợp (JMA+ECMWF+GFS)"
 elif "ECMWF" in sources_used:
     active_source_label = "EU (ECMWF IFS025)"
 elif "JMA" in sources_used and "GFS" in sources_used:
@@ -1191,17 +1175,15 @@ _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 if st.session_state.map_tile not in ("satellite", "street"):
     st.session_state.map_tile = "satellite"
 
-# ── Folium map — location/zoom CỐ ĐỊNH, không thay đổi theo session state ──
-# st_folium với key cố định giữ nguyên camera (pan/zoom) của user giữa các rerun.
-# Nếu truyền location động → folium object thay đổi → st_folium reset view.
-# → Luôn dùng tọa độ khởi tạo cố định; map_center chỉ còn dùng cho lần init đầu tiên.
-_MAP_INIT_LOC  = [35.6895, 139.6917]   # Tokyo — không thay đổi
-_MAP_INIT_ZOOM = 9
+# ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
+# prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
+# Điều này là chìa khoá giúp pan/zoom mượt: Streamlit không can thiệp vào
+# camera position sau mỗi rerun.
 m = folium.Map(
-    location=_MAP_INIT_LOC,
-    zoom_start=_MAP_INIT_ZOOM,
-    tiles=None,
-    prefer_canvas=True,
+    location=st.session_state.map_center,
+    zoom_start=st.session_state.zoom,
+    tiles=None,           # không load tile mặc định; tile được inject qua JS bên dưới
+    prefer_canvas=True,   # dùng Canvas renderer → ít DOM node hơn, scroll mượt hơn
 )
 
 # ── Tile layers (chỉ để JS switchTile có thể gọi; không load ngay) ──
@@ -1355,17 +1337,17 @@ if not is_bookmark:
     ).add_to(m)
 
 # ── st_folium ─────────────────────────────────────────────────────────────────
-# "zoom" và "center" trong returned_objects KHÔNG gây rerun tự động —
-# st_folium chỉ rerun khi last_clicked / last_object_clicked_tooltip thay đổi.
-# Nhưng chúng cho phép đọc view hiện tại của user khi có click,
-# để lưu lại và restore sau rerun.
+# QUAN TRỌNG: KHÔNG đưa "zoom"/"center" vào returned_objects.
+# Nếu có → mỗi pan/zoom map trả data về Python → Streamlit rerun → map refresh.
+# Chỉ return những gì cần xử lý click. Zoom/center được lưu qua _need_fly flag.
 _map_key = "astro_map_main"
 _stfolium_kwargs = dict(
     width='stretch', height=600, key=_map_key,
-    returned_objects=["last_clicked", "last_object_clicked_tooltip", "zoom", "center"],
-    center=st.session_state.map_center,
-    zoom=st.session_state.zoom,
+    returned_objects=["last_clicked", "last_object_clicked_tooltip"],
 )
+if st.session_state._need_fly:
+    _stfolium_kwargs["center"] = st.session_state.map_center
+    st.session_state._need_fly = False   # reset ngay — chỉ fly 1 lần
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
@@ -1376,23 +1358,12 @@ _lpm_url = (f"https://www.lightpollutionmap.info/"
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
-    # Luôn lưu zoom/center hiện tại của user trước khi xử lý click.
-    # Đây là giá trị map đang hiển thị — sẽ được restore sau rerun qua
-    # center= và zoom= params của st_folium phía trên.
-    _cur_center = map_data.get("center")
-    _cur_zoom   = map_data.get("zoom")
-    if _cur_center and isinstance(_cur_center, (list, dict)):
-        if isinstance(_cur_center, dict):
-            _cur_center = [_cur_center.get("lat", st.session_state.map_center[0]),
-                           _cur_center.get("lng", st.session_state.map_center[1])]
-        st.session_state.map_center = _cur_center
-    if _cur_zoom is not None:
-        st.session_state.zoom = _cur_zoom
-
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
+    # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
+    # _last_tip được reset về None sau mỗi rerun thành công → click lại cùng sao vẫn hoạt động.
     if clicked_tip:
         matched = None
         for bname, bcoords in LOCATION_DATABASE.items():
@@ -1403,14 +1374,19 @@ if map_data:
             bname, bcoords = matched
             _tip_key = f"{bcoords[0]:.4f},{bcoords[1]:.4f}"
             if _tip_key != st.session_state._last_tip:
+                # Nếu click sao mới → xử lý và lưu key để chặn rerun kép
+                # Nếu click lại cùng sao → _tip_key == _last_tip → skip (không cần rerun)
                 st.session_state._last_tip       = _tip_key
                 st.session_state._last_lc        = lc
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
+                st.session_state.map_center      = [bcoords[0], bcoords[1]]
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
+                st.session_state._need_fly       = True
                 st.rerun()
         else:
+            # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
             st.session_state._last_tip = None
 
     # ── Priority 2: free-click on empty map ──────────────────────────────────
@@ -1427,6 +1403,7 @@ if map_data:
                     st.session_state.is_custom_point):
                 st.session_state.lat             = bcoords[0]
                 st.session_state.lon             = bcoords[1]
+                # KHÔNG set map_center = bcoords
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.session_state._last_tip       = None
@@ -1437,7 +1414,7 @@ if map_data:
                 st.session_state.lon             = c_lon
                 st.session_state.location_name   = fetch_location_name(c_lat, c_lon)
                 st.session_state.is_custom_point = True
-                st.session_state._last_tip       = None
+                st.session_state._last_tip       = None  # reset → click sao sau đó vẫn work
                 st.rerun()
 
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
@@ -1484,7 +1461,7 @@ with col_right:
 
     # Weather source selectbox + source label
     # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
-    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Blend (JMA+ECMWF+GFS)"]
+    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Tổng hợp (Best)"]
     cur_src = st.session_state.weather_source
     if cur_src not in source_options:
         cur_src = "JMA"
@@ -1686,9 +1663,10 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
             nlat, nlon = LOCATION_DATABASE[sel_loc]
             if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
                 st.session_state.lat, st.session_state.lon = nlat, nlon
-                # KHÔNG set map_center / _need_fly → map giữ nguyên view hiện tại
+                st.session_state.map_center      = [nlat, nlon]
                 st.session_state.location_name   = sel_loc
                 st.session_state.is_custom_point = False
+                st.session_state._need_fly       = True
                 st.rerun()
     with nav_lpm:
         st.markdown(
@@ -1774,45 +1752,6 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
   </table>
 </div>"""
         st.markdown(table_html, unsafe_allow_html=True)
-
-        # ── Cloud debug bar: API cloud (rating) vs TCC (compare) ─────────────
-        _d        = current_cloud_debug
-        _api      = _d.get("total", 0)
-        _tcc      = _d.get("tcc",   0)
-        _delta    = _tcc - _api
-        _delta_s  = f"+{_delta}%" if _delta > 0 else (f"{_delta}%" if _delta < 0 else "±0%")
-        _dcol     = "#f97316" if _delta > 15 else ("#60a5fa" if _delta < -5 else "#64748b")
-        _hint     = "← mây nhiều tầng / front" if _delta > 15 else ("← mây đơn tầng" if _delta < -5 else "")
-        _src_tag  = active_source_label.replace("🔀 ","").split("(")[0].strip()
-        st.markdown(f"""
-<div style="background:rgba(15,23,42,0.70);border:1px solid #1e3a5f;border-radius:9px;
-            padding:8px 13px;margin-bottom:6px;font-size:12px;font-family:'Segoe UI',sans-serif;">
-  <div style="color:#475569;font-weight:600;margin-bottom:4px;">
-    🧮 CLOUD LAYERS · slot 1 · {_src_tag}
-    <span style="font-weight:400;color:#334155;font-size:11px;margin-left:6px;">
-      ☁️ rating dùng API cloud · TCC chỉ để so sánh với Himawari
-    </span>
-  </div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;">
-    <span style="color:#64748b;">Low <b style="color:#7dd3fc;">{_d.get('low',0)}%</b></span>
-    <span style="color:#64748b;">Mid <b style="color:#93c5fd;">{_d.get('mid',0)}%</b></span>
-    <span style="color:#64748b;">High <b style="color:#bae6fd;">{_d.get('high',0)}%</b></span>
-    <span style="color:#64748b;border-left:1px solid #1e3a5f;padding-left:10px;">
-      API cloud <b style="color:#fbbf24;">{_api}%</b></span>
-    <span style="color:#64748b;">
-      TCC <b style="color:#a3e635;">{_tcc}%</b></span>
-    <span style="color:#64748b;">
-      Δ <b style="color:{_dcol};">{_delta_s}</b>
-      <span style="color:#374151;font-size:10px;"> {_hint}</span>
-    </span>
-  </div>
-  <div style="margin-top:5px;color:#334155;font-size:10px;">
-    📋 Excel: <code style="color:#475569;">DateTime · Low · Mid · High · API_cloud · TCC · Himawari_B13(IR) · Thực_tế</code>
-    &nbsp;|&nbsp; Himawari IR band: <a href="https://himawari8.nict.go.jp" target="_blank"
-    style="color:#4f6ef7;">himawari8.nict.go.jp</a> → chọn <b>B13/IRC</b> (hoạt động 24/7, kể cả ban đêm)
-  </div>
-</div>""", unsafe_allow_html=True)
-
     else:
         st.markdown("""
 <div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
