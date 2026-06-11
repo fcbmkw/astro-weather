@@ -902,15 +902,17 @@ _ENDPOINTS = [
 def _fetch_weather_raw(lat, lon):
     """Raw API fetch với retry + multi-endpoint fallback.
     Returns (hourly_dict, utc_offset_seconds, endpoint_used_label, last_error)"""
+    import time as _time
     base = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+    headers = {"User-Agent": "Mozilla/5.0 (AstroMapPro/7.0)"}
     last_error = None
     for ep_label, ep_suffix in _ENDPOINTS:
         url = base + ep_suffix
-        for attempt in range(2):   # 2 lần thử mỗi endpoint
+        for attempt in range(3):   # 3 lần thử mỗi endpoint (network có thể chập chờn)
             try:
                 # Multi-model request (full/no_jma) nặng hơn, cần timeout dài hơn
                 _timeout = 25 if ep_label != "gfs_only" else 12
-                res = requests.get(url, timeout=_timeout)
+                res = requests.get(url, headers=headers, timeout=_timeout)
                 if res.status_code == 200:
                     j = res.json()
                     return j.get("hourly", {}), j.get("utc_offset_seconds", 32400), ep_label, None
@@ -920,10 +922,11 @@ def _fetch_weather_raw(lat, lon):
                     break
             except requests.exceptions.Timeout:
                 last_error = "timeout"
-                # timeout → thử lại 1 lần, sau đó chuyển endpoint
+                # timeout → thử lại
             except requests.exceptions.ConnectionError as e:
                 last_error = f"connection_error: {e.__class__.__name__}"
-                break
+                _time.sleep(0.5 * (attempt + 1))  # backoff rồi thử lại — có thể chỉ là lỗi mạng tạm thời
+                continue
             except Exception as e:
                 last_error = f"{e.__class__.__name__}: {e}"
                 break  # lỗi khác → chuyển endpoint ngay
