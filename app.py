@@ -176,7 +176,7 @@ LOCATION_DATABASE = {
     "163. Shirogane Blue Pond 青い池, Hokkaido": [43.4934, 142.6188],
     "164. Cape Esan 恵山岬, Hokkaido": [41.8065, 141.1667],
     "165. Koganezaki 黄金崎, Shizuoka": [34.7646, 138.7635],
-    "166. Tateyama Kurobe Raicho-daira 雷鳥平, Toyama": [36.5758, 137.6085],
+    "166. Gokayama Ainokura 五箇山相倉集落, Toyama": [36.4259, 136.9357],
     "167. Mikuni Pass 三国峠, Hokkaido": [43.6408, 143.1754],
     "168. Oirase Stream 奥入瀬渓流, Aomori": [40.5228, 140.9344],
     "169. Tanesashi Coast 種差海岸, Aomori": [40.4746, 141.6047],
