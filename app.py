@@ -12,7 +12,7 @@ import ephem
 LOCATION_DATABASE = {
     "1. Jogashima 馬の背, Kanagawa": [35.1313, 139.6179],
     "2. Tateyama ゴルフ場, Chiba": [34.9517, 139.8103],
-    "3. Minamiboso 駐車場, Chiba": [34.9071, 139.8611],
+    "3. Shirahama 白浜の屏風岩, Chiba": [34.9088, 139.8294],
     "4. Onjuku 大波月海岸, Chiba": [35.1795, 140.3729],
     "5. Isumi 雀島, Chiba": [35.3196, 140.4091],
     "6. Manazuru 真鶴岬, Kanagawa": [35.1408, 139.1609],
@@ -34,15 +34,15 @@ LOCATION_DATABASE = {
     "22. Oku-Nikko 湯ノ湖畔, Tochigi": [36.8036, 139.4236],
     "23. Hoshinomura 天地人橋, Fukushima": [37.3427, 140.6756],
     "24. Azuma-kofuji 浄土平, Fukushima": [37.7230, 140.2551],
-    "25. Okama 御釜, Sendai, Miyagi": [38.1361, 140.4468],
+    "25. Okama 御釜, Zao, Miyagi": [38.1361, 140.4468],
     "26. Higashinamekawa 東滑川海浜緑地, Ibaraki": [36.6144, 140.6802],
     "27. Okutama 奥多摩湖, Tokyo": [35.7920, 139.0475],
     "28. Choshi Inubosaki 犬吠埼灯台, Chiba": [35.7077, 140.8685],
-    "29. Kujukuri Beach 九十九里浜, Chiba": [35.5307, 140.4428],
-    "30. Nokogiriyama 鋸山展望台, Chiba": [35.1583, 139.8275],
-    "31. Oarai Isosaki Shrine 神磯の鳥居, Ibaraki": [36.3145, 140.5844],
-    "32. Fukuroda Falls 袋田の滝, Ibaraki": [36.7657, 140.3542],
-    "33. Plateau Satomi プラトーさとみ, Ibaraki": [36.6658, 140.4986],
+    "29. Kujukuri Beach 九十九里浜, Chiba": [35.5002, 140.4315],
+    "30. Awa Shirahama 安房白浜港灯台, Chiba": [34.9146, 139.9355],
+    "31. Oarai Isosaki 神磯の鳥居, Ibaraki": [36.3151, 140.5894],
+    "32. Fukuroda Falls 袋田の滝, Ibaraki": [36.7641, 140.4062],
+    "33. Plateau Satomi プラトーさとみ, Ibaraki": [36.7992, 140.5364],
     "34. Oze Numata 尾瀬ヶ原, Gunma": [36.9306, 139.2150],
     "35. Tanbara Highlands 玉原高原, Gunma": [36.7833, 139.0830],
     "36. Chichibu Misotsuchi 三十槌氷柱周辺, Saitama": [35.9563, 138.9255],
@@ -51,9 +51,9 @@ LOCATION_DATABASE = {
     "39. Mikurajima Observatory 御蔵島展望地, Tokyo": [33.8740, 139.5950],
     "40. Hachijojima Nambara 南原千畳岩海岸, Tokyo": [33.1003, 139.7706],
     "41. Yamanakako Panorama 山中湖パノラマ台, Yamanashi": [35.4154, 138.8758],
-    "42. Kiyosato Seisenryo 清泉寮, Yamanashi": [35.8967, 138.4355],
+    "42. Kiyosato Seisenryo 清泉寮, Yamanashi": [35.9245, 138.4214],
     "43. Misaka Pass 御坂峠, Yamanashi": [35.5493, 138.7090],
-    "44. Nobeyama Radio Observatory 野辺山, Nagano": [35.9405, 138.4740],
+    "44. Nobeyama Radio Observatory 野辺山, Nagano": [35.9414, 138.4704],
     "45. Takabocchi Highlands 高ボッチ高原, Nagano": [36.1045, 138.0170],
     "46. Soni Highlands 曽爾高原, Nara": [34.5346, 136.1506],
     "47. Norikura Tatamidaira 乗鞍畳平, Gifu": [36.1068, 137.5538],
@@ -97,8 +97,8 @@ LOCATION_DATABASE = {
     "85. Shikinejima Tomari Beach 泊海岸, Tokyo": [34.3265, 139.2158],
     "86. Ogasawara Weather Station 小笠原, Tokyo": [27.0944, 142.1917],
     "87. Kirigamine Highlands 霧ヶ峰, Nagano": [36.1030, 138.1946],
-    "88. Kurumayama 車山高原, Nagano": [36.1038, 138.1926],
-    "89. Yachiho Plateau 八千穂高原, Nagano": [36.0690, 138.4567],
+    "88. Shirakoma Pond 白駒池, Nagano": [36.0510, 138.3597],
+    "89. Yachiho Plateau 八千穂高原, Nagano": [36.0694, 138.3806],
     "90. Senjojiki Cirque 千畳敷カール, Nagano": [35.7725, 137.8173],
     "91. Happo Pond 八方池, Nagano": [36.6988, 137.8355],
     "92. Tsugaike Nature Park 栂池自然園, Nagano": [36.7582, 137.8758],
@@ -109,7 +109,53 @@ LOCATION_DATABASE = {
     "97. Senami Coast 瀬波海岸, Niigata": [38.2410, 139.4628],
     "98. Gassan Hachigome 月山八合目, Yamagata": [38.5484, 140.0264],
     "99. Toriumi Observatory 鳥海山鉾立, Akita": [39.0933, 140.0497],
-    "100. Cape Tappi 龍飛崎, Aomori": [41.2570, 140.3495]
+    "100. Cape Tappi 龍飛崎, Aomori": [41.2570, 140.3495],
+    
+    "101. Cape Notoro 能取岬, Hokkaido": [44.0174, 144.2740],
+    "102. Lake Mashu 摩周湖, Hokkaido": [43.5763, 144.5360],
+    "103. Bihoro Pass 美幌峠, Hokkaido": [43.7398, 144.2570],
+    "104. Lake Kussharo 屈斜路湖, Hokkaido": [43.6110, 144.3320],
+    "105. Cape Kiritappu 霧多布岬, Hokkaido": [43.0808, 145.1174],
+    "106. Cape Erimo 襟裳岬, Hokkaido": [41.9272, 143.2473],
+    "107. Notsuke Peninsula 野付半島, Hokkaido": [43.5765, 145.2765],
+    "108. Lake Saroma サロマ湖, Hokkaido": [44.1257, 143.9060],
+    "109. Shiretoko Pass 知床峠, Hokkaido": [44.0702, 145.1110],
+    "110. Cape Kamui 神威岬, Hokkaido": [43.3318, 140.3495],
+    "111. Omazaki 大間崎, Aomori": [41.5265, 140.9125],
+    "112. Hotokegaura 仏ヶ浦, Aomori": [41.3273, 140.8365],
+    "113. Lake Towada 十和田湖, Aomori": [40.4405, 140.8885],
+    "114. Hakkoda 八甲田山, Aomori": [40.6530, 140.8770],
+    "115. Nyuto Onsen 乳頭温泉郷, Akita": [39.7992, 140.8020],
+    "116. Tazawako 田沢湖, Akita": [39.7264, 140.6954],
+    "117. Oga Nyudozaki 入道崎, Akita": [39.9922, 139.7105],
+    "118. Jodogahama 浄土ヶ浜, Iwate": [39.6440, 141.9800],
+    "119. Kitayamazaki 北山崎, Iwate": [40.0715, 141.9472],
+    "120. Ryusendo 龍泉洞周辺, Iwate": [39.8442, 141.8370],
+    "121. Naruko Gorge 鳴子峡, Miyagi": [38.7480, 140.7190],
+    "122. Izunuma 伊豆沼, Miyagi": [38.7350, 141.1030],
+    "123. Mt. Haguro 羽黒山, Yamagata": [38.7025, 139.9838],
+    "124. Zao Okama 蔵王御釜, Yamagata": [38.1420, 140.4400],
+    "125. Tadami Bridge 只見線第一橋梁, Fukushima": [37.3445, 139.3150],
+    "126. Goshikinuma 五色沼, Fukushima": [37.6550, 140.0720],
+    "127. Inawashiro Lake 猪苗代湖, Fukushima": [37.5460, 140.1040],
+    "128. Amaharashi Coast 雨晴海岸, Toyama": [36.8174, 137.0452],
+    "129. Tateyama Murodo 室堂, Toyama": [36.5776, 137.6064],
+    "130. Shogawa Gorge 庄川峡, Toyama": [36.5860, 136.9710],
+    "131. Mitsukejima 見附島, Ishikawa": [37.4364, 137.3602],
+    "132. Senmaida 白米千枚田, Ishikawa": [37.4562, 137.2752],
+    "133. Rokkozaki 禄剛崎, Ishikawa": [37.5203, 137.3305],
+    "134. Shirakawa Hachiman Shrine 白川八幡神社, Gifu": [36.2588, 136.9073],
+    "135. Ena Gorge 恵那峡, Gifu": [35.4478, 137.4120],
+    "136. Daibo Pass 大望峠, Nagano": [36.7340, 137.9660],
+    "137. Norikura Kogen 乗鞍高原, Nagano": [36.1205, 137.6310],
+    "138. Shirouma Oike 白馬大池, Nagano": [36.8280, 137.7860],
+    "139. Nojimazaki 野島崎, Chiba": [34.9025, 139.8764],
+    "140. Futtsu Cape 富津岬, Chiba": [35.3060, 139.7930],
+    "141. Izumo Hinomisaki 日御碕, Shimane": [35.4322, 132.6290],
+    "142. Lake Shinji 宍道湖, Shimane": [35.4560, 132.9760],
+    "143. Hashiguiiwa 橋杭岩, Wakayama": [33.4754, 135.7830],
+    "144. Takeda Castle 竹田城跡, Hyogo": [35.3004, 134.8290],
+    "145. Ine Funaya 伊根の舟屋, Kyoto": [35.6730, 135.2910]
 }
 
 st.set_page_config(page_title="Astro Map Pro", page_icon="🌌", layout="wide", initial_sidebar_state="collapsed")
@@ -190,14 +236,14 @@ def get_moon_phase_percent(date_obj):
     base = datetime(2024, 1, 11)
     phase = ((date_obj - base).total_seconds() / 86400.0 / 29.53059) % 1.0
     illum = round((1 - math.cos(phase * 2 * math.pi)) / 2 * 100, 1)
-    if phase < 0.03 or phase > 0.97: desc = "Trăng Non (New Moon) 🌌"
-    elif phase < 0.22: desc = "Trăng Lưỡi Liềm Đầu Tháng"
-    elif phase < 0.28: desc = "Trăng Bán Nguyệt Đầu Tháng"
-    elif phase < 0.47: desc = "Trăng Khuyết Đầu Tháng"
-    elif phase < 0.53: desc = "Trăng Tròn (Full Moon) 🌕"
-    elif phase < 0.72: desc = "Trăng Khuyết Cuối Tháng"
-    elif phase < 0.78: desc = "Trăng Bán Nguyệt Cuối Tháng"
-    else: desc = "Trăng Lưỡi Liềm Cuối Tháng"
+    if phase < 0.03 or phase > 0.97: desc = "新月 (New Moon) 🌌"
+    elif phase < 0.22: desc = "Waxing Crescent（月齢初期）"
+    elif phase < 0.28: desc = "上弦の月"
+    elif phase < 0.47: desc = "Waxing Gibbous（月齢中期）"
+    elif phase < 0.53: desc = "満月 (Full Moon) 🌕"
+    elif phase < 0.72: desc = "Waning Gibbous（月齢後期）"
+    elif phase < 0.78: desc = "下弦の月"
+    else: desc = "Waning Crescent（月齢末期）"
     return illum, desc
 
 @st.cache_data(ttl=86400, show_spinner=False)  # cache 24 giờ — quỹ đạo trăng không đổi trong ngày
@@ -926,7 +972,7 @@ else:
     _night_base_jst = _now_jst
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
-    f"Evening {(_night_base_jst+timedelta(days=i)).strftime('%d/%m(%a)')} → Morning {(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m(%a)')}"
+    f"{(_night_base_jst+timedelta(days=i)).strftime('%d/%m(%a)')} →{(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m(%a)')}"
     for i in range(7)
 ]
 
@@ -1872,8 +1918,8 @@ st.markdown(
     "<div style='text-align:center;font-size:12px;color:#94a3b8;margin-top:-8px;'>"
     "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
     "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
-    "<span style='color:#a78bfa;'>·····</span> Milky Way GC &nbsp;&nbsp;|&nbsp;&nbsp;"
-    "<span style='color:rgba(251,146,60,0.8);'>▓▒░</span> Sky brightness gradient (tắt khi Sun &lt;−13°)</div>",
+    "<span style='color:#a78bfa;'>·····</span> Milky Way &nbsp;&nbsp;|&nbsp;&nbsp;"
+    "<span style='color:rgba(251,146,60,0.8);'>▓▒░</span> Sky brightness gradient (trully dark when Sun &lt;−13°)</div>",
     unsafe_allow_html=True
 )
 
