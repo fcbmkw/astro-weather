@@ -901,29 +901,38 @@ _ENDPOINTS = [
 @st.cache_data(ttl=1800, show_spinner=False)
 def _fetch_weather_raw(lat, lon):
     """Raw API fetch với retry + multi-endpoint fallback.
-    Returns (hourly_dict, utc_offset_seconds, endpoint_used_label)"""
+    Returns (hourly_dict, utc_offset_seconds, endpoint_used_label, last_error)"""
     base = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+    last_error = None
     for ep_label, ep_suffix in _ENDPOINTS:
         url = base + ep_suffix
         for attempt in range(2):   # 2 lần thử mỗi endpoint
             try:
-                res = requests.get(url, timeout=10)
+                # Multi-model request (full/no_jma) nặng hơn, cần timeout dài hơn
+                _timeout = 25 if ep_label != "gfs_only" else 12
+                res = requests.get(url, timeout=_timeout)
                 if res.status_code == 200:
                     j = res.json()
-                    return j.get("hourly", {}), j.get("utc_offset_seconds", 32400), ep_label
+                    return j.get("hourly", {}), j.get("utc_offset_seconds", 32400), ep_label, None
                 # 5xx = server lỗi → thử endpoint tiếp theo ngay
+                last_error = f"HTTP {res.status_code}"
                 if res.status_code >= 500:
                     break
             except requests.exceptions.Timeout:
-                pass   # timeout → thử lại 1 lần, sau đó chuyển endpoint
-            except Exception:
+                last_error = "timeout"
+                # timeout → thử lại 1 lần, sau đó chuyển endpoint
+            except requests.exceptions.ConnectionError as e:
+                last_error = f"connection_error: {e.__class__.__name__}"
+                break
+            except Exception as e:
+                last_error = f"{e.__class__.__name__}: {e}"
                 break  # lỗi khác → chuyển endpoint ngay
-    return {}, 32400, "offline"
+    return {}, 32400, "offline", last_error
 
 def fetch_weather_7days(lat, lon, source="JMA"):
     """Wrapper giữ nguyên interface cũ — delegate sang cached raw fetch."""
-    hourly, utc_offset, ep_label = _fetch_weather_raw(lat, lon)
-    return hourly, source, utc_offset, ep_label
+    hourly, utc_offset, ep_label, last_error = _fetch_weather_raw(lat, lon)
+    return hourly, source, utc_offset, ep_label, last_error
 
 def get_val(hourly, field, idx, prefer_jma=True):
     """
@@ -1013,7 +1022,7 @@ moon_pct, moon_text = get_moon_phase_percent(target_date)
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
 use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
-hourly_data, _, _loc_utc_offset, _ep_label = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
+hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
 
 # ── AUTO-DETECT JMA COVERAGE cho ngày được chọn ───────────────────────────────
 # JMA MSM chỉ có ~3-4 ngày. Nếu user chọn JMA nhưng ngày đó JMA toàn null
@@ -1756,12 +1765,12 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
         if _ep_label == "no_jma":
             st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
                         'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                        '⚠️ JMA MSM server lỗi — đang dùng <b>ECMWF + GFS</b> thay thế</div>',
+                        '⚠️ JMA MSM サーバーエラー — 代わりに <b>ECMWF + GFS</b> を使用しています</div>',
                         unsafe_allow_html=True)
         elif _ep_label == "gfs_only":
             st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
                         'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                        '⚠️ JMA/ECMWF server lỗi — đang dùng <b>GFS only</b> thay thế</div>',
+                        '⚠️ JMA/ECMWF サーバーエラー — 代わりに <b>GFS のみ</b> を使用しています</div>',
                         unsafe_allow_html=True)
         def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None):
             pct = int(pct_str.replace('%',''))
@@ -1827,18 +1836,51 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
 </div>"""
         st.markdown(table_html, unsafe_allow_html=True)
     else:
-        st.markdown("""
+        # Hiển thị nguyên nhân thực tế thay vì hardcode "502 Bad Gateway"
+        if _last_error == "timeout":
+            _err_title = "⚠️ Open-Meteo API がタイムアウトしました"
+            _err_detail = (
+                'リクエストが <b>25秒</b> 以内に応答しませんでした。'
+                'サーバーが混雑している可能性があります。<br><br>'
+                '<span style="color:#94a3b8;">通常は数分で回復します。'
+                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        elif _last_error and _last_error.startswith("HTTP 5"):
+            _code = _last_error.split(" ")[1]
+            _err_title = f"⚠️ Open-Meteo API が一時的に応答していません"
+            _err_detail = (
+                f'サーバー <code style="color:#fbbf24;">api.open-meteo.com</code> が '
+                f'<b>{_code} エラー</b> を返しました — これは提供元側の問題で、'
+                'アプリ側のエラーではありません。<br><br>'
+                '<span style="color:#94a3b8;">通常5～30分で自動的に回復します。'
+                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        elif _last_error and _last_error.startswith("connection_error"):
+            _err_title = "⚠️ Open-Meteo API に接続できません"
+            _err_detail = (
+                'ネットワーク接続エラーが発生しました。'
+                'インターネット接続を確認してください。<br><br>'
+                '<span style="color:#94a3b8;"><b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        else:
+            _err_title = "⚠️ Open-Meteo API が一時的に応答していません"
+            _err_detail = (
+                f'予期しないエラーが発生しました'
+                + (f'（詳細: <code style="color:#fbbf24;">{_last_error}</code>）' if _last_error else '')
+                + '。<br><br>'
+                '<span style="color:#94a3b8;">通常は数分で回復します。'
+                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        st.markdown(f"""
 <div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
     <div style="font-size:18px;font-weight:700;color:#ef4444;margin-bottom:8px;">
-        ⚠️ Open-Meteo API tạm thời không phản hồi
+        {_err_title}
     </div>
     <div style="color:#cbd5e1;font-size:14px;line-height:1.7;">
-        Server <code style="color:#fbbf24;">api.open-meteo.com</code> đang trả lỗi <b>502 Bad Gateway</b>
-        — đây là sự cố từ phía nhà cung cấp, không phải lỗi của app.<br><br>
-        <span style="color:#94a3b8;">Thường tự khỏi sau 5–30 phút. Bấm <b>Thử lại</b> để xoá cache và fetch lại.</span>
+        {_err_detail}
     </div>
 </div>""", unsafe_allow_html=True)
-        if st.button("🔄 Thử lại", key="btn_retry_weather"):
+        if st.button("🔄 再試行", key="btn_retry_weather"):
             st.cache_data.clear()
             st.rerun()
 
