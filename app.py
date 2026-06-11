@@ -150,7 +150,7 @@ LOCATION_DATABASE = {
     "137. Norikura Kogen 乗鞍高原, Nagano": [36.1205, 137.6310],
     "138. Shirouma Oike 白馬大池, Nagano": [36.8280, 137.7860],
     "139. Nojimazaki 野島崎, Chiba": [34.9013, 139.8882],
-    "140. Futtsu Cape 富津岬, Chiba": [35.3060, 139.7930],
+    "140. Chikura Breakwater 千倉港防波堤, Chiba": [34.9688, 139.9553],
     "141. Izumo Hinomisaki 日御碕, Shimane": [35.4322, 132.6290],
     "142. Lake Shinji 宍道湖, Shimane": [35.4560, 132.9760],
     "143. Hashiguiiwa 橋杭岩, Wakayama": [33.4754, 135.7830],
@@ -1314,6 +1314,7 @@ _TILE_CTRL_TEMPLATE = Template("""
           btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
           btns[k].style.color      = (k === mode) ? '#ffffff' : '#94a3b8';
         });
+        try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
       }
 
       ['satellite','street'].forEach(function(mode){
@@ -1326,7 +1327,14 @@ _TILE_CTRL_TEMPLATE = Template("""
         L.DomEvent.on(btn, 'click', function(){ switchTile(mode); });
       });
 
-      map.whenReady(function(){ switchTile('satellite'); });
+      map.whenReady(function(){
+        var saved = '{{ this.initial_tile }}';
+        try {
+          var ls = window.localStorage.getItem('astro_map_tile');
+          if (ls === 'satellite' || ls === 'street') { saved = ls; }
+        } catch(e){}
+        switchTile(saved);
+      });
       return div;
     }
   });
@@ -1336,12 +1344,13 @@ _TILE_CTRL_TEMPLATE = Template("""
 """)
 
 class _TileControl(MacroElement):
-    def __init__(self):
+    def __init__(self, initial_tile="satellite"):
         super().__init__()
         self._name = '_TileControl'
         self._template = _TILE_CTRL_TEMPLATE
+        self.initial_tile = initial_tile
 
-_TileControl().add_to(m)
+_TileControl(initial_tile=st.session_state.map_tile).add_to(m)
 
 # ── CSS cho tooltip (hover) ────────────────────────────────────────────────────
 m.get_root().html.add_child(folium.Element("""
