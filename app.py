@@ -1352,6 +1352,217 @@ class _TileControl(MacroElement):
 
 _TileControl(initial_tile=st.session_state.map_tile).add_to(m)
 
+# ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
+import json as _json
+_loc_js_list = _json.dumps([
+    {"name": name, "lat": coords[0], "lon": coords[1]}
+    for name, coords in LOCATION_DATABASE.items()
+])
+
+_SEARCH_CTRL_TEMPLATE = Template("""
+{% macro script(this, kwargs) %}
+(function(){
+  var _DB = {{ this.loc_list }};
+
+  var SearchCtrl = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function(map) {
+      var wrapper = L.DomUtil.create('div', '');
+      wrapper.style.cssText = 'position:relative;';
+      L.DomEvent.disableClickPropagation(wrapper);
+      L.DomEvent.disableScrollPropagation(wrapper);
+
+      // ── Container row ──────────────────────────────────────────────────────
+      var row = L.DomUtil.create('div', '', wrapper);
+      row.style.cssText = (
+        'display:flex;align-items:center;gap:4px;'
+        + 'background:rgba(15,23,42,0.92);border:1px solid #334155;'
+        + 'border-radius:8px;padding:4px 7px;box-shadow:0 2px 8px rgba(0,0,0,0.6);'
+      );
+
+      // ── Search icon ────────────────────────────────────────────────────────
+      var icon = L.DomUtil.create('span', '', row);
+      icon.innerHTML = '&#128269;';
+      icon.style.cssText = 'font-size:14px;cursor:pointer;color:#94a3b8;line-height:1;flex-shrink:0;';
+
+      // ── Input ──────────────────────────────────────────────────────────────
+      var inp = L.DomUtil.create('input', '', row);
+      inp.type = 'text';
+      inp.placeholder = 'Search location…';
+      inp.style.cssText = (
+        'background:transparent;border:none;outline:none;'
+        + 'color:#e2e8f0;font-size:12px;width:180px;'
+        + 'font-family:sans-serif;padding:0;'
+      );
+
+      // ── Clear button ───────────────────────────────────────────────────────
+      var clr = L.DomUtil.create('span', '', row);
+      clr.innerHTML = '&#10005;';
+      clr.style.cssText = 'font-size:11px;cursor:pointer;color:#64748b;display:none;flex-shrink:0;';
+      L.DomEvent.on(clr, 'click', function(){
+        inp.value = '';
+        clr.style.display = 'none';
+        dropdown.style.display = 'none';
+        inp.focus();
+      });
+
+      // ── Dropdown ───────────────────────────────────────────────────────────
+      var dropdown = L.DomUtil.create('div', '', wrapper);
+      dropdown.style.cssText = (
+        'position:absolute;top:36px;left:0;z-index:9999;'
+        + 'background:rgba(15,23,42,0.97);border:1px solid #334155;'
+        + 'border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.7);'
+        + 'max-height:280px;overflow-y:auto;min-width:260px;display:none;'
+      );
+
+      var _activeIdx = -1;
+      var _items = [];
+
+      function _highlight(idx) {
+        _items.forEach(function(el, i){
+          el.style.background = (i === idx) ? 'rgba(59,130,246,0.35)' : '';
+        });
+        _activeIdx = idx;
+      }
+
+      function _selectItem(item) {
+        inp.value = item.name;
+        dropdown.style.display = 'none';
+        clr.style.display = 'inline';
+        map.setView([item.lat, item.lon], 11, {animate:true, duration:0.8});
+        // Fire synthetic click → st_folium receives last_clicked
+        setTimeout(function(){
+          map.fire('click', { latlng: L.latLng(item.lat, item.lon) });
+        }, 900);
+      }
+
+      function _buildDropdown(results) {
+        dropdown.innerHTML = '';
+        _items = [];
+        _activeIdx = -1;
+        if (results.length === 0) {
+          var empty = L.DomUtil.create('div', '', dropdown);
+          empty.style.cssText = 'padding:10px 14px;color:#64748b;font-size:12px;';
+          empty.textContent = 'No match — press Enter to geocode';
+          dropdown.style.display = 'block';
+          return;
+        }
+        results.slice(0, 30).forEach(function(item, i) {
+          var el = L.DomUtil.create('div', '', dropdown);
+          el.style.cssText = (
+            'padding:7px 14px;cursor:pointer;font-size:12px;'
+            + 'color:#cbd5e1;border-bottom:1px solid rgba(51,65,85,0.4);'
+            + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+          );
+          el.title = item.name;
+          // Bold number prefix
+          var numMatch = item.name.match(/^(\d+\.\s*)/);
+          if (numMatch) {
+            el.innerHTML = '<span style="color:#60a5fa;font-weight:700;">'
+              + numMatch[0] + '</span>'
+              + item.name.slice(numMatch[0].length);
+          } else {
+            el.textContent = item.name;
+          }
+          _items.push(el);
+          L.DomEvent.on(el, 'click', function(){ _selectItem(item); });
+          L.DomEvent.on(el, 'mouseover', function(){ _highlight(i); });
+        });
+        dropdown.style.display = 'block';
+      }
+
+      // ── Geocode fallback via Nominatim ─────────────────────────────────────
+      function _geocodeAndFly(query) {
+        var url = 'https://nominatim.openstreetmap.org/search?format=json&q='
+          + encodeURIComponent(query) + '&limit=1';
+        fetch(url, { headers: { 'User-Agent': 'AstroMapPro/7.0' }})
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if (data && data.length > 0) {
+              var lat = parseFloat(data[0].lat);
+              var lon = parseFloat(data[0].lon);
+              map.setView([lat, lon], 11, {animate:true, duration:0.8});
+              dropdown.innerHTML = '';
+              var found = L.DomUtil.create('div', '', dropdown);
+              found.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;';
+              found.textContent = '📍 ' + data[0].display_name;
+              dropdown.style.display = 'block';
+              setTimeout(function(){
+                map.fire('click', { latlng: L.latLng(lat, lon) });
+              }, 900);
+            } else {
+              dropdown.innerHTML = '';
+              var nf = L.DomUtil.create('div', '', dropdown);
+              nf.style.cssText = 'padding:8px 14px;font-size:12px;color:#f87171;';
+              nf.textContent = 'Location not found';
+              dropdown.style.display = 'block';
+            }
+          })
+          .catch(function(){
+            dropdown.innerHTML = '';
+            var err = L.DomUtil.create('div', '', dropdown);
+            err.style.cssText = 'padding:8px 14px;font-size:12px;color:#f87171;';
+            err.textContent = 'Geocoding error';
+            dropdown.style.display = 'block';
+          });
+      }
+
+      // ── Input events ───────────────────────────────────────────────────────
+      L.DomEvent.on(inp, 'input', function(){
+        var q = inp.value.trim().toLowerCase();
+        clr.style.display = q ? 'inline' : 'none';
+        if (!q) { dropdown.style.display = 'none'; return; }
+        var results = _DB.filter(function(item){
+          return item.name.toLowerCase().indexOf(q) !== -1;
+        });
+        _buildDropdown(results);
+      });
+
+      L.DomEvent.on(inp, 'keydown', function(e){
+        if (dropdown.style.display === 'none') return;
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          _highlight(Math.min(_activeIdx + 1, _items.length - 1));
+          if (_items[_activeIdx]) _items[_activeIdx].scrollIntoView({block:'nearest'});
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          _highlight(Math.max(_activeIdx - 1, 0));
+          if (_items[_activeIdx]) _items[_activeIdx].scrollIntoView({block:'nearest'});
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (_activeIdx >= 0 && _activeIdx < _items.length) {
+            // Trigger click on highlighted item
+            _items[_activeIdx].click();
+          } else {
+            // No selection → geocode
+            dropdown.style.display = 'none';
+            _geocodeAndFly(inp.value.trim());
+          }
+        } else if (e.key === 'Escape') {
+          dropdown.style.display = 'none';
+        }
+      });
+
+      // Close dropdown when clicking outside
+      map.on('click', function(){ dropdown.style.display = 'none'; });
+
+      return wrapper;
+    }
+  });
+  new SearchCtrl().addTo({{ this._parent.get_name() }});
+})();
+{% endmacro %}
+""")
+
+class _SearchControl(MacroElement):
+    def __init__(self, loc_list="[]"):
+        super().__init__()
+        self._name = '_SearchControl'
+        self._template = _SEARCH_CTRL_TEMPLATE
+        self.loc_list = loc_list
+
+_SearchControl(loc_list=_loc_js_list).add_to(m)
+
 # ── CSS cho tooltip (hover) ────────────────────────────────────────────────────
 m.get_root().html.add_child(folium.Element("""
 <style>
