@@ -150,7 +150,7 @@ LOCATION_DATABASE = {
     "137. Norikura Kogen 乗鞍高原, Nagano": [36.1205, 137.6310],
     "138. Shirouma Oike 白馬大池, Nagano": [36.8280, 137.7860],
     "139. Nojimazaki 野島崎, Chiba": [34.9013, 139.8882],
-    "140. Chikura Breakwater 千倉港防波堤, Chiba": [34.9688, 139.9553],
+    "140. Kobentenjima 小弁天島, Chiba": [35.1134, 140.1988],
     "141. Izumo Hinomisaki 日御碕, Shimane": [35.4322, 132.6290],
     "142. Lake Shinji 宍道湖, Shimane": [35.4560, 132.9760],
     "143. Hashiguiiwa 橋杭岩, Wakayama": [33.4754, 135.7830],
