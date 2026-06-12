@@ -2002,14 +2002,18 @@ with col_left:
     background: rgba(154,52,18,0.60) !important;
     border: 1.5px solid rgba(234,88,12,0.75) !important;
     box-shadow: 0 0 8px rgba(234,88,12,0.18) !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
 }
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) span {
     color: #fb923c !important;
     font-weight: 700 !important;
+    font-size: 12px !important;
 }
 /* ── Location selectbox: compact font ── */
 [data-testid="stSelectbox"]:has(select[id*="sel_loc"]) div[data-baseweb="select"] > div:first-child {
     padding-top: 4px !important; padding-bottom: 4px !important;
+    padding-left: 6px !important; padding-right: 6px !important;
 }
 [data-testid="stSelectbox"]:has(select[id*="sel_loc"]) span {
     font-size: 12px !important;
@@ -2021,34 +2025,49 @@ with col_left:
 .lpm-btn a {
     display:inline-flex;align-items:center;justify-content:center;
     background:rgba(124,58,237,0.20);border:1.5px solid rgba(124,58,237,0.60);
-    border-radius:8px;padding:6px 10px;text-decoration:none;
+    border-radius:8px;padding:6px 8px;text-decoration:none;
     color:#a78bfa;font-size:13px;font-weight:700;
     height:38px;box-sizing:border-box;white-space:nowrap;
     width:100%;
 }
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
-/* ── Force nav rows to stay on 1 line each (no wrap to 5 rows on mobile) ── */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]),
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_loc"]) {
-    flex-wrap: nowrap !important;
+
+/* ── NAV ROW: 5 cột [Prev][date][Next][location][LPM] ──────────────────────
+   - PC (>= 640px): tất cả nằm 1 hàng (flex-wrap: nowrap)
+   - Mobile (< 640px): wrap thành 2 hàng — 3 cột đầu (Prev/date/Next) chiếm
+     đủ 100% width nên buộc location+LPM wrap xuống hàng dưới.            */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) {
+    flex-wrap: wrap !important;
     gap: 6px !important;
+    row-gap: 6px !important;
 }
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div,
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_loc"]) > div {
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div {
     min-width: 0 !important;
 }
-/* Second nav row: small top gap */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_loc"]) {
-    margin-top: 6px !important;
+/* Mobile: ép 3 cột đầu (Prev / date / Next) thành 1 hàng đầy đủ */
+@media (max-width: 640px) {
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(1) {
+        flex: 0 0 22% !important;
+    }
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(2) {
+        flex: 1 1 56% !important;
+    }
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(3) {
+        flex: 0 0 22% !important;
+    }
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(4) {
+        flex: 1 1 78% !important;
+    }
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(5) {
+        flex: 0 0 18% !important;
+    }
 }
 
 </style>""", unsafe_allow_html=True)
 
-    # Nav controls — 2 hàng:
-    #   Hàng 1: [← Previous] [date] [Next →]
-    #   Hàng 2: [location] [LPM]
-    nav1, nav2, nav4 = st.columns([0.9, 1.4, 0.9])
-    nav3, nav_lpm = st.columns([4.0, 1.0])
+    # Nav controls — 1 hàng [⬅️] [date] [➡️] [location] [LPM]
+    # Trên mobile, CSS @media wrap nav thành 2 hàng: (Prev/date/Next) | (location/LPM)
+    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.42, 1.20, 0.36, 1.30, 0.26])
 
     def _go_prev():
         if st.session_state.day_offset > 0:
@@ -2061,7 +2080,7 @@ with col_left:
             st.session_state.sel_date = date_options[st.session_state.day_offset]
 
     with nav1:
-        st.button("⬅️Previous", use_container_width=True, key="btn_prev", on_click=_go_prev)
+        st.button("⬅️", use_container_width=True, key="btn_prev", on_click=_go_prev)
     with nav2:
         sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
                                  label_visibility="collapsed",
@@ -2071,7 +2090,7 @@ with col_left:
             st.session_state.day_offset = new_off
             st.rerun()
     with nav4:
-        st.button("Next➡️", use_container_width=True, key="btn_next", on_click=_go_next)
+        st.button("➡️", use_container_width=True, key="btn_next", on_click=_go_next)
     with nav3:
         loc_opts = list(LOCATION_DATABASE.keys())
         if st.session_state.is_custom_point:
