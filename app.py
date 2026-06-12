@@ -1352,6 +1352,48 @@ class _TileControl(MacroElement):
 
 _TileControl(initial_tile=st.session_state.map_tile).add_to(m)
 
+# ── LPM FLOATING BUTTON — bottomright on map ─────────────────────────────────
+_LPM_CTRL_TEMPLATE = Template("""
+{% macro script(this, kwargs) %}
+(function(){
+  var LpmCtrl = L.Control.extend({
+    options: { position: 'bottomright' },
+    onAdd: function(map) {
+      var a = L.DomUtil.create('a', '');
+      a.href    = '{{ this.lpm_url }}';
+      a.target  = '_blank';
+      a.rel     = 'noopener';
+      a.title   = 'Light Pollution Map';
+      a.textContent = 'LPM';
+      a.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
+        + 'background:rgba(124,58,237,0.22);border:1.5px solid rgba(124,58,237,0.65);'
+        + 'border-radius:8px;padding:4px 10px;text-decoration:none;'
+        + 'color:#a78bfa;font-size:12px;font-weight:700;'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.55);'
+        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;';
+      a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
+      a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
+      L.DomEvent.disableClickPropagation(a);
+      return a;
+    }
+  });
+  new LpmCtrl().addTo({{ this._parent.get_name() }});
+})();
+{% endmacro %}
+""")
+
+class _LpmControl(MacroElement):
+    def __init__(self, lpm_url):
+        super().__init__()
+        self._name = '_LpmControl'
+        self._template = _LPM_CTRL_TEMPLATE
+        self.lpm_url = lpm_url
+
+# ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
+_lpm_url = (f"https://lightpollutionmap.app/"
+            f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
+_LpmControl(lpm_url=_lpm_url).add_to(m)
+
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
 import json as _json
 
@@ -1775,9 +1817,8 @@ map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
-_lpm_url = (f"https://www.lightpollutionmap.info/"
-            f"#zoom=10&lat={st.session_state.lat:.4f}&lon={st.session_state.lon:.4f}"
-            f"&layers=B0FFFFFFFFFFFFFFFFFFF")
+_lpm_url = (f"https://lightpollutionmap.app/"
+            f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
 
 # ── MAP CLICK HANDLER ─────────────────────────────────────────────────────────
 if map_data:
@@ -2039,16 +2080,7 @@ with col_left:
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
-/* ── LPM button styling ── */
-.lpm-btn a {
-    display:inline-flex;align-items:center;justify-content:center;
-    background:rgba(124,58,237,0.20);border:1.5px solid rgba(124,58,237,0.60);
-    border-radius:8px;padding:6px 8px;text-decoration:none;
-    color:#a78bfa;font-size:13px;font-weight:700;
-    height:38px;box-sizing:border-box;white-space:nowrap;
-    width:100%;
-}
-.lpm-btn a:hover { background:rgba(124,58,237,0.35); }
+/* LPM button is now a floating map control (bottomright) */
 
 /* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
    nav_row1: ⬅️  date  ➡️   → luôn nằm 1 hàng (no-wrap)
@@ -2128,9 +2160,7 @@ with col_left:
 .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
     width: fit-content !important;
 }
-.st-key-nav2 [data-testid="stElementContainer"]:has(.lpm-btn) {
-    flex: 0 0 auto !important;
-}
+
 
 /* Cả nav1 và nav2 đều auto-width trên PC → cùng 1 hàng */
 .st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav1),
@@ -2211,12 +2241,7 @@ with col_left:
                     st.session_state._need_fly       = True
                     st.rerun()
 
-            st.markdown(
-                f'<div class="lpm-btn">'
-                f'<a href="{_lpm_url}" target="_blank" rel="noopener" title="Mở Light Pollution Map tại vị trí này">LPM</a>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
+
 
     # Table — custom styled HTML card
     if weather_table_data:
