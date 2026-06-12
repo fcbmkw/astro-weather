@@ -1296,10 +1296,13 @@ _TILE_CTRL_TEMPLATE = Template("""
 (function(){
   // ── Windy iframe overlay (inserted once into map container) ──────────────────
   var _windyFrame = null;
-  function _ensureWindyFrame(mapEl, lat, lon) {
-    if (_windyFrame) return;
-    var zoom = 5;
-    var src = 'https://embed.windy.com/embed2.html'
+  // Kanto center: 35.8, 139.5 / zoom=7 bao phủ toàn Kanto
+  var _WINDY_DEFAULT_LAT = 35.80;
+  var _WINDY_DEFAULT_LON = 139.50;
+  var _WINDY_DEFAULT_ZOOM = 7;
+
+  function _buildWindySrc(lat, lon, zoom) {
+    return 'https://embed.windy.com/embed2.html'
       + '?lat=' + lat + '&lon=' + lon
       + '&detailLat=' + lat + '&detailLon=' + lon
       + '&width=650&height=450&zoom=' + zoom
@@ -1307,8 +1310,13 @@ _TILE_CTRL_TEMPLATE = Template("""
       + '&menu=&message=true&marker=&calendar=now'
       + '&pressure=&type=map&location=coordinates'
       + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
+  }
+
+  function _ensureWindyFrame(mapEl) {
+    if (_windyFrame) return;
     _windyFrame = document.createElement('iframe');
-    _windyFrame.src = src;
+    _windyFrame.src = _buildWindySrc(_WINDY_DEFAULT_LAT, _WINDY_DEFAULT_LON, _WINDY_DEFAULT_ZOOM);
+    _windyFrame.id = 'astro-windy-iframe';
     _windyFrame.style.cssText = (
       'position:absolute;top:0;left:0;width:100%;height:100%;'
       + 'border:none;z-index:500;display:none;border-radius:inherit;'
@@ -1320,8 +1328,14 @@ _TILE_CTRL_TEMPLATE = Template("""
     mapEl.appendChild(_windyFrame);
   }
 
+  // Global flyWindy: search control gọi khi chọn kết quả (zoom=9 vừa đủ)
+  window.flyWindy = function(lat, lon) {
+    if (!_windyFrame) return;
+    _windyFrame.src = _buildWindySrc(lat, lon, 9);
+  };
+
   var TileCtrl = L.Control.extend({
-    options: { position: 'topright' },
+    options: { position: 'bottomright' },
     onAdd: function(map) {
       var div = L.DomUtil.create('div', '');
       div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
@@ -1339,7 +1353,7 @@ _TILE_CTRL_TEMPLATE = Template("""
 
       function switchTile(mode) {
         var mapEl = map.getContainer();
-        _ensureWindyFrame(mapEl, {{ this.init_lat }}, {{ this.init_lon }});
+        _ensureWindyFrame(mapEl);
 
         if (mode === 'windy') {
           // Show Windy iframe, hide base tile
@@ -1395,13 +1409,9 @@ class _TileControl(MacroElement):
         self.init_lat = init_lat
         self.init_lon = init_lon
 
-_TileControl(
-    initial_tile=st.session_state.map_tile,
-    init_lat=round(st.session_state.lat, 4),
-    init_lon=round(st.session_state.lon, 4),
-).add_to(m)
+_lpm_url = (f"https://lightpollutionmap.app/"
+            f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
 
-# ── LOCATION LABEL + LPM BUTTON — bottomright on map ────────────────────────
 _LPM_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
@@ -1454,9 +1464,13 @@ class _LpmControl(MacroElement):
         self.location_name = location_name
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
-_lpm_url = (f"https://lightpollutionmap.app/"
-            f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
+# LPM add trước → hiện trên; TileControl add sau → hiện dưới (bottomright stack)
 _LpmControl(lpm_url=_lpm_url, location_name=_strip_loc_num(st.session_state.location_name)).add_to(m)
+_TileControl(
+    initial_tile=st.session_state.map_tile,
+    init_lat=round(st.session_state.lat, 4),
+    init_lon=round(st.session_state.lon, 4),
+).add_to(m)
 
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
 import json as _json
@@ -1638,6 +1652,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         dropdown.style.display = 'none';
         clr.style.display = 'inline';
         map.setView([item.lat, item.lon], 11, {animate:true, duration:0.8});
+        // Fly Windy to same location
+        if (typeof window.flyWindy === 'function') {
+          window.flyWindy(item.lat, item.lon);
+        }
         // Fire synthetic click → st_folium receives last_clicked
         setTimeout(function(){
           map.fire('click', { latlng: L.latLng(item.lat, item.lon) });
@@ -1684,6 +1702,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               var lat = parseFloat(data[0].lat);
               var lon = parseFloat(data[0].lon);
               map.setView([lat, lon], 11, {animate:true, duration:0.8});
+              // Fly Windy to geocoded location
+              if (typeof window.flyWindy === 'function') {
+                window.flyWindy(lat, lon);
+              }
               dropdown.innerHTML = '';
               var found = L.DomUtil.create('div', '', dropdown);
               found.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;';
@@ -2458,70 +2480,6 @@ st.markdown(
 
 
 
-
-# ── SATELLITE & RAIN RADAR MAP ────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("### 🌬️ WINDY — Rain & Wind Radar")
-
-import streamlit.components.v1 as _components
-from datetime import datetime, timezone, timedelta
-
-_now_jst = datetime.now(timezone(timedelta(hours=9)))
-_hi_ts_label = _now_jst.strftime("%Y-%m-%d %H:%M JST")
-
-# Windy embed URL – centered on selected location, rain overlay
-_windy_url = (
-    "https://embed.windy.com/embed2.html"
-    f"?lat={st.session_state.lat:.2f}&lon={st.session_state.lon:.2f}"
-    f"&detailLat={st.session_state.lat:.4f}&detailLon={st.session_state.lon:.4f}"
-    "&width=650&height=450&zoom=5&level=surface&overlay=rain"
-    "&product=ecmwf&menu=&message=true&marker=&calendar=now"
-    "&pressure=&type=map&location=coordinates&detail=&metricWind=default"
-    "&metricTemp=default&radarRange=-1"
-)
-
-_sat_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * {{ box-sizing:border-box; margin:0; padding:0; }}
-  body {{ background:#0f172a; font-family:sans-serif; color:#94a3b8; }}
-  .wrap {{ background:#0f172a; border-radius:10px; border:1px solid #334155; padding:12px; }}
-  .hdr {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }}
-  .ts {{ font-size:11px; color:#475569; margin-top:5px; text-align:right; }}
-  .links {{ margin-top:10px; font-size:12px; border-top:1px solid #1e293b; padding-top:8px; }}
-  .links a {{ color:#60a5fa; margin-right:14px; text-decoration:none; font-size:11px; }}
-  .links a:hover {{ text-decoration:underline; }}
-  #windy-frame {{ width:100%; height:460px; border:none; border-radius:8px; display:block; }}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="hdr">
-    <span style="font-size:13px;color:#cbd5e1;font-weight:600;">
-      🌬️ Windy · ECMWF Rain &amp; Wind
-      <span style="color:#475569;font-size:11px;font-weight:400;margin-left:6px;">{_hi_ts_label}</span>
-    </span>
-  </div>
-
-  <iframe id="windy-frame" src="{_windy_url}"
-    frameborder="0" allowfullscreen
-    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation">
-  </iframe>
-  <div class="ts">Windy.com · ECMWF · rain overlay · zoom/drag available</div>
-
-  <div class="links">
-    <a href="https://www.windy.com/?rain,{st.session_state.lat:.2f},{st.session_state.lon:.2f},5" target="_blank">🌬️ Windy を開く</a>
-    <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank">🌧️ JMA 雨雲レーダー</a>
-    <a href="https://weather-gpv.info/" target="_blank">📊 weather-gpv.info</a>
-  </div>
-</div>
-</body>
-</html>
-"""
-_components.html(_sat_html, height=560, scrolling=False)
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
