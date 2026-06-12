@@ -2050,87 +2050,71 @@ with col_left:
 }
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
 
-/* ── NAV ROW: 5 cột [Prev][date][Next][location][LPM] ──────────────────────
-   - PC (>= 640px): tất cả nằm 1 hàng
-   - Mobile (< 640px): wrap thành 2 hàng — 3 cột đầu (Prev/date/Next) chiếm
-     đủ 100% width nên buộc location+LPM wrap xuống hàng dưới.
-   Streamlit có thể đổi data-testid giữa các version (stColumn / column) và
-   có thể tự set flex-direction:column trên mobile → cần override cả 2.    */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) {
-    flex-wrap: wrap !important;
+/* ── NAV BOX: khung chứa 5 "ô" [⬅️][date][➡️][location][LPM] ───────────────
+   Giống khung Bortle: 1 container bo viền, các ô con tự flex-wrap.
+   - PC (rộng): 5 ô đủ chỗ → nằm 1 hàng
+   - Mobile (hẹp): ô location quá rộng → tự wrap xuống hàng 2, kéo theo LPM */
+.st-key-nav_box > div {
+    display: flex !important;
     flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
     gap: 6px !important;
-    row-gap: 6px !important;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 6px;
 }
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-    > [data-testid="stColumn"],
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-    > [data-testid="column"] {
+/* Mỗi widget container — bỏ margin mặc định, để flex tự co giãn */
+.st-key-nav_box [data-testid="stElementContainer"] {
+    margin: 0 !important;
+    flex: 0 0 auto;
+}
+/* ⬅️ ➡️ — ô nhỏ cố định */
+.st-key-nav_box [data-testid="stElementContainer"]:has([data-testid="stButton"]) {
+    flex: 0 0 44px;
+}
+.st-key-nav_box [data-testid="stButton"] button {
+    width: 44px !important;
     min-width: 0 !important;
-    width: auto !important;
-    flex: 1 1 auto !important;
+    padding: 0 !important;
 }
-/* Mobile: ép 3 cột đầu (Prev / date / Next) thành 1 hàng đầy đủ, location+LPM wrap xuống */
-@media (max-width: 640px) {
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="stColumn"]:nth-of-type(1),
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="column"]:nth-of-type(1) {
-        flex: 0 0 18% !important; width: 18% !important;
-    }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="stColumn"]:nth-of-type(2),
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="column"]:nth-of-type(2) {
-        flex: 1 1 60% !important; width: 60% !important;
-    }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="stColumn"]:nth-of-type(3),
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="column"]:nth-of-type(3) {
-        flex: 0 0 18% !important; width: 18% !important;
-    }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="stColumn"]:nth-of-type(4),
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="column"]:nth-of-type(4) {
-        flex: 1 1 78% !important; width: 78% !important;
-    }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="stColumn"]:nth-of-type(5),
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        > [data-testid="column"]:nth-of-type(5) {
-        flex: 0 0 18% !important; width: 18% !important;
-    }
-    /* Prev/Next button (⬅️/➡️) — shrink padding & min-width như nút LPM */
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
-        [data-testid="stButton"] button {
-        min-width: 0 !important;
-        width: 100% !important;
-        padding-left: 4px !important;
-        padding-right: 4px !important;
-    }
+/* Date selectbox — co theo nội dung, không chiếm hết hàng */
+.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_date"]) {
+    flex: 0 1 auto;
+}
+/* Location selectbox — chiếm phần còn lại, wrap xuống hàng 2 trên mobile */
+.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
+    flex: 1 1 200px;
+}
+/* LPM — ô nhỏ cố định, đi cùng hàng với location khi wrap */
+.st-key-nav_box [data-testid="stElementContainer"]:has(.lpm-btn) {
+    flex: 0 0 70px;
+}
+.st-key-nav_box .lpm-btn {
+    margin: 0 !important;
 }
 
 </style>""", unsafe_allow_html=True)
 
-    # Nav controls — 1 hàng [⬅️] [date] [➡️] [location] [LPM]
-    # Trên mobile, CSS @media wrap nav thành 2 hàng: (Prev/date/Next) | (location/LPM)
-    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.42, 1.20, 0.36, 1.30, 0.26])
+    # Nav controls — render trong 1 st.container, KHÔNG dùng st.columns.
+    # CSS bên dưới biến block con của container này thành flex-wrap row,
+    # giúp 5 widget tự xếp 1 hàng trên PC và 2 hàng trên mobile (giống
+    # khung Bortle: nhiều "ô" trong 1 khung, tự wrap theo độ rộng).
+    nav_box = st.container(key="nav_box")
+    with nav_box:
+        def _go_prev():
+            if st.session_state.day_offset > 0:
+                st.session_state.day_offset -= 1
+                st.session_state.sel_date = date_options[st.session_state.day_offset]
 
-    def _go_prev():
-        if st.session_state.day_offset > 0:
-            st.session_state.day_offset -= 1
-            st.session_state.sel_date = date_options[st.session_state.day_offset]
+        def _go_next():
+            if st.session_state.day_offset < 6:
+                st.session_state.day_offset += 1
+                st.session_state.sel_date = date_options[st.session_state.day_offset]
 
-    def _go_next():
-        if st.session_state.day_offset < 6:
-            st.session_state.day_offset += 1
-            st.session_state.sel_date = date_options[st.session_state.day_offset]
+        st.button("⬅️", key="btn_prev", on_click=_go_prev)
 
-    with nav1:
-        st.button("⬅️", use_container_width=True, key="btn_prev", on_click=_go_prev)
-    with nav2:
         sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
                                  label_visibility="collapsed",
                                  key="sel_date")
@@ -2138,9 +2122,9 @@ with col_left:
         if new_off != st.session_state.day_offset:
             st.session_state.day_offset = new_off
             st.rerun()
-    with nav4:
-        st.button("➡️", use_container_width=True, key="btn_next", on_click=_go_next)
-    with nav3:
+
+        st.button("➡️", key="btn_next", on_click=_go_next)
+
         loc_opts = list(LOCATION_DATABASE.keys())
         if st.session_state.is_custom_point:
             disp_opts = [f"📍 {st.session_state.location_name}"] + loc_opts
@@ -2161,9 +2145,9 @@ with col_left:
                 st.session_state.is_custom_point = False
                 st.session_state._need_fly       = True
                 st.rerun()
-    with nav_lpm:
+
         st.markdown(
-            f'<div class="lpm-btn" style="padding-top:2px;">'
+            f'<div class="lpm-btn">'
             f'<a href="{_lpm_url}" target="_blank" rel="noopener" title="Mở Light Pollution Map tại vị trí này">🌃 LPM</a>'
             f'</div>',
             unsafe_allow_html=True
