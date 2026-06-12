@@ -1013,7 +1013,7 @@ else:
     _night_base_jst = _now_jst
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
-    f"{(_night_base_jst+timedelta(days=i)).strftime('%d/%m(%a)')} →{(_night_base_jst+timedelta(days=i+1)).strftime('%d/%m(%a)')}"
+    f"{(_night_base_jst+timedelta(days=i)).strftime('%-m月%-d日(%a)')} →{(_night_base_jst+timedelta(days=i+1)).strftime('%-m月%-d日(%a)')}"
     for i in range(7)
 ]
 
@@ -2101,6 +2101,14 @@ with col_left:
     [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
         > [data-testid="column"]:nth-of-type(5) {
         flex: 0 0 18% !important; width: 18% !important;
+    }
+    /* Prev/Next button (⬅️/➡️) — shrink padding & min-width như nút LPM */
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        [data-testid="stButton"] button {
+        min-width: 0 !important;
+        width: 100% !important;
+        padding-left: 4px !important;
+        padding-right: 4px !important;
     }
 }
 
