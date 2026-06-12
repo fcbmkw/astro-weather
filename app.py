@@ -1299,6 +1299,7 @@ _TILE_CTRL_TEMPLATE = Template("""
   var LS_W_LAT   = 'astro_windy_lat';
   var LS_W_LON   = 'astro_windy_lon';
   var LS_W_ZOOM  = 'astro_windy_zoom';
+  var LS_W_PREV  = 'astro_windy_prev_mode';  // mode BEFORE switching to windy
 
   // ── Windy defaults (Kanto, zoom 7) ────────────────────────────────────────
   var _W_DEF_LAT  = 35.80;
@@ -1329,11 +1330,9 @@ _TILE_CTRL_TEMPLATE = Template("""
 
   function _ensureWindyFrame(mapEl) {
     if (_windyFrame) return;
-    // Try to find existing iframe from a previous Streamlit rerun
     _windyFrame = mapEl.querySelector('#astro-windy-iframe');
     if (_windyFrame) return;
 
-    // Restore last known Windy position from localStorage
     var lat  = parseFloat(_lsGet(LS_W_LAT,  _W_DEF_LAT));
     var lon  = parseFloat(_lsGet(LS_W_LON,  _W_DEF_LON));
     var zoom = parseInt(  _lsGet(LS_W_ZOOM, _W_DEF_ZOOM), 10);
@@ -1353,8 +1352,6 @@ _TILE_CTRL_TEMPLATE = Template("""
   }
 
   // ── Global flyWindy — called by Search when user picks a result ──────────
-  // zoom=9 gives a good city-level view; saves to localStorage so next
-  // Streamlit rerun restores the same position instead of the default.
   window.flyWindy = function(lat, lon, zoom) {
     zoom = zoom || 9;
     _lsSet(LS_W_LAT,  lat);
@@ -1379,32 +1376,32 @@ _TILE_CTRL_TEMPLATE = Template("""
         street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
       };
       var attrs  = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
-      var current = null;
-      var btns    = {};
-      var _curMode = null;
+      var current  = null;
+      var btns     = {};
+      // _curMode is read/written via localStorage so it survives Streamlit reruns
+      // LS_TILE already tracks the active tile; we use LS_W_PREV to know
+      // which map mode was active before the user switched to Windy.
 
       function switchTile(mode) {
-        var mapEl = map.getContainer();
+        var mapEl  = map.getContainer();
+        var prevMode = _lsGet(LS_TILE, null);
         _ensureWindyFrame(mapEl);
 
         if (mode === 'windy') {
-          // ── Sync: use current Leaflet view → fly Windy to same spot ────────
-          var c    = map.getCenter();
-          var z    = map.getZoom();
-          var wlat = c.lat, wlon = c.lng, wzoom = z;
-          // Only sync if user was on satellite/street (not first load)
-          if (_curMode && _curMode !== 'windy') {
-            window.flyWindy(wlat, wlon, wzoom);
+          // Sync: fly Windy to current Leaflet view (only when coming FROM sat/street)
+          if (prevMode && prevMode !== 'windy') {
+            var c = map.getCenter();
+            window.flyWindy(c.lat, c.lng, map.getZoom());
           }
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
         } else {
-          // ── Sync: restore Leaflet to last known Windy position ───────────
-          if (_curMode === 'windy') {
-            var wlat2  = parseFloat(_lsGet(LS_W_LAT,  map.getCenter().lat));
-            var wlon2  = parseFloat(_lsGet(LS_W_LON,  map.getCenter().lng));
-            var wzoom2 = parseInt(  _lsGet(LS_W_ZOOM, map.getZoom()), 10);
-            map.setView([wlat2, wlon2], wzoom2, {animate: false});
+          // Sync: when leaving Windy, fly Leaflet to last saved Windy position
+          if (prevMode === 'windy') {
+            var wlat  = parseFloat(_lsGet(LS_W_LAT,  map.getCenter().lat));
+            var wlon  = parseFloat(_lsGet(LS_W_LON,  map.getCenter().lng));
+            var wzoom = parseInt(  _lsGet(LS_W_ZOOM, map.getZoom()), 10);
+            map.setView([wlat, wlon], wzoom, {animate: false});
           }
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
@@ -1412,12 +1409,11 @@ _TILE_CTRL_TEMPLATE = Template("""
           current.addTo(map);
         }
 
-        _curMode = mode;
+        _lsSet(LS_TILE, mode);
         Object.keys(btns).forEach(function(k){
           btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
           btns[k].style.color      = (k === mode) ? '#ffffff' : '#94a3b8';
         });
-        _lsSet(LS_TILE, mode);
       }
 
       ['windy','satellite','street'].forEach(function(mode){
@@ -1702,7 +1698,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         if (typeof window.flyWindy === 'function') {
           window.flyWindy(item.lat, item.lon, 11);
         }
-        // Fire synthetic click → st_folium receives last_clicked
+        // Fire synthetic click so Python receives last_clicked and updates session state.
+        // Delay 900ms to let map animation finish first.
         setTimeout(function(){
           map.fire('click', { latlng: L.latLng(item.lat, item.lon) });
         }, 900);
@@ -1953,11 +1950,13 @@ if map_data:
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
     # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
-    # _last_tip được reset về None sau mỗi rerun thành công → click lại cùng sao vẫn hoạt động.
+    # Tooltip HTML chỉ chứa _strip_loc_num(bname) → match theo tên stripped.
     if clicked_tip:
         matched = None
+        tip_str = str(clicked_tip)
         for bname, bcoords in LOCATION_DATABASE.items():
-            if bname in str(clicked_tip):
+            stripped = _strip_loc_num(bname)
+            if stripped in tip_str:
                 matched = (bname, bcoords)
                 break
         if matched:
