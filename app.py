@@ -1294,123 +1294,84 @@ from jinja2 import Template
 _TILE_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
-  // ── Location database for markers ────────────────────────────────────────────
   var _LOCS = {{ this.loc_list_js }};
 
-  // ── Windy iframe + SVG marker overlay ────────────────────────────────────────
-  var _windyFrame = null;
-  var _markerOverlay = null;
-  var _markerSvg = null;
+  // ── Base tile URLs ────────────────────────────────────────────────────────────
+  var _BASE = {
+    windy:     'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+  };
+  var _ATTRS = {
+    windy:     'Google Satellite Hybrid',
+    satellite: 'Google Satellite Hybrid',
+    street:    'CartoDB Voyager'
+  };
 
-  function _mercY(lat) {
-    var r = Math.PI / 180;
-    return Math.log(Math.tan(Math.PI/4 + lat * r / 2));
-  }
+  // Windy rain tile (công khai, không cần key)
+  var _WINDY_RAIN_URL = 'https://tiles.windy.com/tiles/v10.0/rainAccu/{z}/{x}/{y}.png';
 
-  function _drawMarkers(mapEl) {
-    if (!_markerOverlay) return;
-    var W = mapEl.offsetWidth;
-    var H = mapEl.offsetHeight;
-    _markerOverlay.style.width  = W + 'px';
-    _markerOverlay.style.height = H + 'px';
+  var _baseTile  = null;
+  var _rainTile  = null;
+  var _markerLG  = null;
 
-    var zoom = 5;
-    var tileSize = 256;
-    var scale = tileSize * Math.pow(2, zoom) / (2 * Math.PI);
-    var cLat = {{ this.init_lat }};
-    var cLon = {{ this.init_lon }};
-    var cY = _mercY(cLat);
-    var cX = cLon * Math.PI / 180;
-
-    var svg = '';
-    _LOCS.forEach(function(loc) {
-      var mY = _mercY(loc.lat);
-      var mX = loc.lon * Math.PI / 180;
-      var px = W/2 + (mX - cX) * scale;
-      var py = H/2 - (mY - cY) * scale;
-      if (px < -10 || px > W+10 || py < -10 || py > H+10) return;
-      svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="5"'
-           + ' fill="rgba(251,191,36,0.85)" stroke="#1e293b" stroke-width="1.2">'
-           + '<title>' + loc.name + '</title>'
-           + '</circle>';
+  // ── Build Leaflet marker layer ─────────────────────────────────────────────────
+  function _buildMarkers(map) {
+    if (_markerLG) return;
+    _markerLG = L.layerGroup();
+    var icon = L.divIcon({
+      className: '',
+      html: '<svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">'
+          + '<circle cx="6" cy="6" r="5" fill="rgba(251,191,36,0.88)" stroke="#1e293b" stroke-width="1.2"/>'
+          + '</svg>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
     });
-    _markerSvg.innerHTML = svg;
+    _LOCS.forEach(function(loc) {
+      var m = L.marker([loc.lat, loc.lon], { icon: icon });
+      m.bindTooltip(loc.name, { direction:'top', offset:[0,-6],
+        className:'windy-tip', opacity:0.95 });
+      _markerLG.addLayer(m);
+    });
   }
 
-  function _ensureWindyOverlay(mapEl) {
-    if (_windyFrame) return;
-    var lat = {{ this.init_lat }};
-    var lon = {{ this.init_lon }};
-    var src = 'https://embed.windy.com/embed2.html'
-      + '?lat=' + lat + '&lon=' + lon
-      + '&detailLat=' + lat + '&detailLon=' + lon
-      + '&width=650&height=450&zoom=5&level=surface&overlay=rain&product=ecmwf'
-      + '&menu=&message=true&marker=&calendar=now'
-      + '&pressure=&type=map&location=coordinates'
-      + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
+  // ── Switch tile mode ──────────────────────────────────────────────────────────
+  function switchTile(map, mode) {
+    if (_baseTile)  { map.removeLayer(_baseTile);  _baseTile  = null; }
+    if (_rainTile)  { map.removeLayer(_rainTile);  _rainTile  = null; }
+    if (_markerLG)  { map.removeLayer(_markerLG); }
 
-    mapEl.style.position = 'relative';
+    _baseTile = L.tileLayer(_BASE[mode], {
+      attribution: _ATTRS[mode], maxZoom: 19
+    }).addTo(map);
 
-    _windyFrame = document.createElement('iframe');
-    _windyFrame.src = src;
-    _windyFrame.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;'
-      + 'border:none;z-index:500;display:none;border-radius:inherit;';
-    _windyFrame.setAttribute('allowfullscreen','');
-    _windyFrame.setAttribute('sandbox',
-      'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation');
-    mapEl.appendChild(_windyFrame);
+    if (mode === 'windy') {
+      _rainTile = L.tileLayer(_WINDY_RAIN_URL, {
+        attribution: 'Windy.com', maxZoom: 19, opacity: 0.7
+      }).addTo(map);
+      _buildMarkers(map);
+      _markerLG.addTo(map);
+    }
 
-    _markerOverlay = document.createElement('div');
-    _markerOverlay.style.cssText = 'position:absolute;top:0;left:0;'
-      + 'z-index:600;pointer-events:none;display:none;';
-    _markerSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    _markerSvg.style.cssText = 'width:100%;height:100%;overflow:visible;';
-    _markerOverlay.appendChild(_markerSvg);
-    mapEl.appendChild(_markerOverlay);
-
-    _drawMarkers(mapEl);
+    Object.keys(_btns).forEach(function(k){
+      _btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
+      _btns[k].style.color      = (k === mode) ? '#fff'    : '#94a3b8';
+    });
+    try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
   }
 
-  // ── Tile switcher — topleft (repositioned to center via CSS after render) ────
+  var _btns = {};
+
+  // ── Control ───────────────────────────────────────────────────────────────────
   var TileCtrl = L.Control.extend({
     options: { position: 'topleft' },
     onAdd: function(map) {
-      var div = L.DomUtil.create('div', 'tile-switcher-ctrl');
+      var div = L.DomUtil.create('div', '');
       div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
         + 'border:1px solid #334155;border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);';
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin:0;';
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
-
-      var tiles = {
-        satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-        street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      };
-      var attrs = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
-      var current = null;
-      var btns = {};
-
-      function switchTile(mode) {
-        var mapEl = map.getContainer();
-        _ensureWindyOverlay(mapEl);
-        if (mode === 'windy') {
-          if (current) { map.removeLayer(current); current = null; }
-          _windyFrame.style.display = 'block';
-          _markerOverlay.style.display = 'block';
-          _drawMarkers(mapEl);
-        } else {
-          if (_windyFrame) _windyFrame.style.display = 'none';
-          if (_markerOverlay) _markerOverlay.style.display = 'none';
-          if (current) { map.removeLayer(current); }
-          current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
-          current.addTo(map);
-        }
-        Object.keys(btns).forEach(function(k){
-          btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
-          btns[k].style.color      = (k === mode) ? '#ffffff' : '#94a3b8';
-        });
-        try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
-      }
 
       ['windy','satellite','street'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', div);
@@ -1419,14 +1380,13 @@ _TILE_CTRL_TEMPLATE = Template("""
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
           + 'padding:3px 10px;font-size:12px;font-weight:600;'
           + 'transition:background 0.2s,color 0.2s;background:transparent;color:#94a3b8;';
-        btns[mode] = btn;
-        L.DomEvent.on(btn, 'click', function(){ switchTile(mode); });
+        _btns[mode] = btn;
+        L.DomEvent.on(btn, 'click', function(){ switchTile(map, mode); });
       });
 
-      // Reposition to top-center after Leaflet places the control
+      // Move parent container to topcenter
       setTimeout(function(){
-        var mapEl = map.getContainer();
-        var parent = div.parentElement; // .leaflet-top.leaflet-left
+        var parent = div.parentElement;
         if (parent) {
           parent.style.cssText = 'position:absolute;top:10px;left:0;right:0;'
             + 'display:flex;justify-content:center;pointer-events:none;z-index:1000;';
@@ -1434,30 +1394,39 @@ _TILE_CTRL_TEMPLATE = Template("""
         }
       }, 0);
 
-      var saved = '{{ this.initial_tile }}';
-      try {
-        var ls = window.localStorage.getItem('astro_map_tile');
-        if (ls === 'satellite' || ls === 'street' || ls === 'windy') { saved = ls; }
-      } catch(e){}
-      // Defer switchTile until after map is in DOM
-      setTimeout(function(){ switchTile(saved); }, 50);
+      // Apply saved/default tile
+      setTimeout(function(){
+        var saved = '{{ this.initial_tile }}';
+        try {
+          var ls = window.localStorage.getItem('astro_map_tile');
+          if (['windy','satellite','street'].indexOf(ls) !== -1) saved = ls;
+        } catch(e){}
+        switchTile(map, saved);
+      }, 50);
 
       return div;
     }
   });
   new TileCtrl().addTo({{ this._parent.get_name() }});
+
+  // ── Tooltip style inject ───────────────────────────────────────────────────────
+  var style = document.createElement('style');
+  style.textContent = '.windy-tip{background:rgba(15,23,42,0.92)!important;'
+    + 'border:1px solid #334155!important;color:#e2e8f0!important;'
+    + 'font-size:11px!important;padding:3px 7px!important;border-radius:5px!important;'
+    + 'box-shadow:0 2px 6px rgba(0,0,0,0.5)!important;white-space:nowrap!important;}'
+    + '.windy-tip::before{display:none!important;}';
+  document.head.appendChild(style);
 })();
 {% endmacro %}
 """)
 
 class _TileControl(MacroElement):
-    def __init__(self, initial_tile="windy", init_lat=36.5, init_lon=136.5, loc_list_js="[]"):
+    def __init__(self, initial_tile="windy", loc_list_js="[]"):
         super().__init__()
         self._name = '_TileControl'
         self._template = _TILE_CTRL_TEMPLATE
         self.initial_tile = initial_tile
-        self.init_lat = init_lat
-        self.init_lon = init_lon
         self.loc_list_js = loc_list_js
 
 # Build compact location list (name + lat + lon only) for JS markers
@@ -1469,8 +1438,6 @@ _loc_list_for_markers = _json.dumps([
 
 _TileControl(
     initial_tile=st.session_state.map_tile,
-    init_lat=round(st.session_state.lat, 4),
-    init_lon=round(st.session_state.lon, 4),
     loc_list_js=_loc_list_for_markers,
 ).add_to(m)
 
