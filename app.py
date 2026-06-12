@@ -1662,7 +1662,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         map.setView([item.lat, item.lon], 11, {animate:true, duration:0.8});
         // Fly Windy to same location
         if (typeof window.flyWindy === 'function') {
-          window.flyWindy(item.lat, item.lon, 11);
+          window.flyWindy(item.lat, item.lon, 8);
         }
         // Fire synthetic click so Python receives last_clicked and updates session state.
         // Delay 900ms to let map animation finish first.
@@ -1720,7 +1720,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               map.setView([lat, lon], 11, {animate:true, duration:0.8});
               // Fly Windy to geocoded location
               if (typeof window.flyWindy === 'function') {
-                window.flyWindy(lat, lon, 11);
+                window.flyWindy(lat, lon, 8);
               }
               dropdown.innerHTML = '';
               var found = L.DomUtil.create('div', '', dropdown);
@@ -1927,6 +1927,69 @@ if st.session_state._need_fly:
     _stfolium_kwargs["center"] = st.session_state.map_center
     st.session_state._need_fly = False   # reset ngay — chỉ fly 1 lần
 map_data = st_folium(m, **_stfolium_kwargs)
+
+# ── TOP-CENTER MAP LABEL — Weather valuation badge ────────────────────────────
+def _build_map_label(table_data):
+    if not table_data:
+        return None
+    row = table_data[0]
+    stars_str  = row.get("📸", "")
+    cloud_str  = row.get("☁️", "0%")
+    precip_val = row.get("_precip", 0.0) or 0.0
+    time_lbl   = row.get("⏰", "")
+    star_count = stars_str.count("⭐")
+    cloud_pct  = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 0
+    is_rain    = precip_val >= 0.3
+    is_dark    = cloud_pct >= 80
+    if is_rain:
+        icon = "🌧️"; anim = "blink-warn"; color = "#f87171"
+        bg = "rgba(239,68,68,0.18)"; border = "rgba(239,68,68,0.55)"
+        text = f"Rain \u00b7 {cloud_pct}% cloud"
+    elif is_dark:
+        icon = "☁️"; anim = "blink-warn"; color = "#fbbf24"
+        bg = "rgba(251,191,36,0.15)"; border = "rgba(251,191,36,0.5)"
+        text = f"{cloud_pct}% cloud"
+    elif star_count >= 4:
+        icon = "😄"; anim = "blink-smile"; color = "#34d399"
+        bg = "rgba(52,211,153,0.15)"; border = "rgba(52,211,153,0.5)"
+        text = f"{stars_str}"
+    elif star_count == 3:
+        icon = "😊"; anim = "blink-smile"; color = "#34d399"
+        bg = "rgba(52,211,153,0.15)"; border = "rgba(52,211,153,0.5)"
+        text = f"{stars_str}"
+    else:
+        icon = "🌤️"; anim = "blink-neutral"; color = "#94a3b8"
+        bg = "rgba(148,163,184,0.12)"; border = "rgba(148,163,184,0.4)"
+        text = f"{stars_str} \u00b7 {cloud_pct}%"
+    return {"icon": icon, "text": text, "anim": anim, "color": color,
+            "bg": bg, "border": border, "time": time_lbl}
+
+_lbl = _build_map_label(weather_table_data)
+if _lbl:
+    _warn_speed = "1.2s" if _lbl["anim"] == "blink-warn" else "1.8s"
+    _html_label = f"""
+<style>
+@keyframes blink-warn   {{0%,100%{{opacity:1}}50%{{opacity:0.2}}}}
+@keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.7;transform:scale(1.1)}}}}
+@keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.5}}}}
+.astro-maplabel{{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  z-index:9999;pointer-events:none;
+  display:flex;align-items:center;gap:7px;
+  padding:5px 14px 5px 10px;border-radius:20px;
+  font-family:sans-serif;font-size:13px;font-weight:700;
+  white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.5);
+  background:{_lbl["bg"]};border:1.5px solid {_lbl["border"]};color:{_lbl["color"]};
+}}
+</style>
+<div style="position:relative;margin-top:-604px;height:0;overflow:visible;z-index:9999;">
+<div class="astro-maplabel">
+  <span style="animation:{_lbl["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:16px;">{_lbl["icon"]}</span>
+  <span style="letter-spacing:0.01em;">{_lbl["text"]}</span>
+  <span style="font-size:10px;opacity:0.6;font-weight:500;">@{_lbl["time"]}</span>
+</div>
+</div>"""
+    st.markdown(_html_label, unsafe_allow_html=True)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
