@@ -235,7 +235,7 @@ st.markdown("""
 
 # ── SESSION STATE ────────────────────────────────────────────────────────────
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
-             ("map_center", [35.6895, 139.6917]), ("zoom", 9),
+             ("map_center", [35.6895, 139.6917]), ("zoom", 8),
              ("day_offset", 0), ("location_name", "Tokyo, Japan"),
              ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"),
              ("active_source_used", "JMA"),
@@ -2003,7 +2003,7 @@ with col_left:
     border: 1.5px solid rgba(234,88,12,0.75) !important;
     box-shadow: 0 0 8px rgba(234,88,12,0.18) !important;
 }
-div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) span {
     color: #fb923c !important;
     font-weight: 700 !important;
 }
@@ -2024,12 +2024,31 @@ div[data-testid="column"]:nth-child(2) div[data-baseweb="select"] span {
     border-radius:8px;padding:6px 10px;text-decoration:none;
     color:#a78bfa;font-size:13px;font-weight:700;
     height:38px;box-sizing:border-box;white-space:nowrap;
+    width:100%;
 }
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
+/* ── Force nav rows to stay on 1 line each (no wrap to 5 rows on mobile) ── */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_loc"]) {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+}
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_loc"]) > div {
+    min-width: 0 !important;
+}
+/* Second nav row: small top gap */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_loc"]) {
+    margin-top: 6px !important;
+}
+
 </style>""", unsafe_allow_html=True)
 
-    # Nav controls: 1 hàng [← prev] [date] [next →] [location] [LPM]
-    nav1, nav2, nav4, nav3, nav_lpm = st.columns([0.42, 1.20, 0.36, 1.30, 0.26])
+    # Nav controls — 2 hàng:
+    #   Hàng 1: [← Previous] [date] [Next →]
+    #   Hàng 2: [location] [LPM]
+    nav1, nav2, nav4 = st.columns([0.9, 1.4, 0.9])
+    nav3, nav_lpm = st.columns([4.0, 1.0])
 
     def _go_prev():
         if st.session_state.day_offset > 0:
