@@ -241,7 +241,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
-             ("map_tile", "satellite"),
+             ("map_tile", "windy"),
              ("_need_fly", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -1469,7 +1469,7 @@ _LPM_CTRL_TEMPLATE = Template("""
       wrap.style.cssText = 'display:flex;align-items:center;gap:6px;'
         + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
         + 'border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);max-width:260px;';
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);';
       L.DomEvent.disableClickPropagation(wrap);
 
       // pin + location label
@@ -1480,8 +1480,7 @@ _LPM_CTRL_TEMPLATE = Template("""
       var loc = L.DomUtil.create('span', '', wrap);
       loc.textContent = '{{ this.location_name }}';
       loc.style.cssText = 'color:#e2e8f0;font-size:12px;font-weight:600;'
-        + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
-        + 'max-width:160px;display:inline-block;';
+        + 'white-space:nowrap;display:inline-block;';
 
       // LPM link button
       var a = L.DomUtil.create('a', '', wrap);
@@ -2449,7 +2448,7 @@ with col_left:
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
-st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE")
+st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE(°)")
 
 import plotly.graph_objects as go
 
@@ -2532,8 +2531,7 @@ fig.update_layout(
     ),
     yaxis=dict(
         gridcolor='rgba(71,85,105,0.3)',
-        title='Altitude (°)',
-        title_font_color='#94a3b8',
+        title=None,
         zeroline=False,
     ),
     legend=dict(
