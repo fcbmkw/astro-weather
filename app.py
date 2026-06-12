@@ -1314,11 +1314,9 @@ _TILE_CTRL_TEMPLATE = Template("""
     _markerOverlay.style.width  = W + 'px';
     _markerOverlay.style.height = H + 'px';
 
-    // Windy iframe is fixed at zoom=5, center = init_lat/lon (Mercator)
     var zoom = 5;
     var tileSize = 256;
     var scale = tileSize * Math.pow(2, zoom) / (2 * Math.PI);
-
     var cLat = {{ this.init_lat }};
     var cLon = {{ this.init_lon }};
     var cY = _mercY(cLat);
@@ -1332,8 +1330,7 @@ _TILE_CTRL_TEMPLATE = Template("""
       var py = H/2 - (mY - cY) * scale;
       if (px < -10 || px > W+10 || py < -10 || py > H+10) return;
       svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="5"'
-           + ' fill="rgba(251,191,36,0.85)" stroke="#1e293b" stroke-width="1"'
-           + ' style="cursor:pointer;">'
+           + ' fill="rgba(251,191,36,0.85)" stroke="#1e293b" stroke-width="1.2">'
            + '<title>' + loc.name + '</title>'
            + '</circle>';
     });
@@ -1363,7 +1360,6 @@ _TILE_CTRL_TEMPLATE = Template("""
       'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation');
     mapEl.appendChild(_windyFrame);
 
-    // SVG overlay for markers (above iframe, pointer-events:none so clicks pass through)
     _markerOverlay = document.createElement('div');
     _markerOverlay.style.cssText = 'position:absolute;top:0;left:0;'
       + 'z-index:600;pointer-events:none;display:none;';
@@ -1375,24 +1371,16 @@ _TILE_CTRL_TEMPLATE = Template("""
     _drawMarkers(mapEl);
   }
 
-  // ── Tile switcher — topcenter ─────────────────────────────────────────────────
+  // ── Tile switcher — topleft (repositioned to center via CSS after render) ────
   var TileCtrl = L.Control.extend({
-    options: { position: 'topcenter' },
+    options: { position: 'topleft' },
     onAdd: function(map) {
-      // Register custom position if not already done
-      if (!L.Map.prototype._initControlPos._topcenter_done) {
-        var proto = map.getContainer();
-        var tc = L.DomUtil.create('div', 'leaflet-top leaflet-topcenter', proto);
-        tc.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;';
-        map._controlContainer._topcenter = tc;
-        L.Map.prototype._initControlPos._topcenter_done = true;
-      }
-
-      var div = L.DomUtil.create('div', '');
+      var div = L.DomUtil.create('div', 'tile-switcher-ctrl');
       div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
         + 'border:1px solid #334155;border-radius:8px;padding:5px 8px;'
         + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);';
       L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
 
       var tiles = {
         satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
@@ -1405,7 +1393,6 @@ _TILE_CTRL_TEMPLATE = Template("""
       function switchTile(mode) {
         var mapEl = map.getContainer();
         _ensureWindyOverlay(mapEl);
-
         if (mode === 'windy') {
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
@@ -1436,24 +1423,26 @@ _TILE_CTRL_TEMPLATE = Template("""
         L.DomEvent.on(btn, 'click', function(){ switchTile(mode); });
       });
 
-      map.whenReady(function(){
-        // Attach control div to topcenter container
-        var container = map.getContainer();
-        var tc = container.querySelector('.leaflet-topcenter');
-        if (!tc) {
-          tc = L.DomUtil.create('div', 'leaflet-topcenter', container);
-          tc.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;pointer-events:auto;';
+      // Reposition to top-center after Leaflet places the control
+      setTimeout(function(){
+        var mapEl = map.getContainer();
+        var parent = div.parentElement; // .leaflet-top.leaflet-left
+        if (parent) {
+          parent.style.cssText = 'position:absolute;top:10px;left:0;right:0;'
+            + 'display:flex;justify-content:center;pointer-events:none;z-index:1000;';
+          div.style.pointerEvents = 'auto';
         }
-        tc.appendChild(div);
+      }, 0);
 
-        var saved = '{{ this.initial_tile }}';
-        try {
-          var ls = window.localStorage.getItem('astro_map_tile');
-          if (ls === 'satellite' || ls === 'street' || ls === 'windy') { saved = ls; }
-        } catch(e){}
-        switchTile(saved);
-      });
-      return L.DomUtil.create('div',''); // dummy — real div appended in whenReady
+      var saved = '{{ this.initial_tile }}';
+      try {
+        var ls = window.localStorage.getItem('astro_map_tile');
+        if (ls === 'satellite' || ls === 'street' || ls === 'windy') { saved = ls; }
+      } catch(e){}
+      // Defer switchTile until after map is in DOM
+      setTimeout(function(){ switchTile(saved); }, 50);
+
+      return div;
     }
   });
   new TileCtrl().addTo({{ this._parent.get_name() }});
