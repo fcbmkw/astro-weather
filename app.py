@@ -247,6 +247,11 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
         st.session_state[k] = v
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
+def _strip_loc_num(name: str) -> str:
+    """Bỏ số thứ tự ở đầu tên địa danh: '15. Kamikochi...' → 'Kamikochi...'"""
+    import re
+    return re.sub(r'^\d+\.\s*', '', name).strip()
+
 @st.cache_data(ttl=3600, show_spinner=False)   # cache 1 giờ — tên địa điểm không đổi
 def fetch_location_name(lat, lon):
     url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
@@ -1013,7 +1018,7 @@ else:
     _night_base_jst = _now_jst
 # date_options i=0 → tonight (18:00 of _night_base_jst)
 date_options = [
-    f"{(_night_base_jst+timedelta(days=i)).strftime('%-m月%-d日(%a)')} →{(_night_base_jst+timedelta(days=i+1)).strftime('%-m月%-d日(%a)')}"
+    f"{(_night_base_jst+timedelta(days=i)).strftime('%-m月%-d日(%a)')} → {(_night_base_jst+timedelta(days=i+1)).strftime('%-m月%-d日(%a)')}"
     for i in range(7)
 ]
 
@@ -1407,7 +1412,7 @@ class _LpmControl(MacroElement):
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 _lpm_url = (f"https://lightpollutionmap.app/"
             f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
-_LpmControl(lpm_url=_lpm_url, location_name=st.session_state.location_name).add_to(m)
+_LpmControl(lpm_url=_lpm_url, location_name=_strip_loc_num(st.session_state.location_name)).add_to(m)
 
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
 import json as _json
@@ -1813,7 +1818,7 @@ if not is_bookmark:
         icon=folium.DivIcon(
             html='<div style="font-size:28px;line-height:1;filter:drop-shadow(0 0 6px rgba(255,50,50,0.9));cursor:pointer;">📍</div>',
             icon_size=(32,32), icon_anchor=(10,30)),
-        tooltip=folium.Tooltip(f"📍 {st.session_state.location_name}", sticky=True)
+        tooltip=folium.Tooltip(f"📍 {_strip_loc_num(st.session_state.location_name)}", sticky=True)
     ).add_to(m)
 
 # ── st_folium ─────────────────────────────────────────────────────────────────
@@ -1933,7 +1938,7 @@ with col_right:
     st.markdown(f"""
     <div class="metric-card">
         <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 POSITION & COORDINATE</span>
-        <div style="font-size:15px;font-weight:bold;color:#f43f5e;margin-top:4px;margin-bottom:4px;">📍 {st.session_state.location_name}</div>
+        <div style="font-size:15px;font-weight:bold;color:#f43f5e;margin-top:4px;margin-bottom:4px;">📍 {_strip_loc_num(st.session_state.location_name)}</div>
         <div class="geo-highlight">
             <span style="color:#60a5fa;">LON:</span> {round(st.session_state.lon,4)}<br>
             <span style="color:#34d399;">LAT:</span> {round(st.session_state.lat,4)}
