@@ -1354,15 +1354,99 @@ _TileControl(initial_tile=st.session_state.map_tile).add_to(m)
 
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
 import json as _json
+
+# ── KANJI ⇄ ROMAJI ALIAS TABLE ───────────────────────────────────────────────
+# Cho phép search bằng kanji (vd "福島", "秋元") match với tên romaji trong entry
+# (vd "Fukushima", "Akimoto"). Mỗi entry sẽ được gắn thêm "alias text" chứa tất
+# cả romaji keyword tương ứng với kanji xuất hiện trong tên.
+_KANJI_ALIAS = {
+    # ── 47 tỉnh (Prefectures) ────────────────────────────────────────────────
+    "北海道": "Hokkaido", "青森": "Aomori", "岩手": "Iwate", "宮城": "Miyagi",
+    "秋田": "Akita", "山形": "Yamagata", "福島": "Fukushima", "茨城": "Ibaraki",
+    "栃木": "Tochigi", "群馬": "Gunma", "埼玉": "Saitama", "千葉": "Chiba",
+    "東京": "Tokyo", "神奈川": "Kanagawa", "新潟": "Niigata", "富山": "Toyama",
+    "石川": "Ishikawa", "福井": "Fukui", "山梨": "Yamanashi", "長野": "Nagano",
+    "岐阜": "Gifu", "静岡": "Shizuoka", "愛知": "Aichi", "三重": "Mie",
+    "滋賀": "Shiga", "京都": "Kyoto", "大阪": "Osaka", "兵庫": "Hyogo",
+    "奈良": "Nara", "和歌山": "Wakayama", "鳥取": "Tottori", "島根": "Shimane",
+    "岡山": "Okayama", "広島": "Hiroshima", "山口": "Yamaguchi", "徳島": "Tokushima",
+    "香川": "Kagawa", "愛媛": "Ehime", "高知": "Kochi", "福岡": "Fukuoka",
+    "佐賀": "Saga", "長崎": "Nagasaki", "熊本": "Kumamoto", "大分": "Oita",
+    "宮崎": "Miyazaki", "鹿児島": "Kagoshima", "沖縄": "Okinawa",
+    # ── Landmark / địa danh kanji → romaji trong tên entry ───────────────────
+    "馬の背": "Jogashima", "白浜": "Shirahama", "大波月": "Onjuku", "雀島": "Isumi",
+    "真鶴": "Manazuru", "愛の鐘": "Cape Aiai", "千貫門": "Matsuzaki",
+    "奥大井湖上": "Okuoikojo", "朝霧高原": "Asagiri Plateau", "御嶽山": "Ontake",
+    "上高地": "Kamikochi", "燕山荘": "Enzan-so", "イルカ岩": "Enzan-so",
+    "美ヶ原": "Utsukushihara", "渋峠": "Yugama Shibutoge", "上発知": "Sakura",
+    "シダレザクラ": "Sakura", "湯ノ湖": "Oku-Nikko", "天地人橋": "Hoshinomura",
+    "浄土平": "Azuma-kofuji", "御釜": "Okama Zao", "東滑川": "Higashinamekawa",
+    "奥多摩湖": "Okutama", "犬吠埼": "Choshi Inubosaki", "九十九里浜": "Kujukuri Beach",
+    "安房白浜": "Awa Shirahama", "神磯の鳥居": "Oarai Isosaki", "袋田の滝": "Fukuroda Falls",
+    "プラトーさとみ": "Plateau Satomi", "尾瀬ヶ原": "Oze Numata", "玉原高原": "Tanbara Highlands",
+    "三十槌氷柱": "Chichibu Misotsuchi", "中津峡": "Nakatsu Gorge", "前浜海岸": "Kozushima Maehama",
+    "御蔵島": "Mikurajima Observatory", "南原千畳岩": "Hachijojima Nambara",
+    "山中湖": "Yamanakako Panorama", "清泉寮": "Kiyosato Seisenryo", "御坂峠": "Misaka Pass",
+    "野辺山": "Nobeyama Radio Observatory", "高ボッチ高原": "Takabocchi Highlands",
+    "曽爾高原": "Soni Highlands", "乗鞍畳平": "Norikura Tatamidaira", "平湯峠": "Hirayu Pass",
+    "新穂高": "Shinhotaka Ropeway", "白川郷": "Shirakawago", "千里浜": "Chirihama Beach",
+    "三方五湖": "Mikatagoko Rainbow Line", "鬼ヶ城": "Kumano Oni-ga-jo", "大王崎": "Daiozaki Lighthouse",
+    "大台ヶ原": "Odaigahara Driveway", "天川村": "Tenkawa Miroku Pass", "西はりま天文台": "Nishiharima Observatory",
+    "美星天文台": "Bisei Observatory", "蒜山高原": "Hiruzen Highlands", "鳥取砂丘": "Tottori Sand Dunes",
+    "三朝温泉": "Misasa Onsen", "秋吉台": "Akiyoshidai Karst", "四国カルスト": "Shikoku Karst",
+    "足摺岬": "Ashizuri Cape", "佐多岬": "Sata Cape", "草千里ヶ浜": "Aso Kusasenri",
+    "大観峰": "Daikanbo", "生月島": "Ikitsuki Island", "波戸岬": "Yobuko Cape Hado",
+    "高千穂": "Amaterasu Railway", "都井岬": "Cape Toi", "開聞岳": "Kaimondake",
+    "百合ヶ浜": "Yoron Island", "平久保崎": "Ishigaki Hirakubozaki", "玉取崎": "Tamatorizaki Observatory",
+    "星砂の浜": "Iriomote Hoshizuna Beach", "波照間島": "Hateruma Observatory", "残波岬": "Cape Zanpa",
+    "古宇利大橋": "Kouri Bridge", "辺戸岬": "Cape Hedo", "東平安名崎": "Miyakojima Higashi-Hennazaki",
+    "来間大橋": "Kurima Bridge", "青ヶ島": "Aogashima Observatory", "羽伏浦海岸": "Niijima Habushiura",
+    "泊海岸": "Shikinejima Tomari Beach", "小笠原": "Ogasawara Weather Station",
+    "霧ヶ峰": "Kirigamine Highlands", "白駒池": "Shirakoma Pond", "八千穂高原": "Yachiho Plateau",
+    "千畳敷カール": "Senjojiki Cirque", "八方池": "Happo Pond", "栂池自然園": "Tsugaike Nature Park",
+    "白馬岩岳": "Hakuba Iwatake", "志賀高原": "Shiga Highlands", "妙高高原": "Mt. Myoko",
+    "弥彦山": "Yahiko Skyline", "瀬波海岸": "Senami Coast", "月山八合目": "Gassan Hachigome",
+    "鳥海山": "Toriumi Observatory", "龍飛崎": "Cape Tappi", "能取岬": "Cape Notoro",
+    "摩周湖": "Lake Mashu", "美幌峠": "Bihoro Pass", "屈斜路湖": "Lake Kussharo",
+    "霧多布岬": "Cape Kiritappu", "襟裳岬": "Cape Erimo", "野付半島": "Notsuke Peninsula",
+    "サロマ湖": "Lake Saroma", "知床峠": "Shiretoko Pass", "神威岬": "Cape Kamui",
+    "大間崎": "Omazaki", "仏ヶ浦": "Hotokegaura", "十和田湖": "Lake Towada",
+    "八甲田山": "Hakkoda", "乳頭温泉郷": "Nyuto Onsen", "田沢湖": "Tazawako",
+    "入道崎": "Oga Nyudozaki", "浄土ヶ浜": "Jodogahama", "北山崎": "Kitayamazaki",
+    "龍泉洞": "Ryusendo", "鳴子峡": "Naruko Gorge", "伊豆沼": "Izunuma",
+    "羽黒山": "Mt. Haguro", "蔵王御釜": "Zao Okama", "只見線第一橋梁": "Tadami Bridge",
+    "五色沼": "Goshikinuma", "猪苗代湖": "Inawashiro Lake", "雨晴海岸": "Amaharashi Coast",
+    "室堂": "Tateyama Murodo", "庄川峡": "Shogawa Gorge", "見附島": "Mitsukejima",
+    "白米千枚田": "Senmaida", "禄剛崎": "Rokkozaki", "白川八幡神社": "Shirakawa Hachiman",
+    "恵那峡大橋": "Ena Ravine Bridge", "大望峠": "Daibo Pass", "乗鞍高原": "Norikura Kogen",
+    "白馬大池": "Shirouma Oike", "野島崎": "Nojimazaki", "小弁天島": "Kobentenjima",
+    "日御碕": "Izumo Hinomisaki", "宍道湖": "Lake Shinji", "橋杭岩": "Hashiguiiwa",
+    "竹田城跡": "Takeda Castle", "伊根の舟屋": "Ine Funaya", "柏島": "Kashiwajima",
+    "角島大橋": "Tsunoshima Bridge", "元乃隅神社": "Motonosumi Shrine", "父母ヶ浜": "Chichibugahama",
+    "室戸岬": "Cape Muroto", "大内宿": "Ouchi-juku", "星峠の棚田": "Hoshitoge Rice Terraces",
+    "桧原湖": "Lake Hibara", "尻屋崎": "Cape Shiriya", "小川原湖": "Lake Ogawara",
+    "納沙布岬": "Cape Nosappu", "地球岬": "Cape Chikyu", "オンネトー": "Lake Onneto",
+    "青い池": "Shirogane Blue Pond", "恵山岬": "Cape Esan", "黄金崎": "Koganezaki",
+    "五箇山相倉集落": "Gokayama Ainokura", "三国峠": "Mikuni Pass", "奥入瀬渓流": "Oirase Stream",
+    "種差海岸": "Tanesashi Coast", "蕪島神社": "Kabushima Shrine", "厳美渓": "Genbikei Gorge",
+    "栗駒山": "Mt. Kurikoma", "秋元湖": "Lake Akimoto", "秋元": "Akimoto",
+    "磐梯山": "Bandai-san", "磐梯": "Bandai",
+}
+
 _loc_js_list = _json.dumps([
     {"name": name, "lat": coords[0], "lon": coords[1]}
     for name, coords in LOCATION_DATABASE.items()
 ])
+_kanji_alias_js = _json.dumps(_KANJI_ALIAS, ensure_ascii=False)
+
+
+
 
 _SEARCH_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
   var _DB = {{ this.loc_list }};
+  var _ALIAS = {{ this.alias_dict }};
 
   var SearchCtrl = L.Control.extend({
     options: { position: 'topleft' },
@@ -1509,11 +1593,26 @@ _SEARCH_CTRL_TEMPLATE = Template("""
 
       // ── Input events ───────────────────────────────────────────────────────
       L.DomEvent.on(inp, 'input', function(){
-        var q = inp.value.trim().toLowerCase();
+        var qRaw = inp.value.trim();
+        var q = qRaw.toLowerCase();
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
+
+        // Translate any kanji substrings in the query to their romaji alias
+        var translations = [];
+        for (var kanji in _ALIAS) {
+          if (qRaw.indexOf(kanji) !== -1) {
+            translations.push(_ALIAS[kanji].toLowerCase());
+          }
+        }
+
         var results = _DB.filter(function(item){
-          return item.name.toLowerCase().indexOf(q) !== -1;
+          var nl = item.name.toLowerCase();
+          if (nl.indexOf(q) !== -1) return true;
+          for (var i = 0; i < translations.length; i++) {
+            if (nl.indexOf(translations[i]) !== -1) return true;
+          }
+          return false;
         });
         _buildDropdown(results);
       });
@@ -1555,13 +1654,14 @@ _SEARCH_CTRL_TEMPLATE = Template("""
 """)
 
 class _SearchControl(MacroElement):
-    def __init__(self, loc_list="[]"):
+    def __init__(self, loc_list="[]", alias_dict="{}"):
         super().__init__()
         self._name = '_SearchControl'
         self._template = _SEARCH_CTRL_TEMPLATE
         self.loc_list = loc_list
+        self.alias_dict = alias_dict
 
-_SearchControl(loc_list=_loc_js_list).add_to(m)
+_SearchControl(loc_list=_loc_js_list, alias_dict=_kanji_alias_js).add_to(m)
 
 # ── CSS cho tooltip (hover) ────────────────────────────────────────────────────
 m.get_root().html.add_child(folium.Element("""
