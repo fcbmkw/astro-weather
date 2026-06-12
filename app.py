@@ -2415,72 +2415,166 @@ st.markdown(
 
 
 
-# ── WEATHER-GPV (JMA MSM Cloud / Precipitation Map) ──────────────────────────
+# ── SATELLITE & RAIN RADAR MAP ────────────────────────────────────────────────
 st.markdown("---")
-st.markdown("### 🌧️ JMA MSM CLOUD & PRECIPITATION MAP")
-st.markdown(
-    "<div style='font-size:12px;color:#64748b;margin-bottom:6px;'>"
-    "Source: <a href='http://weather-gpv.info/' target='_blank' rel='noopener' "
-    "style='color:#60a5fa;'>weather-gpv.info</a> &nbsp;·&nbsp; "
-    "JMA MSM model · Total Cloud Cover + Precipitation</div>",
-    unsafe_allow_html=True
-)
+st.markdown("### 🛰️ HIMAWARI SATELLITE & JMA RAIN RADAR")
 
 import streamlit.components.v1 as _components
+from datetime import datetime, timezone, timedelta
 
-# Build GPV URL pre-set to Kanto area (エリア: 関東) + 雨量・雲量 layer
-# The site remembers last settings in URL params / cookies, so we just open the root.
-_gpv_html = """
-<div id="gpv-wrap" style="width:100%;border-radius:10px;overflow:hidden;
-     border:1px solid #334155;background:#0f172a;">
-  <iframe
-    id="gpv-iframe"
-    src="http://weather-gpv.info/"
-    width="100%" height="600"
-    style="border:none;display:block;"
-    allowfullscreen
-    loading="lazy"
-    onerror="document.getElementById('gpv-fallback').style.display='block';
-             document.getElementById('gpv-iframe').style.display='none';"
-  ></iframe>
-  <div id="gpv-fallback" style="display:none;padding:24px;text-align:center;color:#94a3b8;font-size:14px;">
-    ⚠️ iframe がブロックされました。
-    <a href="http://weather-gpv.info/" target="_blank" rel="noopener"
-       style="color:#60a5fa;font-weight:700;">weather-gpv.info を新しいタブで開く →</a>
+# ── Build timestamped URLs for Himawari-9 (NICT) and JMA Rain Radar ──────────
+# NICT Himawari Monitor: true-color band B13 (IR), updated every 10 min
+# URL format: https://himawari8.nict.go.jp/img/D531106/1d/550/{yyyy}/{mm}/{dd}/{HH}{MM}00_0_0.png
+# JMA Rain Radar (雨雲レーダー) still image (whole Japan):
+# https://www.jma.go.jp/bosai/jmatile/data/nowc/{basetime}/none/{validtime}/surf/hrpns/{z}/{x}/{y}.png
+# → Use the simple radar composite PNG that JMA publishes every 5 min:
+# https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N1.json  (get latest times)
+# Simpler: use the public Himawari monitor page embed-friendly image tiles.
+
+# Compute latest Himawari snapshot time (round down to nearest 10 min, JST)
+_now_jst = datetime.now(timezone(timedelta(hours=9)))
+_hi_min  = (_now_jst.minute // 10) * 10
+_hi_dt   = _now_jst.replace(minute=_hi_min, second=0, microsecond=0)
+# NICT 550px tiles: 1d = full disk, 4d = 4x zoom Japan area
+_hi_base = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/1d/550/%Y/%m/%d/%H%M%S")
+# 1d full-disk is a 1×1 grid → single tile _0_0.png
+_hi_url_fd = _hi_base + "_0_0.png"
+# 2d Japan zoom (2×2 grid) – tile row0/col0 covers Honshu nicely
+_hi_base2  = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/2d/550/%Y/%m/%d/%H%M%S")
+_hi_url_r0c0 = _hi_base2 + "_0_0.png"
+_hi_url_r0c1 = _hi_base2 + "_0_1.png"
+_hi_url_r1c0 = _hi_base2 + "_1_0.png"
+_hi_url_r1c1 = _hi_base2 + "_1_1.png"
+
+_hi_ts_label = _hi_dt.strftime("%Y-%m-%d %H:%M JST")
+
+_sat_html = f"""
+<style>
+  .sat-wrap {{
+    background:#0f172a; border-radius:10px; border:1px solid #334155;
+    padding:12px; font-family:sans-serif; color:#94a3b8;
+  }}
+  .sat-tabs {{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }}
+  .sat-tab {{
+    padding:6px 14px; border-radius:6px; cursor:pointer; font-size:13px;
+    background:#1e293b; border:1px solid #334155; color:#94a3b8;
+    transition: all .15s;
+  }}
+  .sat-tab.active, .sat-tab:hover {{
+    background:#3b82f6; border-color:#3b82f6; color:#fff;
+  }}
+  .sat-panel {{ display:none; }}
+  .sat-panel.active {{ display:block; }}
+  .sat-img-wrap {{
+    width:100%; border-radius:8px; overflow:hidden; background:#020817;
+    display:flex; align-items:center; justify-content:center; min-height:300px;
+  }}
+  .sat-img-wrap img {{ width:100%; height:auto; display:block; }}
+  .sat-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:2px; }}
+  .sat-ts {{ font-size:11px; color:#475569; margin-top:6px; text-align:right; }}
+  .sat-links {{ margin-top:10px; font-size:12px; }}
+  .sat-links a {{ color:#60a5fa; margin-right:12px; text-decoration:none; }}
+  .sat-links a:hover {{ text-decoration:underline; }}
+  .reload-btn {{
+    background:#1e293b; border:1px solid #334155; color:#94a3b8;
+    padding:4px 10px; border-radius:5px; cursor:pointer; font-size:12px;
+    float:right;
+  }}
+  .reload-btn:hover {{ background:#334155; color:#e2e8f0; }}
+</style>
+
+<div class="sat-wrap">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+    <span style="font-size:13px; color:#cbd5e1; font-weight:600;">
+      🛰️ Himawari-9 (NICT) &nbsp;·&nbsp; <span style="color:#60a5fa">{_hi_ts_label}</span>
+    </span>
+    <button class="reload-btn" onclick="reloadImages()">🔄 更新</button>
+  </div>
+
+  <div class="sat-tabs">
+    <div class="sat-tab active" onclick="switchTab('fd')">🌏 Full Disk</div>
+    <div class="sat-tab" onclick="switchTab('jp')">🗾 Japan Zoom (2×2)</div>
+    <div class="sat-tab" onclick="switchTab('radar')">🌧️ Rain Radar (JMA)</div>
+  </div>
+
+  <!-- Full Disk -->
+  <div id="tab-fd" class="sat-panel active">
+    <div class="sat-img-wrap">
+      <img id="img-fd" src="{_hi_url_fd}" alt="Himawari Full Disk"
+           onerror="this.src=''; this.alt='⚠️ 画像を取得できませんでした（10分後に再試行）';" />
+    </div>
+    <div class="sat-ts">Source: himawari8.nict.go.jp &nbsp;·&nbsp; Band13 IR · {_hi_ts_label}</div>
+  </div>
+
+  <!-- Japan 2×2 Zoom -->
+  <div id="tab-jp" class="sat-panel">
+    <div class="sat-img-wrap">
+      <div class="sat-grid">
+        <img id="img-jp00" src="{_hi_url_r0c0}" alt="JP 0,0" style="width:100%;"
+             onerror="this.alt='⚠️';" />
+        <img id="img-jp01" src="{_hi_url_r0c1}" alt="JP 0,1" style="width:100%;"
+             onerror="this.alt='⚠️';" />
+        <img id="img-jp10" src="{_hi_url_r1c0}" alt="JP 1,0" style="width:100%;"
+             onerror="this.alt='⚠️';" />
+        <img id="img-jp11" src="{_hi_url_r1c1}" alt="JP 1,1" style="width:100%;"
+             onerror="this.alt='⚠️';" />
+      </div>
+    </div>
+    <div class="sat-ts">Himawari-9 2d Japan zoom · {_hi_ts_label}</div>
+  </div>
+
+  <!-- JMA Rain Radar -->
+  <div id="tab-radar" class="sat-panel">
+    <div class="sat-img-wrap" style="flex-direction:column; gap:8px; padding:12px;">
+      <img id="img-radar"
+           src="https://www.jma.go.jp/bosai/nowc/data/nowcasting/radar/japan.png"
+           alt="JMA Rain Radar"
+           style="width:100%; max-width:700px;"
+           onerror="document.getElementById('radar-fb').style.display='block'; this.style.display='none';" />
+      <div id="radar-fb" style="display:none; text-align:center; color:#94a3b8; padding:20px;">
+        ⚠️ JMA レーダー画像を直接表示できません。<br>
+        <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank"
+           style="color:#60a5fa;">JMA 雨雲レーダー を新しいタブで開く →</a>
+      </div>
+    </div>
+    <div class="sat-ts">Source: jma.go.jp/bosai/nowc · 雨雲レーダー (5 min update)</div>
+  </div>
+
+  <div class="sat-links">
+    <a href="https://himawari8.nict.go.jp/" target="_blank" rel="noopener">🛰️ NICT Himawari Monitor</a>
+    <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank" rel="noopener">🌧️ JMA 雨雲レーダー</a>
+    <a href="https://www.jma.go.jp/bosai/map.html#contents=nowc" target="_blank" rel="noopener">🗺️ JMA 防災情報</a>
+    <a href="https://weather-gpv.info/" target="_blank" rel="noopener">📡 weather-gpv.info</a>
   </div>
 </div>
+
 <script>
-// Detect iframe load failure (X-Frame-Options / CSP block)
-(function(){
-  var ifr = document.getElementById('gpv-iframe');
-  var fb  = document.getElementById('gpv-fallback');
-  ifr.addEventListener('load', function(){
-    try {
-      // If blocked, contentDocument is null or throws
-      var doc = ifr.contentDocument || ifr.contentWindow.document;
-      if (!doc || doc.URL === 'about:blank') throw new Error('blocked');
-    } catch(e) {
-      ifr.style.display = 'none';
-      fb.style.display  = 'block';
-    }
-  });
-  // Timeout fallback: if nothing loads in 8s, show link
-  setTimeout(function(){
-    try {
-      var doc = ifr.contentDocument || ifr.contentWindow.document;
-      if (!doc || doc.URL === 'about:blank' || !doc.body || doc.body.innerHTML.trim() === '') {
-        ifr.style.display = 'none';
-        fb.style.display  = 'block';
-      }
-    } catch(e) {
-      ifr.style.display = 'none';
-      fb.style.display  = 'block';
-    }
-  }, 8000);
-})();
+function switchTab(name) {{
+  document.querySelectorAll('.sat-tab').forEach(function(el, i) {{
+    var names = ['fd','jp','radar'];
+    el.classList.toggle('active', names[i] === name);
+  }});
+  document.querySelectorAll('.sat-panel').forEach(function(el) {{
+    el.classList.remove('active');
+  }});
+  document.getElementById('tab-' + name).classList.add('active');
+}}
+
+function reloadImages() {{
+  // Force cache-bust by appending timestamp
+  var ts = '?t=' + Date.now();
+  var ids = ['img-fd','img-jp00','img-jp01','img-jp10','img-jp11','img-radar'];
+  ids.forEach(function(id) {{
+    var el = document.getElementById(id);
+    if (el && el.src) {{
+      var base = el.src.split('?')[0];
+      el.src = base + ts;
+    }}
+  }});
+}}
 </script>
 """
-_components.html(_gpv_html, height=620, scrolling=False)
+_components.html(_sat_html, height=580, scrolling=False)
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
