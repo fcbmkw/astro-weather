@@ -1472,6 +1472,7 @@ class _TileControl(MacroElement):
         self.loc_list_js = loc_list_js
 
 # Build compact location list (name + lat + lon only) for JS markers
+import json as _json
 _loc_list_for_markers = _json.dumps([
     {"name": _strip_loc_num(name), "lat": coords[0], "lon": coords[1]}
     for name, coords in LOCATION_DATABASE.items()
