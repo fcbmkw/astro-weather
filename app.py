@@ -2423,16 +2423,7 @@ import streamlit.components.v1 as _components
 from datetime import datetime, timezone, timedelta
 
 _now_jst = datetime.now(timezone(timedelta(hours=9)))
-_hi_min  = (_now_jst.minute // 10) * 10
-_hi_dt   = _now_jst.replace(minute=_hi_min, second=0, microsecond=0)
-_hi_ts_label = _hi_dt.strftime("%Y-%m-%d %H:%M JST")
-
-# NICT Himawari image URLs (with referrerpolicy=no-referrer to bypass Referer hotlink check)
-_hi_url_fd   = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/1d/550/%Y/%m/%d/%H%M%S") + "_0_0.png"
-_hi_url_r0c0 = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/2d/550/%Y/%m/%d/%H%M%S") + "_0_0.png"
-_hi_url_r0c1 = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/2d/550/%Y/%m/%d/%H%M%S") + "_0_1.png"
-_hi_url_r1c0 = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/2d/550/%Y/%m/%d/%H%M%S") + "_1_0.png"
-_hi_url_r1c1 = _hi_dt.strftime("https://himawari8.nict.go.jp/img/D531106/2d/550/%Y/%m/%d/%H%M%S") + "_1_1.png"
+_hi_ts_label = _now_jst.strftime("%Y-%m-%d %H:%M JST")
 
 # Windy embed URL – centered on Japan, rain overlay
 _windy_url = (
@@ -2444,37 +2435,40 @@ _windy_url = (
     "&metricTemp=default&radarRange=-1"
 )
 
+# Digital Typhoon (NII Informatics) – Himawari JPEG, public/no hotlink block, ~1h update
+# http://agora.ex.nii.ac.jp/digital-typhoon/latest/color/
+_dt_japan = "https://agora.ex.nii.ac.jp/digital-typhoon/latest/color/medium/JAPAN.jpg"
+_dt_fd    = "https://agora.ex.nii.ac.jp/digital-typhoon/latest/color/medium/FLDK.jpg"
+
 _sat_html = f"""
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-  * {{ box-sizing: border-box; margin:0; padding:0; }}
+  * {{ box-sizing:border-box; margin:0; padding:0; }}
   body {{ background:#0f172a; font-family:sans-serif; color:#94a3b8; }}
   .wrap {{ background:#0f172a; border-radius:10px; border:1px solid #334155; padding:12px; }}
   .hdr {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }}
-  .hdr-title {{ font-size:13px; color:#cbd5e1; font-weight:600; }}
-  .tabs {{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }}
+  .tabs {{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }}
   .tab {{
-    padding:6px 14px; border-radius:6px; cursor:pointer; font-size:13px;
+    padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12px;
     background:#1e293b; border:1px solid #334155; color:#94a3b8; transition:.15s;
+    white-space:nowrap;
   }}
   .tab.active, .tab:hover {{ background:#3b82f6; border-color:#3b82f6; color:#fff; }}
   .panel {{ display:none; }}
   .panel.active {{ display:block; }}
   .img-wrap {{
     width:100%; border-radius:8px; overflow:hidden; background:#020817;
-    display:flex; align-items:center; justify-content:center; min-height:320px;
+    display:flex; align-items:center; justify-content:center; min-height:340px;
     position:relative;
   }}
-  .img-wrap img {{ width:100%; height:auto; display:block; }}
-  .grid2 {{ display:grid; grid-template-columns:1fr 1fr; gap:2px; width:100%; }}
-  .ts {{ font-size:11px; color:#475569; margin-top:6px; text-align:right; }}
-  .links {{ margin-top:10px; font-size:12px; }}
-  .links a {{ color:#60a5fa; margin-right:12px; text-decoration:none; }}
+  .img-wrap img {{ width:100%; height:auto; display:block; cursor:zoom-in; }}
+  .ts {{ font-size:11px; color:#475569; margin-top:5px; text-align:right; }}
+  .links {{ margin-top:10px; font-size:12px; border-top:1px solid #1e293b; padding-top:8px; }}
+  .links a {{ color:#60a5fa; margin-right:14px; text-decoration:none; font-size:11px; }}
   .links a:hover {{ text-decoration:underline; }}
   .reload-btn {{
     background:#1e293b; border:1px solid #334155; color:#94a3b8;
@@ -2482,199 +2476,198 @@ _sat_html = f"""
   }}
   .reload-btn:hover {{ background:#334155; color:#e2e8f0; }}
   #map-radar {{ height:420px; width:100%; border-radius:8px; }}
+  #windy-frame {{ width:100%; height:450px; border:none; border-radius:8px; display:block; }}
   .err-box {{
     display:none; text-align:center; padding:30px; color:#94a3b8; font-size:13px;
-    flex-direction:column; gap:10px; align-items:center;
+    flex-direction:column; gap:12px; align-items:center; width:100%;
   }}
   .err-box a {{ color:#60a5fa; }}
-  #windy-frame {{ width:100%; height:440px; border:none; border-radius:8px; display:block; }}
+  .spinner {{
+    width:32px; height:32px; border:3px solid #334155;
+    border-top-color:#3b82f6; border-radius:50%;
+    animation: spin 0.8s linear infinite; margin:auto;
+  }}
+  @keyframes spin {{ to {{ transform:rotate(360deg); }} }}
+  .loading-wrap {{
+    position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; background:#020817; z-index:2;
+  }}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="hdr">
-    <span class="hdr-title">🛰️ Satellite &amp; Rain Radar &nbsp;·&nbsp;
-      <span style="color:#60a5fa">{_hi_ts_label}</span></span>
+    <span style="font-size:13px;color:#cbd5e1;font-weight:600;">
+      🛰️ Satellite &amp; Rain Radar
+      <span style="color:#475569;font-size:11px;font-weight:400;margin-left:6px;">{_hi_ts_label}</span>
+    </span>
     <button class="reload-btn" onclick="refreshAll()">🔄 更新</button>
   </div>
 
   <div class="tabs">
-    <div class="tab active"   onclick="showTab('radar')">🌧️ Rain Radar (RainViewer)</div>
-    <div class="tab"          onclick="showTab('windy')">💨 Wind &amp; Rain (Windy)</div>
-    <div class="tab"          onclick="showTab('fd')">🌏 Himawari Full Disk</div>
-    <div class="tab"          onclick="showTab('jp')">🗾 Himawari Japan Zoom</div>
+    <div class="tab active" onclick="showTab('radar')">🌧️ RainViewer</div>
+    <div class="tab"        onclick="showTab('windy')">💨 Windy</div>
+    <div class="tab"        onclick="showTab('japan')">🗾 Himawari Japan</div>
+    <div class="tab"        onclick="showTab('fd')">🌏 Full Disk</div>
   </div>
 
-  <!-- TAB: RainViewer interactive radar via Leaflet -->
+  <!-- TAB: RainViewer (Leaflet + RainViewer tile API) -->
   <div id="tab-radar" class="panel active">
     <div id="map-radar"></div>
-    <div class="ts">Source: RainViewer API · tilecache.rainviewer.com · updates ~2 min</div>
+    <div class="ts" id="radar-ts">RainViewer · 読み込み中...</div>
   </div>
 
   <!-- TAB: Windy iframe -->
   <div id="tab-windy" class="panel">
-    <div class="img-wrap" style="min-height:440px; display:block;">
-      <iframe id="windy-frame"
-        src="{_windy_url}"
-        frameborder="0"
-        allowfullscreen
+    <div class="img-wrap" style="min-height:450px;display:block;">
+      <iframe id="windy-frame" src="{_windy_url}"
+        frameborder="0" allowfullscreen
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation">
       </iframe>
     </div>
-    <div class="ts">Source: Windy.com · ECMWF model · Rain overlay</div>
+    <div class="ts">Windy.com · ECMWF · rain overlay · zoom/drag available</div>
   </div>
 
-  <!-- TAB: NICT Himawari Full Disk -->
+  <!-- TAB: Digital Typhoon – Himawari Japan (NII Informatics, open JPEG) -->
+  <div id="tab-japan" class="panel">
+    <div class="img-wrap" id="wrap-japan">
+      <div class="loading-wrap" id="spin-japan"><div class="spinner"></div></div>
+      <img id="img-japan"
+           src="{_dt_japan}?t={int(_now_jst.timestamp())}"
+           referrerpolicy="no-referrer"
+           alt="Himawari Japan"
+           style="display:none;"
+           onload="imgLoaded('spin-japan','img-japan')"
+           onerror="imgError('spin-japan','img-japan','err-japan')" />
+      <div class="err-box" id="err-japan">
+        ⚠️ 画像を取得できません<br>
+        <a href="http://agora.ex.nii.ac.jp/digital-typhoon/latest/color/" target="_blank">
+          Digital Typhoon (NII) を開く →
+        </a>
+      </div>
+    </div>
+    <div class="ts">Source: Digital Typhoon · NII Informatics · Himawari Japan IR · ~1h update</div>
+  </div>
+
+  <!-- TAB: Digital Typhoon – Full Disk -->
   <div id="tab-fd" class="panel">
     <div class="img-wrap" id="wrap-fd">
+      <div class="loading-wrap" id="spin-fd"><div class="spinner"></div></div>
       <img id="img-fd"
-           src="{_hi_url_fd}"
+           src="{_dt_fd}?t={int(_now_jst.timestamp())}"
            referrerpolicy="no-referrer"
-           crossorigin="anonymous"
-           alt="Loading..."
-           onerror="showImgErr('wrap-fd','img-fd','err-fd')" />
+           alt="Himawari Full Disk"
+           style="display:none;"
+           onload="imgLoaded('spin-fd','img-fd')"
+           onerror="imgError('spin-fd','img-fd','err-fd')" />
       <div class="err-box" id="err-fd">
-        ⚠️ Himawari 画像をブロックされました。<br>
-        <a href="https://himawari8.nict.go.jp/" target="_blank">
-          NICT Himawari Monitor を開く →
+        ⚠️ 画像を取得できません<br>
+        <a href="http://agora.ex.nii.ac.jp/digital-typhoon/latest/color/" target="_blank">
+          Digital Typhoon (NII) を開く →
         </a>
       </div>
     </div>
-    <div class="ts">Source: NICT himawari8.nict.go.jp · B13 IR · {_hi_ts_label}</div>
-  </div>
-
-  <!-- TAB: NICT Himawari Japan 2×2 -->
-  <div id="tab-jp" class="panel">
-    <div class="img-wrap" id="wrap-jp" style="display:block;">
-      <div class="grid2" id="grid-jp">
-        <img src="{_hi_url_r0c0}" referrerpolicy="no-referrer" crossorigin="anonymous"
-             onerror="showGridErr()" style="width:100%;" />
-        <img src="{_hi_url_r0c1}" referrerpolicy="no-referrer" crossorigin="anonymous"
-             onerror="showGridErr()" style="width:100%;" />
-        <img src="{_hi_url_r1c0}" referrerpolicy="no-referrer" crossorigin="anonymous"
-             onerror="showGridErr()" style="width:100%;" />
-        <img src="{_hi_url_r1c1}" referrerpolicy="no-referrer" crossorigin="anonymous"
-             onerror="showGridErr()" style="width:100%;" />
-      </div>
-      <div class="err-box" id="err-jp">
-        ⚠️ Himawari Japan Zoom 画像をブロックされました。<br>
-        <a href="https://himawari8.nict.go.jp/" target="_blank">
-          NICT Himawari Monitor を開く →
-        </a>
-      </div>
-    </div>
-    <div class="ts">Source: NICT Himawari-9 2d Japan · {_hi_ts_label}</div>
+    <div class="ts">Source: Digital Typhoon · NII Informatics · Himawari Full Disk IR · ~1h update</div>
   </div>
 
   <div class="links">
-    <a href="https://himawari8.nict.go.jp/" target="_blank">🛰️ NICT Himawari</a>
+    <a href="http://agora.ex.nii.ac.jp/digital-typhoon/" target="_blank">🛰️ Digital Typhoon (NII)</a>
+    <a href="https://himawari8.nict.go.jp/" target="_blank">📡 NICT Himawari</a>
+    <a href="https://www.eorc.jaxa.jp/ptree/" target="_blank">🚀 JAXA P-Tree</a>
     <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank">🌧️ JMA 雨雲レーダー</a>
-    <a href="https://www.rainviewer.com/" target="_blank">📡 RainViewer</a>
     <a href="https://weather-gpv.info/" target="_blank">📊 weather-gpv.info</a>
   </div>
 </div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ── Tab switching ────────────────────────────────────────────────────────────
-var _tabs = ['radar','windy','fd','jp'];
+var _TABS = ['radar','windy','japan','fd'];
 function showTab(name) {{
-  _tabs.forEach(function(t) {{
+  _TABS.forEach(function(t) {{
     document.getElementById('tab-' + t).classList.toggle('active', t === name);
   }});
   document.querySelectorAll('.tab').forEach(function(el, i) {{
-    el.classList.toggle('active', _tabs[i] === name);
+    el.classList.toggle('active', _TABS[i] === name);
   }});
   if (name === 'radar' && !_radarInited) initRadar();
 }}
 
-// ── Error handlers ───────────────────────────────────────────────────────────
-function showImgErr(wrapId, imgId, errId) {{
-  var img = document.getElementById(imgId);
-  var err = document.getElementById(errId);
-  if (img) {{ img.style.display = 'none'; }}
-  if (err) {{ err.style.display = 'flex'; }}
+// ── Image load/error helpers ─────────────────────────────────────────────────
+function imgLoaded(spinId, imgId) {{
+  var sp = document.getElementById(spinId);
+  var im = document.getElementById(imgId);
+  if (sp) sp.style.display = 'none';
+  if (im) im.style.display = 'block';
 }}
-var _gridErrShown = false;
-function showGridErr() {{
-  if (_gridErrShown) return;
-  _gridErrShown = true;
-  var grid = document.getElementById('grid-jp');
-  var err  = document.getElementById('err-jp');
-  if (grid) grid.style.display = 'none';
-  if (err)  err.style.display  = 'flex';
+function imgError(spinId, imgId, errId) {{
+  var sp  = document.getElementById(spinId);
+  var im  = document.getElementById(imgId);
+  var err = document.getElementById(errId);
+  if (sp)  sp.style.display  = 'none';
+  if (im)  im.style.display  = 'none';
+  if (err) err.style.display = 'flex';
 }}
 
-// ── RainViewer radar via Leaflet ─────────────────────────────────────────────
-var _radarInited = false;
-var _radarMap    = null;
-var _radarLayer  = null;
+// ── RainViewer radar ─────────────────────────────────────────────────────────
+var _radarInited = false, _radarMap = null, _radarLayer = null;
 
 function initRadar() {{
   _radarInited = true;
-  _radarMap = L.map('map-radar').setView([36.5, 136.5], 5);
-
-  // Base map: OpenStreetMap (open tiles, no key)
+  _radarMap = L.map('map-radar', {{zoomControl:true}}).setView([36.5, 136.5], 5);
   L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-    attribution: '© OpenStreetMap',
-    maxZoom: 10
+    attribution:'© OpenStreetMap', maxZoom:12
   }}).addTo(_radarMap);
 
-  // Fetch latest radar time from RainViewer public API
   fetch('https://api.rainviewer.com/public/weather-maps.json')
     .then(function(r) {{ return r.json(); }})
     .then(function(data) {{
       var frames = data.radar && data.radar.past;
-      if (!frames || frames.length === 0) return;
+      if (!frames || !frames.length) return;
       var latest = frames[frames.length - 1];
       var tileUrl = 'https://tilecache.rainviewer.com' + latest.path +
                     '/512/{{z}}/{{x}}/{{y}}/4/1_1.png';
       _radarLayer = L.tileLayer(tileUrl, {{
-        opacity: 0.75,
-        attribution: '© RainViewer'
+        opacity: 0.75, attribution: '© RainViewer', tileSize:512, zoomOffset:0
       }}).addTo(_radarMap);
-
-      // Show timestamp
-      var d = new Date(latest.time * 1000);
+      var d  = new Date(latest.time * 1000);
       var ts = d.toLocaleString('ja-JP', {{timeZone:'Asia/Tokyo',
-               hour:'2-digit', minute:'2-digit', month:'short', day:'numeric'}});
-      document.querySelector('#tab-radar .ts').textContent =
-        'RainViewer · ' + ts + ' JST · 約2分更新';
+               month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}});
+      document.getElementById('radar-ts').textContent =
+        'RainViewer · ' + ts + ' JST · ~2min update · drag/zoom available';
     }})
     .catch(function(e) {{
-      document.querySelector('#tab-radar .ts').textContent =
-        '⚠️ RainViewer API エラー: ' + e.message;
+      document.getElementById('radar-ts').textContent = '⚠️ RainViewer API error: ' + e.message;
     }});
 }}
 
-// ── Refresh all ─────────────────────────────────────────────────────────────
+// ── Refresh ──────────────────────────────────────────────────────────────────
 function refreshAll() {{
-  // Re-fetch radar
   if (_radarMap && _radarLayer) {{
     _radarMap.removeLayer(_radarLayer);
-    _radarLayer = null;
-    _radarInited = false;
+    _radarLayer = null; _radarInited = false;
     initRadar();
   }}
-  // Cache-bust Himawari images
   var ts = '?t=' + Date.now();
-  ['img-fd'].forEach(function(id) {{
+  ['img-japan','img-fd'].forEach(function(id) {{
     var el = document.getElementById(id);
-    if (el) {{ var b = el.src.split('?')[0]; el.src = b + ts; }}
-  }});
-  document.querySelectorAll('#grid-jp img').forEach(function(el) {{
-    var b = el.src.split('?')[0]; el.src = b + ts;
+    if (el) {{
+      var b = el.src.split('?')[0];
+      var sp = id === 'img-japan' ? 'spin-japan' : 'spin-fd';
+      var sp_el = document.getElementById(sp);
+      if (sp_el) sp_el.style.display = 'flex';
+      el.style.display = 'none';
+      el.src = b + ts;
+    }}
   }});
 }}
 
-// Auto-init radar on load
 window.addEventListener('load', function() {{ initRadar(); }});
 </script>
 </body>
 </html>
 """
-_components.html(_sat_html, height=560, scrolling=False)
+_components.html(_sat_html, height=580, scrolling=False)
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
