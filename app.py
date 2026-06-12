@@ -1619,15 +1619,9 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
           );
           el.title = item.name;
-          // Bold number prefix
-          var numMatch = item.name.match(/^(\d+\.\s*)/);
-          if (numMatch) {
-            el.innerHTML = '<span style="color:#60a5fa;font-weight:700;">'
-              + numMatch[0] + '</span>'
-              + item.name.slice(numMatch[0].length);
-          } else {
-            el.textContent = item.name;
-          }
+          // Strip number prefix for display
+          var cleanName = item.name.replace(/^\d+\.\s*/, '');
+          el.textContent = cleanName;
           _items.push(el);
           L.DomEvent.on(el, 'click', function(){ _selectItem(item); });
           L.DomEvent.on(el, 'mouseover', function(){ _highlight(i); });
@@ -1799,7 +1793,7 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
         img_html = ""
     tooltip_html = (f'<div style="font-family:sans-serif;font-size:13px;font-weight:600;'
                     f'color:#1e293b;max-width:230px;line-height:1.4;">'
-                    f'{img_html}{loc_name}</div>')
+                    f'{img_html}{_strip_loc_num(loc_name)}</div>')
     folium.Marker(
         loc_coords,
         icon=folium.DivIcon(
