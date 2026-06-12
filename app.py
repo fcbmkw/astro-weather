@@ -1294,84 +1294,70 @@ from jinja2 import Template
 _TILE_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
-  var _LOCS = {{ this.loc_list_js }};
-
-  // ── Base tile URLs ────────────────────────────────────────────────────────────
-  var _BASE = {
-    windy:     'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-  };
-  var _ATTRS = {
-    windy:     'CartoDB Dark Matter',
-    satellite: 'Google Satellite Hybrid',
-    street:    'CartoDB Voyager'
-  };
-
-  // Windy rain tile (công khai, không cần key)
-  var _WINDY_RAIN_URL = 'https://tiles.windy.com/tiles/v10.0/rainAccu/{z}/{x}/{y}.png';
-
-  var _baseTile  = null;
-  var _rainTile  = null;
-  var _markerLG  = null;
-
-  // ── Build Leaflet marker layer ─────────────────────────────────────────────────
-  function _buildMarkers(map) {
-    if (_markerLG) return;
-    _markerLG = L.layerGroup();
-    var icon = L.divIcon({
-      className: '',
-      html: '<svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">'
-          + '<circle cx="6" cy="6" r="5" fill="rgba(251,191,36,0.88)" stroke="#1e293b" stroke-width="1.2"/>'
-          + '</svg>',
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
-    });
-    _LOCS.forEach(function(loc) {
-      var m = L.marker([loc.lat, loc.lon], { icon: icon });
-      m.bindTooltip(loc.name, { direction:'top', offset:[0,-6],
-        className:'windy-tip', opacity:0.95 });
-      _markerLG.addLayer(m);
-    });
+  // ── Windy iframe overlay (inserted once into map container) ──────────────────
+  var _windyFrame = null;
+  function _ensureWindyFrame(mapEl, lat, lon) {
+    if (_windyFrame) return;
+    var zoom = 5;
+    var src = 'https://embed.windy.com/embed2.html'
+      + '?lat=' + lat + '&lon=' + lon
+      + '&detailLat=' + lat + '&detailLon=' + lon
+      + '&width=650&height=450&zoom=' + zoom
+      + '&level=surface&overlay=rain&product=ecmwf'
+      + '&menu=&message=true&marker=&calendar=now'
+      + '&pressure=&type=map&location=coordinates'
+      + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
+    _windyFrame = document.createElement('iframe');
+    _windyFrame.src = src;
+    _windyFrame.style.cssText = (
+      'position:absolute;top:0;left:0;width:100%;height:100%;'
+      + 'border:none;z-index:500;display:none;border-radius:inherit;'
+    );
+    _windyFrame.setAttribute('allowfullscreen','');
+    _windyFrame.setAttribute('sandbox',
+      'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation');
+    mapEl.style.position = 'relative';
+    mapEl.appendChild(_windyFrame);
   }
 
-  // ── Switch tile mode ──────────────────────────────────────────────────────────
-  function switchTile(map, mode) {
-    if (_baseTile)  { map.removeLayer(_baseTile);  _baseTile  = null; }
-    if (_rainTile)  { map.removeLayer(_rainTile);  _rainTile  = null; }
-    if (_markerLG)  { map.removeLayer(_markerLG); }
-
-    _baseTile = L.tileLayer(_BASE[mode], {
-      attribution: _ATTRS[mode], maxZoom: 19
-    }).addTo(map);
-
-    if (mode === 'windy') {
-      _rainTile = L.tileLayer(_WINDY_RAIN_URL, {
-        attribution: 'Windy.com', maxZoom: 19, opacity: 0.7
-      }).addTo(map);
-      _buildMarkers(map);
-      _markerLG.addTo(map);
-    }
-
-    Object.keys(_btns).forEach(function(k){
-      _btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
-      _btns[k].style.color      = (k === mode) ? '#fff'    : '#94a3b8';
-    });
-    try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
-  }
-
-  var _btns = {};
-
-  // ── Control ───────────────────────────────────────────────────────────────────
   var TileCtrl = L.Control.extend({
-    options: { position: 'topleft' },
+    options: { position: 'topright' },
     onAdd: function(map) {
       var div = L.DomUtil.create('div', '');
       div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
         + 'border:1px solid #334155;border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin:0;';
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);';
       L.DomEvent.disableClickPropagation(div);
-      L.DomEvent.disableScrollPropagation(div);
+
+      var tiles = {
+        satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+      };
+      var attrs  = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
+      var current = null;
+      var btns = {};
+
+      function switchTile(mode) {
+        var mapEl = map.getContainer();
+        _ensureWindyFrame(mapEl, {{ this.init_lat }}, {{ this.init_lon }});
+
+        if (mode === 'windy') {
+          // Show Windy iframe, hide base tile
+          if (current) { map.removeLayer(current); current = null; }
+          _windyFrame.style.display = 'block';
+        } else {
+          // Hide Windy, show map tile
+          if (_windyFrame) _windyFrame.style.display = 'none';
+          if (current) { map.removeLayer(current); }
+          current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
+          current.addTo(map);
+        }
+        Object.keys(btns).forEach(function(k){
+          btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
+          btns[k].style.color      = (k === mode) ? '#ffffff' : '#94a3b8';
+        });
+        try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
+      }
 
       ['windy','satellite','street'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', div);
@@ -1380,65 +1366,39 @@ _TILE_CTRL_TEMPLATE = Template("""
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
           + 'padding:3px 10px;font-size:12px;font-weight:600;'
           + 'transition:background 0.2s,color 0.2s;background:transparent;color:#94a3b8;';
-        _btns[mode] = btn;
-        L.DomEvent.on(btn, 'click', function(){ switchTile(map, mode); });
+        btns[mode] = btn;
+        L.DomEvent.on(btn, 'click', function(){ switchTile(mode); });
       });
 
-      // Move parent container to topcenter
-      setTimeout(function(){
-        var parent = div.parentElement;
-        if (parent) {
-          parent.style.cssText = 'position:absolute;top:10px;left:0;right:0;'
-            + 'display:flex;justify-content:center;pointer-events:none;z-index:1000;';
-          div.style.pointerEvents = 'auto';
-        }
-      }, 0);
-
-      // Apply saved/default tile
-      setTimeout(function(){
+      map.whenReady(function(){
         var saved = '{{ this.initial_tile }}';
         try {
           var ls = window.localStorage.getItem('astro_map_tile');
-          if (['windy','satellite','street'].indexOf(ls) !== -1) saved = ls;
+          if (ls === 'satellite' || ls === 'street' || ls === 'windy') { saved = ls; }
         } catch(e){}
-        switchTile(map, saved);
-      }, 50);
-
+        switchTile(saved);
+      });
       return div;
     }
   });
   new TileCtrl().addTo({{ this._parent.get_name() }});
-
-  // ── Tooltip style inject ───────────────────────────────────────────────────────
-  var style = document.createElement('style');
-  style.textContent = '.windy-tip{background:rgba(15,23,42,0.92)!important;'
-    + 'border:1px solid #334155!important;color:#e2e8f0!important;'
-    + 'font-size:11px!important;padding:3px 7px!important;border-radius:5px!important;'
-    + 'box-shadow:0 2px 6px rgba(0,0,0,0.5)!important;white-space:nowrap!important;}'
-    + '.windy-tip::before{display:none!important;}';
-  document.head.appendChild(style);
 })();
 {% endmacro %}
 """)
 
 class _TileControl(MacroElement):
-    def __init__(self, initial_tile="windy", loc_list_js="[]"):
+    def __init__(self, initial_tile="windy", init_lat=36.5, init_lon=136.5):
         super().__init__()
         self._name = '_TileControl'
         self._template = _TILE_CTRL_TEMPLATE
         self.initial_tile = initial_tile
-        self.loc_list_js = loc_list_js
-
-# Build compact location list (name + lat + lon only) for JS markers
-import json as _json
-_loc_list_for_markers = _json.dumps([
-    {"name": _strip_loc_num(name), "lat": coords[0], "lon": coords[1]}
-    for name, coords in LOCATION_DATABASE.items()
-], ensure_ascii=False)
+        self.init_lat = init_lat
+        self.init_lon = init_lon
 
 _TileControl(
     initial_tile=st.session_state.map_tile,
-    loc_list_js=_loc_list_for_markers,
+    init_lat=round(st.session_state.lat, 4),
+    init_lon=round(st.session_state.lon, 4),
 ).add_to(m)
 
 # ── LOCATION LABEL + LPM BUTTON — bottomright on map ────────────────────────
@@ -2496,6 +2456,72 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
+
+
+# ── SATELLITE & RAIN RADAR MAP ────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("### 🌬️ WINDY — Rain & Wind Radar")
+
+import streamlit.components.v1 as _components
+from datetime import datetime, timezone, timedelta
+
+_now_jst = datetime.now(timezone(timedelta(hours=9)))
+_hi_ts_label = _now_jst.strftime("%Y-%m-%d %H:%M JST")
+
+# Windy embed URL – centered on selected location, rain overlay
+_windy_url = (
+    "https://embed.windy.com/embed2.html"
+    f"?lat={st.session_state.lat:.2f}&lon={st.session_state.lon:.2f}"
+    f"&detailLat={st.session_state.lat:.4f}&detailLon={st.session_state.lon:.4f}"
+    "&width=650&height=450&zoom=5&level=surface&overlay=rain"
+    "&product=ecmwf&menu=&message=true&marker=&calendar=now"
+    "&pressure=&type=map&location=coordinates&detail=&metricWind=default"
+    "&metricTemp=default&radarRange=-1"
+)
+
+_sat_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ box-sizing:border-box; margin:0; padding:0; }}
+  body {{ background:#0f172a; font-family:sans-serif; color:#94a3b8; }}
+  .wrap {{ background:#0f172a; border-radius:10px; border:1px solid #334155; padding:12px; }}
+  .hdr {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }}
+  .ts {{ font-size:11px; color:#475569; margin-top:5px; text-align:right; }}
+  .links {{ margin-top:10px; font-size:12px; border-top:1px solid #1e293b; padding-top:8px; }}
+  .links a {{ color:#60a5fa; margin-right:14px; text-decoration:none; font-size:11px; }}
+  .links a:hover {{ text-decoration:underline; }}
+  #windy-frame {{ width:100%; height:460px; border:none; border-radius:8px; display:block; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <span style="font-size:13px;color:#cbd5e1;font-weight:600;">
+      🌬️ Windy · ECMWF Rain &amp; Wind
+      <span style="color:#475569;font-size:11px;font-weight:400;margin-left:6px;">{_hi_ts_label}</span>
+    </span>
+  </div>
+
+  <iframe id="windy-frame" src="{_windy_url}"
+    frameborder="0" allowfullscreen
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation">
+  </iframe>
+  <div class="ts">Windy.com · ECMWF · rain overlay · zoom/drag available</div>
+
+  <div class="links">
+    <a href="https://www.windy.com/?rain,{st.session_state.lat:.2f},{st.session_state.lon:.2f},5" target="_blank">🌬️ Windy を開く</a>
+    <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank">🌧️ JMA 雨雲レーダー</a>
+    <a href="https://weather-gpv.info/" target="_blank">📊 weather-gpv.info</a>
+  </div>
+</div>
+</body>
+</html>
+"""
+_components.html(_sat_html, height=560, scrolling=False)
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
