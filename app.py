@@ -1298,12 +1298,12 @@ _TILE_CTRL_TEMPLATE = Template("""
 
   // ── Base tile URLs ────────────────────────────────────────────────────────────
   var _BASE = {
-    windy:     'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    windy:     'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
     satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
   };
   var _ATTRS = {
-    windy:     'Google Satellite Hybrid',
+    windy:     'CartoDB Dark Matter',
     satellite: 'Google Satellite Hybrid',
     street:    'CartoDB Voyager'
   };
