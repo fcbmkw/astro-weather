@@ -2413,5 +2413,74 @@ st.markdown(
 )
 
 
+
+
+# ── WEATHER-GPV (JMA MSM Cloud / Precipitation Map) ──────────────────────────
+st.markdown("---")
+st.markdown("### 🌧️ JMA MSM CLOUD & PRECIPITATION MAP")
+st.markdown(
+    "<div style='font-size:12px;color:#64748b;margin-bottom:6px;'>"
+    "Source: <a href='http://weather-gpv.info/' target='_blank' rel='noopener' "
+    "style='color:#60a5fa;'>weather-gpv.info</a> &nbsp;·&nbsp; "
+    "JMA MSM model · Total Cloud Cover + Precipitation</div>",
+    unsafe_allow_html=True
+)
+
+import streamlit.components.v1 as _components
+
+# Build GPV URL pre-set to Kanto area (エリア: 関東) + 雨量・雲量 layer
+# The site remembers last settings in URL params / cookies, so we just open the root.
+_gpv_html = """
+<div id="gpv-wrap" style="width:100%;border-radius:10px;overflow:hidden;
+     border:1px solid #334155;background:#0f172a;">
+  <iframe
+    id="gpv-iframe"
+    src="http://weather-gpv.info/"
+    width="100%" height="600"
+    style="border:none;display:block;"
+    allowfullscreen
+    loading="lazy"
+    onerror="document.getElementById('gpv-fallback').style.display='block';
+             document.getElementById('gpv-iframe').style.display='none';"
+  ></iframe>
+  <div id="gpv-fallback" style="display:none;padding:24px;text-align:center;color:#94a3b8;font-size:14px;">
+    ⚠️ iframe がブロックされました。
+    <a href="http://weather-gpv.info/" target="_blank" rel="noopener"
+       style="color:#60a5fa;font-weight:700;">weather-gpv.info を新しいタブで開く →</a>
+  </div>
+</div>
+<script>
+// Detect iframe load failure (X-Frame-Options / CSP block)
+(function(){
+  var ifr = document.getElementById('gpv-iframe');
+  var fb  = document.getElementById('gpv-fallback');
+  ifr.addEventListener('load', function(){
+    try {
+      // If blocked, contentDocument is null or throws
+      var doc = ifr.contentDocument || ifr.contentWindow.document;
+      if (!doc || doc.URL === 'about:blank') throw new Error('blocked');
+    } catch(e) {
+      ifr.style.display = 'none';
+      fb.style.display  = 'block';
+    }
+  });
+  // Timeout fallback: if nothing loads in 8s, show link
+  setTimeout(function(){
+    try {
+      var doc = ifr.contentDocument || ifr.contentWindow.document;
+      if (!doc || doc.URL === 'about:blank' || !doc.body || doc.body.innerHTML.trim() === '') {
+        ifr.style.display = 'none';
+        fb.style.display  = 'block';
+      }
+    } catch(e) {
+      ifr.style.display = 'none';
+      fb.style.display  = 'block';
+    }
+  }, 8000);
+})();
+</script>
+"""
+_components.html(_gpv_html, height=620, scrolling=False)
+
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
