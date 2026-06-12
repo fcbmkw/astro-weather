@@ -1287,26 +1287,28 @@ folium.TileLayer(
     name='OpenRailwayMap', overlay=True, control=True, opacity=0.25, attr='OpenRailwayMap'
 ).add_to(m)
 
-# ── Tile switcher control (Satellite / Street) — inject qua MacroElement ──
+# ── Combined BottomRight control: [📍 Label  LPM] + [Windy|Satellite|Street] ──
+# Gộp thành một control duy nhất (column) để kiểm soát khoảng cách chính xác.
 from folium import MacroElement
 from jinja2 import Template
 
-_TILE_CTRL_TEMPLATE = Template("""
+_lpm_url = (f"https://lightpollutionmap.app/"
+            f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
+
+_COMBINED_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
   // ── localStorage keys ─────────────────────────────────────────────────────
-  var LS_TILE    = 'astro_map_tile';
-  var LS_W_LAT   = 'astro_windy_lat';
-  var LS_W_LON   = 'astro_windy_lon';
-  var LS_W_ZOOM  = 'astro_windy_zoom';
-  var LS_W_PREV  = 'astro_windy_prev_mode';  // mode BEFORE switching to windy
+  var LS_TILE   = 'astro_map_tile';
+  var LS_W_LAT  = 'astro_windy_lat';
+  var LS_W_LON  = 'astro_windy_lon';
+  var LS_W_ZOOM = 'astro_windy_zoom';
 
   // ── Windy defaults (Kanto, zoom 7) ────────────────────────────────────────
   var _W_DEF_LAT  = 35.80;
   var _W_DEF_LON  = 139.50;
   var _W_DEF_ZOOM = 7;
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   function _lsGet(k, def) {
     try { var v = localStorage.getItem(k); return (v !== null) ? v : def; } catch(e) { return def; }
   }
@@ -1325,18 +1327,15 @@ _TILE_CTRL_TEMPLATE = Template("""
       + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
   }
 
-  // ── Windy iframe (singleton across reruns via DOM id) ─────────────────────
   var _windyFrame = null;
 
   function _ensureWindyFrame(mapEl) {
     if (_windyFrame) return;
     _windyFrame = mapEl.querySelector('#astro-windy-iframe');
     if (_windyFrame) return;
-
     var lat  = parseFloat(_lsGet(LS_W_LAT,  _W_DEF_LAT));
     var lon  = parseFloat(_lsGet(LS_W_LON,  _W_DEF_LON));
     var zoom = parseInt(  _lsGet(LS_W_ZOOM, _W_DEF_ZOOM), 10);
-
     _windyFrame = document.createElement('iframe');
     _windyFrame.id  = 'astro-windy-iframe';
     _windyFrame.src = _buildWindySrc(lat, lon, zoom);
@@ -1351,66 +1350,88 @@ _TILE_CTRL_TEMPLATE = Template("""
     mapEl.appendChild(_windyFrame);
   }
 
-  // ── Global flyWindy — called by Search when user picks a result ──────────
   window.flyWindy = function(lat, lon, zoom) {
     zoom = zoom || 9;
     _lsSet(LS_W_LAT,  lat);
     _lsSet(LS_W_LON,  lon);
     _lsSet(LS_W_ZOOM, zoom);
-    if (_windyFrame) {
-      _windyFrame.src = _buildWindySrc(lat, lon, zoom);
-    }
+    if (_windyFrame) { _windyFrame.src = _buildWindySrc(lat, lon, zoom); }
   };
 
-  var TileCtrl = L.Control.extend({
+  var CombinedCtrl = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd: function(map) {
-      var div = L.DomUtil.create('div', '');
-      div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
+      // ── Outer column wrapper ───────────────────────────────────────────────
+      var col = L.DomUtil.create('div', '');
+      col.style.cssText = (
+        'display:flex;flex-direction:column;align-items:flex-end;'
+        + 'gap:6px;margin-bottom:38px;'
+      );
+      L.DomEvent.disableClickPropagation(col);
+
+      // ── Row 1: 📍 Label + LPM ─────────────────────────────────────────────
+      var infoRow = L.DomUtil.create('div', '', col);
+      infoRow.style.cssText = (
+        'display:flex;align-items:center;gap:6px;'
+        + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
+        + 'border-radius:8px;padding:5px 8px;'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);'
+      );
+
+      var pin = L.DomUtil.create('span', '', infoRow);
+      pin.innerHTML = '&#128205;';
+      pin.style.cssText = 'font-size:13px;flex-shrink:0;line-height:1;';
+
+      var loc = L.DomUtil.create('span', '', infoRow);
+      loc.textContent = '{{ this.location_name }}';
+      loc.style.cssText = 'color:#e2e8f0;font-size:12px;font-weight:600;'
+        + 'white-space:nowrap;display:inline-block;';
+
+      var a = L.DomUtil.create('a', '', infoRow);
+      a.href = '{{ this.lpm_url }}';
+      a.target = '_blank'; a.rel = 'noopener'; a.title = 'Light Pollution Map';
+      a.textContent = 'LPM';
+      a.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
+        + 'background:rgba(124,58,237,0.22);border:1.5px solid rgba(124,58,237,0.65);'
+        + 'border-radius:6px;padding:2px 8px;text-decoration:none;'
+        + 'color:#a78bfa;font-size:12px;font-weight:700;'
+        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
+      a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
+      a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
+
+      // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
+      var tileRow = L.DomUtil.create('div', '', col);
+      tileRow.style.cssText = (
+        'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
         + 'border:1px solid #334155;border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin-bottom:38px;';
-      L.DomEvent.disableClickPropagation(div);
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);'
+      );
 
       var tiles = {
         satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
       };
-      var attrs  = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
-      var current  = null;
-      var btns     = {};
-      // _curMode is read/written via localStorage so it survives Streamlit reruns
-      // LS_TILE already tracks the active tile; we use LS_W_PREV to know
-      // which map mode was active before the user switched to Windy.
+      var attrs = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
+      var current = null;
+      var btns = {};
 
       function switchTile(mode) {
-        var mapEl  = map.getContainer();
+        var mapEl = map.getContainer();
         var prevMode = _lsGet(LS_TILE, null);
         _ensureWindyFrame(mapEl);
-
         if (mode === 'windy') {
-          // Always sync Windy to current Leaflet view when entering Windy mode.
-          // This ensures Windy->Satellite can later return to the right spot.
-          // On init (prevMode already 'windy'), only sync if LS hasn't been set yet.
           var c = map.getCenter();
           var z = map.getZoom();
-          var needSync = (prevMode !== 'windy') ||
-                         (_lsGet(LS_W_LAT, null) === null);
-          if (needSync) {
-            window.flyWindy(c.lat, c.lng, z);
-          }
+          var needSync = (prevMode !== 'windy') || (_lsGet(LS_W_LAT, null) === null);
+          if (needSync) { window.flyWindy(c.lat, c.lng, z); }
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
         } else {
-          // When leaving Windy: keep Leaflet at the position it had when Windy was entered.
-          // (Windy is cross-origin iframe — cannot read its internal pan/zoom state.
-          //  Leaflet already holds the correct view from when user switched TO Windy,
-          //  or from the last searchbox flyTo — both call map.setView + flyWindy in sync.)
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
           current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
           current.addTo(map);
         }
-
         _lsSet(LS_TILE, mode);
         Object.keys(btns).forEach(function(k){
           btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
@@ -1419,7 +1440,7 @@ _TILE_CTRL_TEMPLATE = Template("""
       }
 
       ['windy','satellite','street'].forEach(function(mode){
-        var btn = L.DomUtil.create('button', '', div);
+        var btn = L.DomUtil.create('button', '', tileRow);
         btn.textContent = mode === 'windy' ? 'Windy'
                         : mode.charAt(0).toUpperCase() + mode.slice(1);
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
@@ -1431,92 +1452,32 @@ _TILE_CTRL_TEMPLATE = Template("""
 
       map.whenReady(function(){
         var saved = _lsGet(LS_TILE, 'windy');
-        if (saved !== 'satellite' && saved !== 'street' && saved !== 'windy') {
-          saved = 'windy';
-        }
+        if (saved !== 'satellite' && saved !== 'street' && saved !== 'windy') saved = 'windy';
         switchTile(saved);
       });
-      return div;
+
+      return col;
     }
   });
-  new TileCtrl().addTo({{ this._parent.get_name() }});
+  new CombinedCtrl().addTo({{ this._parent.get_name() }});
 })();
 {% endmacro %}
 """)
 
-class _TileControl(MacroElement):
-    def __init__(self, initial_tile="windy", init_lat=36.5, init_lon=136.5):
+class _CombinedControl(MacroElement):
+    def __init__(self, lpm_url, location_name, initial_tile="windy"):
         super().__init__()
-        self._name = '_TileControl'
-        self._template = _TILE_CTRL_TEMPLATE
-        self.initial_tile = initial_tile
-        self.init_lat = init_lat
-        self.init_lon = init_lon
-
-_lpm_url = (f"https://lightpollutionmap.app/"
-            f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
-
-_LPM_CTRL_TEMPLATE = Template("""
-{% macro script(this, kwargs) %}
-(function(){
-  var InfoCtrl = L.Control.extend({
-    options: { position: 'bottomright' },
-    onAdd: function(map) {
-      var wrap = L.DomUtil.create('div', '');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:6px;'
-        + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
-        + 'border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin-bottom:38px;';
-      L.DomEvent.disableClickPropagation(wrap);
-
-      // pin + location label
-      var pin = L.DomUtil.create('span', '', wrap);
-      pin.innerHTML = '&#128205;';   // 📍 via HTML entity (avoids Unicode encode issues)
-      pin.style.cssText = 'font-size:13px;flex-shrink:0;line-height:1;';
-
-      var loc = L.DomUtil.create('span', '', wrap);
-      loc.textContent = '{{ this.location_name }}';
-      loc.style.cssText = 'color:#e2e8f0;font-size:12px;font-weight:600;'
-        + 'white-space:nowrap;display:inline-block;';
-
-      // LPM link button
-      var a = L.DomUtil.create('a', '', wrap);
-      a.href    = '{{ this.lpm_url }}';
-      a.target  = '_blank';
-      a.rel     = 'noopener';
-      a.title   = 'Light Pollution Map';
-      a.textContent = 'LPM';
-      a.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
-        + 'background:rgba(124,58,237,0.22);border:1.5px solid rgba(124,58,237,0.65);'
-        + 'border-radius:6px;padding:2px 8px;text-decoration:none;'
-        + 'color:#a78bfa;font-size:12px;font-weight:700;'
-        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
-      a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
-      a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
-
-      return wrap;
-    }
-  });
-  new InfoCtrl().addTo({{ this._parent.get_name() }});
-})();
-{% endmacro %}
-""")
-
-class _LpmControl(MacroElement):
-    def __init__(self, lpm_url, location_name):
-        super().__init__()
-        self._name = '_LpmControl'
-        self._template = _LPM_CTRL_TEMPLATE
+        self._name = '_CombinedControl'
+        self._template = _COMBINED_CTRL_TEMPLATE
         self.lpm_url = lpm_url
         self.location_name = location_name
+        self.initial_tile = initial_tile
 
-# ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
-# LPM add trước → hiện trên; TileControl add sau → hiện dưới (bottomright stack)
-_LpmControl(lpm_url=_lpm_url, location_name=_strip_loc_num(st.session_state.location_name)).add_to(m)
-_TileControl(
+# ── COMBINED CONTROL (Label/LPM on top, Tile switcher below, gap=6px) ─────────
+_CombinedControl(
+    lpm_url=_lpm_url,
+    location_name=_strip_loc_num(st.session_state.location_name),
     initial_tile=st.session_state.map_tile,
-    init_lat=round(st.session_state.lat, 4),
-    init_lon=round(st.session_state.lon, 4),
 ).add_to(m)
 
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
