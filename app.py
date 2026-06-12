@@ -1294,44 +1294,75 @@ from jinja2 import Template
 _TILE_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
-  // ── Windy iframe overlay (inserted once into map container) ──────────────────
-  var _windyFrame = null;
-  // Kanto center: 35.8, 139.5 / zoom=7 bao phủ toàn Kanto
-  var _WINDY_DEFAULT_LAT = 35.80;
-  var _WINDY_DEFAULT_LON = 139.50;
-  var _WINDY_DEFAULT_ZOOM = 7;
+  // ── localStorage keys ─────────────────────────────────────────────────────
+  var LS_TILE    = 'astro_map_tile';
+  var LS_W_LAT   = 'astro_windy_lat';
+  var LS_W_LON   = 'astro_windy_lon';
+  var LS_W_ZOOM  = 'astro_windy_zoom';
+
+  // ── Windy defaults (Kanto, zoom 7) ────────────────────────────────────────
+  var _W_DEF_LAT  = 35.80;
+  var _W_DEF_LON  = 139.50;
+  var _W_DEF_ZOOM = 7;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function _lsGet(k, def) {
+    try { var v = localStorage.getItem(k); return (v !== null) ? v : def; } catch(e) { return def; }
+  }
+  function _lsSet(k, v) { try { localStorage.setItem(k, String(v)); } catch(e){} }
 
   function _buildWindySrc(lat, lon, zoom) {
     return 'https://embed.windy.com/embed2.html'
-      + '?lat=' + lat + '&lon=' + lon
-      + '&detailLat=' + lat + '&detailLon=' + lon
-      + '&width=650&height=450&zoom=' + zoom
+      + '?lat=' + parseFloat(lat).toFixed(4)
+      + '&lon=' + parseFloat(lon).toFixed(4)
+      + '&detailLat=' + parseFloat(lat).toFixed(4)
+      + '&detailLon=' + parseFloat(lon).toFixed(4)
+      + '&width=650&height=450&zoom=' + Math.round(zoom)
       + '&level=surface&overlay=rain&product=ecmwf'
       + '&menu=&message=true&marker=&calendar=now'
       + '&pressure=&type=map&location=coordinates'
       + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
   }
 
+  // ── Windy iframe (singleton across reruns via DOM id) ─────────────────────
+  var _windyFrame = null;
+
   function _ensureWindyFrame(mapEl) {
     if (_windyFrame) return;
+    // Try to find existing iframe from a previous Streamlit rerun
+    _windyFrame = mapEl.querySelector('#astro-windy-iframe');
+    if (_windyFrame) return;
+
+    // Restore last known Windy position from localStorage
+    var lat  = parseFloat(_lsGet(LS_W_LAT,  _W_DEF_LAT));
+    var lon  = parseFloat(_lsGet(LS_W_LON,  _W_DEF_LON));
+    var zoom = parseInt(  _lsGet(LS_W_ZOOM, _W_DEF_ZOOM), 10);
+
     _windyFrame = document.createElement('iframe');
-    _windyFrame.src = _buildWindySrc(_WINDY_DEFAULT_LAT, _WINDY_DEFAULT_LON, _WINDY_DEFAULT_ZOOM);
-    _windyFrame.id = 'astro-windy-iframe';
+    _windyFrame.id  = 'astro-windy-iframe';
+    _windyFrame.src = _buildWindySrc(lat, lon, zoom);
     _windyFrame.style.cssText = (
       'position:absolute;top:0;left:0;width:100%;height:100%;'
       + 'border:none;z-index:500;display:none;border-radius:inherit;'
     );
-    _windyFrame.setAttribute('allowfullscreen','');
+    _windyFrame.setAttribute('allowfullscreen', '');
     _windyFrame.setAttribute('sandbox',
       'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation');
     mapEl.style.position = 'relative';
     mapEl.appendChild(_windyFrame);
   }
 
-  // Global flyWindy: search control gọi khi chọn kết quả (zoom=9 vừa đủ)
-  window.flyWindy = function(lat, lon) {
-    if (!_windyFrame) return;
-    _windyFrame.src = _buildWindySrc(lat, lon, 9);
+  // ── Global flyWindy — called by Search when user picks a result ──────────
+  // zoom=9 gives a good city-level view; saves to localStorage so next
+  // Streamlit rerun restores the same position instead of the default.
+  window.flyWindy = function(lat, lon, zoom) {
+    zoom = zoom || 9;
+    _lsSet(LS_W_LAT,  lat);
+    _lsSet(LS_W_LON,  lon);
+    _lsSet(LS_W_ZOOM, zoom);
+    if (_windyFrame) {
+      _windyFrame.src = _buildWindySrc(lat, lon, zoom);
+    }
   };
 
   var TileCtrl = L.Control.extend({
@@ -1349,28 +1380,44 @@ _TILE_CTRL_TEMPLATE = Template("""
       };
       var attrs  = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
       var current = null;
-      var btns = {};
+      var btns    = {};
+      var _curMode = null;
 
       function switchTile(mode) {
         var mapEl = map.getContainer();
         _ensureWindyFrame(mapEl);
 
         if (mode === 'windy') {
-          // Show Windy iframe, hide base tile
+          // ── Sync: use current Leaflet view → fly Windy to same spot ────────
+          var c    = map.getCenter();
+          var z    = map.getZoom();
+          var wlat = c.lat, wlon = c.lng, wzoom = z;
+          // Only sync if user was on satellite/street (not first load)
+          if (_curMode && _curMode !== 'windy') {
+            window.flyWindy(wlat, wlon, wzoom);
+          }
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
         } else {
-          // Hide Windy, show map tile
+          // ── Sync: restore Leaflet to last known Windy position ───────────
+          if (_curMode === 'windy') {
+            var wlat2  = parseFloat(_lsGet(LS_W_LAT,  map.getCenter().lat));
+            var wlon2  = parseFloat(_lsGet(LS_W_LON,  map.getCenter().lng));
+            var wzoom2 = parseInt(  _lsGet(LS_W_ZOOM, map.getZoom()), 10);
+            map.setView([wlat2, wlon2], wzoom2, {animate: false});
+          }
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
           current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
           current.addTo(map);
         }
+
+        _curMode = mode;
         Object.keys(btns).forEach(function(k){
           btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
           btns[k].style.color      = (k === mode) ? '#ffffff' : '#94a3b8';
         });
-        try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
+        _lsSet(LS_TILE, mode);
       }
 
       ['windy','satellite','street'].forEach(function(mode){
@@ -1385,11 +1432,10 @@ _TILE_CTRL_TEMPLATE = Template("""
       });
 
       map.whenReady(function(){
-        var saved = '{{ this.initial_tile }}';
-        try {
-          var ls = window.localStorage.getItem('astro_map_tile');
-          if (ls === 'satellite' || ls === 'street' || ls === 'windy') { saved = ls; }
-        } catch(e){}
+        var saved = _lsGet(LS_TILE, '{{ this.initial_tile }}');
+        if (saved !== 'satellite' && saved !== 'street' && saved !== 'windy') {
+          saved = '{{ this.initial_tile }}';
+        }
         switchTile(saved);
       });
       return div;
@@ -1654,7 +1700,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         map.setView([item.lat, item.lon], 11, {animate:true, duration:0.8});
         // Fly Windy to same location
         if (typeof window.flyWindy === 'function') {
-          window.flyWindy(item.lat, item.lon);
+          window.flyWindy(item.lat, item.lon, 11);
         }
         // Fire synthetic click → st_folium receives last_clicked
         setTimeout(function(){
@@ -1704,7 +1750,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               map.setView([lat, lon], 11, {animate:true, duration:0.8});
               // Fly Windy to geocoded location
               if (typeof window.flyWindy === 'function') {
-                window.flyWindy(lat, lon);
+                window.flyWindy(lat, lon, 11);
               }
               dropdown.innerHTML = '';
               var found = L.DomUtil.create('div', '', dropdown);
