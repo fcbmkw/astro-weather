@@ -2053,21 +2053,33 @@ with col_left:
 /* ── NAV BOX: khung chứa 5 "ô" [⬅️][date][➡️][location][LPM] ───────────────
    Giống khung Bortle: 1 container bo viền, các ô con tự flex-wrap.
    - PC (rộng): 5 ô đủ chỗ → nằm 1 hàng
-   - Mobile (hẹp): ô location quá rộng → tự wrap xuống hàng 2, kéo theo LPM */
-.st-key-nav_box > div {
+   - Mobile (hẹp): ô location quá rộng → tự wrap xuống hàng 2, kéo theo LPM
+   Cấu trúc thực tế: .st-key-nav_box > stVerticalBlockBorderWrapper >
+                     stVerticalBlock > stElementContainer (x5)
+   → display:flex phải áp lên stVerticalBlock, không phải lớp wrapper ngoài. */
+.st-key-nav_box,
+.st-key-nav_box > div,
+.st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"] > div {
+    width: 100% !important;
+}
+.st-key-nav_box [data-testid="stVerticalBlock"] {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
     align-items: center !important;
     gap: 6px !important;
+    width: 100% !important;
     background: rgba(255,255,255,0.03);
     border: 1px solid #1e293b;
     border-radius: 10px;
     padding: 6px;
+    box-sizing: border-box;
 }
 /* Mỗi widget container — bỏ margin mặc định, để flex tự co giãn */
 .st-key-nav_box [data-testid="stElementContainer"] {
     margin: 0 !important;
+    width: auto !important;
     flex: 0 0 auto;
 }
 /* ⬅️ ➡️ — ô nhỏ cố định */
@@ -2083,9 +2095,15 @@ with col_left:
 .st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_date"]) {
     flex: 0 1 auto;
 }
+.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_date"]) [data-testid="stSelectbox"] {
+    width: fit-content !important;
+}
 /* Location selectbox — chiếm phần còn lại, wrap xuống hàng 2 trên mobile */
 .st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
     flex: 1 1 200px;
+}
+.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
+    width: 100% !important;
 }
 /* LPM — ô nhỏ cố định, đi cùng hàng với location khi wrap */
 .st-key-nav_box [data-testid="stElementContainer"]:has(.lpm-btn) {
