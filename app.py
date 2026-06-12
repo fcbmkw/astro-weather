@@ -2107,44 +2107,53 @@ with col_left:
     width: fit-content !important;
 }
 
-/* --- nav_row2: location LPM — không bao giờ wrap nội bộ, chiếm phần còn lại --- */
+/* --- nav_row2: location LPM — co theo nội dung, không bao giờ wrap nội bộ --- */
 .st-key-nav2,
 .st-key-nav2 > div,
 .st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"],
-.st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"] > div { width: 100% !important; }
+.st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"] > div { width: auto !important; }
 .st-key-nav2 [data-testid="stVerticalBlock"] {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
     gap: 6px !important;
-    width: 100% !important;
+    width: auto !important;
 }
-.st-key-nav2 [data-testid="stElementContainer"] { margin: 0 !important; }
+.st-key-nav2 [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
+/* Location: co theo nội dung như date box */
 .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
-    flex: 1 1 0 !important; min-width: 0 !important;
+    flex: 0 1 auto !important; min-width: 0 !important;
 }
 .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
-    width: 100% !important;
+    width: fit-content !important;
 }
 .st-key-nav2 [data-testid="stElementContainer"]:has(.lpm-btn) {
-    flex: 0 0 70px !important;
-}
-
-/* nav_row2 chiếm phần còn lại của nav_box trên PC, xuống hàng trên mobile */
-/* Trên PC: nav_row1 auto-width, nav_row2 flex:1 → cùng 1 hàng */
-.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav1) {
     flex: 0 0 auto !important;
 }
+
+/* Cả nav1 và nav2 đều auto-width trên PC → cùng 1 hàng */
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav1),
 .st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav2) {
-    flex: 1 1 200px !important;
-    min-width: 200px !important;
+    flex: 0 0 auto !important;
 }
-/* Trên mobile: nav_row2 chiếm full width → tự wrap xuống hàng mới */
+/* Trên mobile: nav2 chiếm full width → wrap xuống hàng mới */
 @media (max-width: 600px) {
     .st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav2) {
         flex: 0 0 100% !important;
         min-width: 100% !important;
+    }
+    /* Trên mobile nav2 stretch full, location lấp đầy */
+    .st-key-nav2 [data-testid="stVerticalBlock"] { width: 100% !important; }
+    .st-key-nav2,
+    .st-key-nav2 > div,
+    .st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"],
+    .st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"] > div { width: 100% !important; }
+    .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
+        flex: 1 1 0 !important;
+    }
+    .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
+        width: 100% !important;
     }
 }
 
@@ -2204,7 +2213,7 @@ with col_left:
 
             st.markdown(
                 f'<div class="lpm-btn">'
-                f'<a href="{_lpm_url}" target="_blank" rel="noopener" title="Mở Light Pollution Map tại vị trí này">🌃 LPM</a>'
+                f'<a href="{_lpm_url}" target="_blank" rel="noopener" title="Mở Light Pollution Map tại vị trí này">LPM</a>'
                 f'</div>',
                 unsafe_allow_html=True
             )
