@@ -1294,35 +1294,100 @@ from jinja2 import Template
 _TILE_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
-  // ── Windy iframe overlay (inserted once into map container) ──────────────────
+  // ── Location database for markers ────────────────────────────────────────────
+  var _LOCS = {{ this.loc_list_js }};
+
+  // ── Windy iframe + SVG marker overlay ────────────────────────────────────────
   var _windyFrame = null;
-  function _ensureWindyFrame(mapEl, lat, lon) {
-    if (_windyFrame) return;
+  var _markerOverlay = null;
+  var _markerSvg = null;
+
+  function _mercY(lat) {
+    var r = Math.PI / 180;
+    return Math.log(Math.tan(Math.PI/4 + lat * r / 2));
+  }
+
+  function _drawMarkers(mapEl) {
+    if (!_markerOverlay) return;
+    var W = mapEl.offsetWidth;
+    var H = mapEl.offsetHeight;
+    _markerOverlay.style.width  = W + 'px';
+    _markerOverlay.style.height = H + 'px';
+
+    // Windy iframe is fixed at zoom=5, center = init_lat/lon (Mercator)
     var zoom = 5;
+    var tileSize = 256;
+    var scale = tileSize * Math.pow(2, zoom) / (2 * Math.PI);
+
+    var cLat = {{ this.init_lat }};
+    var cLon = {{ this.init_lon }};
+    var cY = _mercY(cLat);
+    var cX = cLon * Math.PI / 180;
+
+    var svg = '';
+    _LOCS.forEach(function(loc) {
+      var mY = _mercY(loc.lat);
+      var mX = loc.lon * Math.PI / 180;
+      var px = W/2 + (mX - cX) * scale;
+      var py = H/2 - (mY - cY) * scale;
+      if (px < -10 || px > W+10 || py < -10 || py > H+10) return;
+      svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="5"'
+           + ' fill="rgba(251,191,36,0.85)" stroke="#1e293b" stroke-width="1"'
+           + ' style="cursor:pointer;">'
+           + '<title>' + loc.name + '</title>'
+           + '</circle>';
+    });
+    _markerSvg.innerHTML = svg;
+  }
+
+  function _ensureWindyOverlay(mapEl) {
+    if (_windyFrame) return;
+    var lat = {{ this.init_lat }};
+    var lon = {{ this.init_lon }};
     var src = 'https://embed.windy.com/embed2.html'
       + '?lat=' + lat + '&lon=' + lon
       + '&detailLat=' + lat + '&detailLon=' + lon
-      + '&width=650&height=450&zoom=' + zoom
-      + '&level=surface&overlay=rain&product=ecmwf'
+      + '&width=650&height=450&zoom=5&level=surface&overlay=rain&product=ecmwf'
       + '&menu=&message=true&marker=&calendar=now'
       + '&pressure=&type=map&location=coordinates'
       + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
+
+    mapEl.style.position = 'relative';
+
     _windyFrame = document.createElement('iframe');
     _windyFrame.src = src;
-    _windyFrame.style.cssText = (
-      'position:absolute;top:0;left:0;width:100%;height:100%;'
-      + 'border:none;z-index:500;display:none;border-radius:inherit;'
-    );
+    _windyFrame.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;'
+      + 'border:none;z-index:500;display:none;border-radius:inherit;';
     _windyFrame.setAttribute('allowfullscreen','');
     _windyFrame.setAttribute('sandbox',
       'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation');
-    mapEl.style.position = 'relative';
     mapEl.appendChild(_windyFrame);
+
+    // SVG overlay for markers (above iframe, pointer-events:none so clicks pass through)
+    _markerOverlay = document.createElement('div');
+    _markerOverlay.style.cssText = 'position:absolute;top:0;left:0;'
+      + 'z-index:600;pointer-events:none;display:none;';
+    _markerSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    _markerSvg.style.cssText = 'width:100%;height:100%;overflow:visible;';
+    _markerOverlay.appendChild(_markerSvg);
+    mapEl.appendChild(_markerOverlay);
+
+    _drawMarkers(mapEl);
   }
 
+  // ── Tile switcher — topcenter ─────────────────────────────────────────────────
   var TileCtrl = L.Control.extend({
-    options: { position: 'topright' },
+    options: { position: 'topcenter' },
     onAdd: function(map) {
+      // Register custom position if not already done
+      if (!L.Map.prototype._initControlPos._topcenter_done) {
+        var proto = map.getContainer();
+        var tc = L.DomUtil.create('div', 'leaflet-top leaflet-topcenter', proto);
+        tc.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;';
+        map._controlContainer._topcenter = tc;
+        L.Map.prototype._initControlPos._topcenter_done = true;
+      }
+
       var div = L.DomUtil.create('div', '');
       div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
         + 'border:1px solid #334155;border-radius:8px;padding:5px 8px;'
@@ -1333,21 +1398,22 @@ _TILE_CTRL_TEMPLATE = Template("""
         satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
       };
-      var attrs  = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
+      var attrs = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
       var current = null;
       var btns = {};
 
       function switchTile(mode) {
         var mapEl = map.getContainer();
-        _ensureWindyFrame(mapEl, {{ this.init_lat }}, {{ this.init_lon }});
+        _ensureWindyOverlay(mapEl);
 
         if (mode === 'windy') {
-          // Show Windy iframe, hide base tile
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
+          _markerOverlay.style.display = 'block';
+          _drawMarkers(mapEl);
         } else {
-          // Hide Windy, show map tile
           if (_windyFrame) _windyFrame.style.display = 'none';
+          if (_markerOverlay) _markerOverlay.style.display = 'none';
           if (current) { map.removeLayer(current); }
           current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
           current.addTo(map);
@@ -1371,6 +1437,15 @@ _TILE_CTRL_TEMPLATE = Template("""
       });
 
       map.whenReady(function(){
+        // Attach control div to topcenter container
+        var container = map.getContainer();
+        var tc = container.querySelector('.leaflet-topcenter');
+        if (!tc) {
+          tc = L.DomUtil.create('div', 'leaflet-topcenter', container);
+          tc.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;pointer-events:auto;';
+        }
+        tc.appendChild(div);
+
         var saved = '{{ this.initial_tile }}';
         try {
           var ls = window.localStorage.getItem('astro_map_tile');
@@ -1378,7 +1453,7 @@ _TILE_CTRL_TEMPLATE = Template("""
         } catch(e){}
         switchTile(saved);
       });
-      return div;
+      return L.DomUtil.create('div',''); // dummy — real div appended in whenReady
     }
   });
   new TileCtrl().addTo({{ this._parent.get_name() }});
@@ -1387,18 +1462,26 @@ _TILE_CTRL_TEMPLATE = Template("""
 """)
 
 class _TileControl(MacroElement):
-    def __init__(self, initial_tile="windy", init_lat=36.5, init_lon=136.5):
+    def __init__(self, initial_tile="windy", init_lat=36.5, init_lon=136.5, loc_list_js="[]"):
         super().__init__()
         self._name = '_TileControl'
         self._template = _TILE_CTRL_TEMPLATE
         self.initial_tile = initial_tile
         self.init_lat = init_lat
         self.init_lon = init_lon
+        self.loc_list_js = loc_list_js
+
+# Build compact location list (name + lat + lon only) for JS markers
+_loc_list_for_markers = _json.dumps([
+    {"name": _strip_loc_num(name), "lat": coords[0], "lon": coords[1]}
+    for name, coords in LOCATION_DATABASE.items()
+], ensure_ascii=False)
 
 _TileControl(
     initial_tile=st.session_state.map_tile,
     init_lat=round(st.session_state.lat, 4),
     init_lon=round(st.session_state.lon, 4),
+    loc_list_js=_loc_list_for_markers,
 ).add_to(m)
 
 # ── LOCATION LABEL + LPM BUTTON — bottomright on map ────────────────────────
@@ -2456,72 +2539,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-
-
-# ── SATELLITE & RAIN RADAR MAP ────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("### 🌬️ WINDY — Rain & Wind Radar")
-
-import streamlit.components.v1 as _components
-from datetime import datetime, timezone, timedelta
-
-_now_jst = datetime.now(timezone(timedelta(hours=9)))
-_hi_ts_label = _now_jst.strftime("%Y-%m-%d %H:%M JST")
-
-# Windy embed URL – centered on selected location, rain overlay
-_windy_url = (
-    "https://embed.windy.com/embed2.html"
-    f"?lat={st.session_state.lat:.2f}&lon={st.session_state.lon:.2f}"
-    f"&detailLat={st.session_state.lat:.4f}&detailLon={st.session_state.lon:.4f}"
-    "&width=650&height=450&zoom=5&level=surface&overlay=rain"
-    "&product=ecmwf&menu=&message=true&marker=&calendar=now"
-    "&pressure=&type=map&location=coordinates&detail=&metricWind=default"
-    "&metricTemp=default&radarRange=-1"
-)
-
-_sat_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * {{ box-sizing:border-box; margin:0; padding:0; }}
-  body {{ background:#0f172a; font-family:sans-serif; color:#94a3b8; }}
-  .wrap {{ background:#0f172a; border-radius:10px; border:1px solid #334155; padding:12px; }}
-  .hdr {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }}
-  .ts {{ font-size:11px; color:#475569; margin-top:5px; text-align:right; }}
-  .links {{ margin-top:10px; font-size:12px; border-top:1px solid #1e293b; padding-top:8px; }}
-  .links a {{ color:#60a5fa; margin-right:14px; text-decoration:none; font-size:11px; }}
-  .links a:hover {{ text-decoration:underline; }}
-  #windy-frame {{ width:100%; height:460px; border:none; border-radius:8px; display:block; }}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="hdr">
-    <span style="font-size:13px;color:#cbd5e1;font-weight:600;">
-      🌬️ Windy · ECMWF Rain &amp; Wind
-      <span style="color:#475569;font-size:11px;font-weight:400;margin-left:6px;">{_hi_ts_label}</span>
-    </span>
-  </div>
-
-  <iframe id="windy-frame" src="{_windy_url}"
-    frameborder="0" allowfullscreen
-    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation">
-  </iframe>
-  <div class="ts">Windy.com · ECMWF · rain overlay · zoom/drag available</div>
-
-  <div class="links">
-    <a href="https://www.windy.com/?rain,{st.session_state.lat:.2f},{st.session_state.lon:.2f},5" target="_blank">🌬️ Windy を開く</a>
-    <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank">🌧️ JMA 雨雲レーダー</a>
-    <a href="https://weather-gpv.info/" target="_blank">📊 weather-gpv.info</a>
-  </div>
-</div>
-</body>
-</html>
-"""
-_components.html(_sat_html, height=560, scrolling=False)
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
