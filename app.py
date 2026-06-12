@@ -1262,8 +1262,8 @@ st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
 _TILE_SAT_URL  = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
 _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 
-if st.session_state.map_tile not in ("satellite", "street"):
-    st.session_state.map_tile = "satellite"
+if st.session_state.map_tile not in ("satellite", "street", "windy"):
+    st.session_state.map_tile = "windy"
 
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
@@ -1294,6 +1294,32 @@ from jinja2 import Template
 _TILE_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
+  // ── Windy iframe overlay (inserted once into map container) ──────────────────
+  var _windyFrame = null;
+  function _ensureWindyFrame(mapEl, lat, lon) {
+    if (_windyFrame) return;
+    var zoom = 5;
+    var src = 'https://embed.windy.com/embed2.html'
+      + '?lat=' + lat + '&lon=' + lon
+      + '&detailLat=' + lat + '&detailLon=' + lon
+      + '&width=650&height=450&zoom=' + zoom
+      + '&level=surface&overlay=rain&product=ecmwf'
+      + '&menu=&message=true&marker=&calendar=now'
+      + '&pressure=&type=map&location=coordinates'
+      + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
+    _windyFrame = document.createElement('iframe');
+    _windyFrame.src = src;
+    _windyFrame.style.cssText = (
+      'position:absolute;top:0;left:0;width:100%;height:100%;'
+      + 'border:none;z-index:500;display:none;border-radius:inherit;'
+    );
+    _windyFrame.setAttribute('allowfullscreen','');
+    _windyFrame.setAttribute('sandbox',
+      'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation');
+    mapEl.style.position = 'relative';
+    mapEl.appendChild(_windyFrame);
+  }
+
   var TileCtrl = L.Control.extend({
     options: { position: 'topright' },
     onAdd: function(map) {
@@ -1312,9 +1338,20 @@ _TILE_CTRL_TEMPLATE = Template("""
       var btns = {};
 
       function switchTile(mode) {
-        if (current) { map.removeLayer(current); }
-        current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
-        current.addTo(map);
+        var mapEl = map.getContainer();
+        _ensureWindyFrame(mapEl, {{ this.init_lat }}, {{ this.init_lon }});
+
+        if (mode === 'windy') {
+          // Show Windy iframe, hide base tile
+          if (current) { map.removeLayer(current); current = null; }
+          _windyFrame.style.display = 'block';
+        } else {
+          // Hide Windy, show map tile
+          if (_windyFrame) _windyFrame.style.display = 'none';
+          if (current) { map.removeLayer(current); }
+          current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
+          current.addTo(map);
+        }
         Object.keys(btns).forEach(function(k){
           btns[k].style.background = (k === mode) ? '#3b82f6' : 'transparent';
           btns[k].style.color      = (k === mode) ? '#ffffff' : '#94a3b8';
@@ -1322,9 +1359,10 @@ _TILE_CTRL_TEMPLATE = Template("""
         try { window.localStorage.setItem('astro_map_tile', mode); } catch(e){}
       }
 
-      ['satellite','street'].forEach(function(mode){
+      ['windy','satellite','street'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', div);
-        btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+        btn.textContent = mode === 'windy' ? 'Windy'
+                        : mode.charAt(0).toUpperCase() + mode.slice(1);
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
           + 'padding:3px 10px;font-size:12px;font-weight:600;'
           + 'transition:background 0.2s,color 0.2s;background:transparent;color:#94a3b8;';
@@ -1336,7 +1374,7 @@ _TILE_CTRL_TEMPLATE = Template("""
         var saved = '{{ this.initial_tile }}';
         try {
           var ls = window.localStorage.getItem('astro_map_tile');
-          if (ls === 'satellite' || ls === 'street') { saved = ls; }
+          if (ls === 'satellite' || ls === 'street' || ls === 'windy') { saved = ls; }
         } catch(e){}
         switchTile(saved);
       });
@@ -1349,13 +1387,19 @@ _TILE_CTRL_TEMPLATE = Template("""
 """)
 
 class _TileControl(MacroElement):
-    def __init__(self, initial_tile="satellite"):
+    def __init__(self, initial_tile="windy", init_lat=36.5, init_lon=136.5):
         super().__init__()
         self._name = '_TileControl'
         self._template = _TILE_CTRL_TEMPLATE
         self.initial_tile = initial_tile
+        self.init_lat = init_lat
+        self.init_lon = init_lon
 
-_TileControl(initial_tile=st.session_state.map_tile).add_to(m)
+_TileControl(
+    initial_tile=st.session_state.map_tile,
+    init_lat=round(st.session_state.lat, 4),
+    init_lon=round(st.session_state.lon, 4),
+).add_to(m)
 
 # ── LOCATION LABEL + LPM BUTTON — bottomright on map ────────────────────────
 _LPM_CTRL_TEMPLATE = Template("""
@@ -2417,7 +2461,7 @@ st.markdown(
 
 # ── SATELLITE & RAIN RADAR MAP ────────────────────────────────────────────────
 st.markdown("---")
-st.markdown("### 🛰️ SATELLITE & RAIN RADAR")
+st.markdown("### 🌬️ WINDY — Rain & Wind Radar")
 
 import streamlit.components.v1 as _components
 from datetime import datetime, timezone, timedelta
@@ -2425,249 +2469,59 @@ from datetime import datetime, timezone, timedelta
 _now_jst = datetime.now(timezone(timedelta(hours=9)))
 _hi_ts_label = _now_jst.strftime("%Y-%m-%d %H:%M JST")
 
-# Windy embed URL – centered on Japan, rain overlay
+# Windy embed URL – centered on selected location, rain overlay
 _windy_url = (
     "https://embed.windy.com/embed2.html"
-    "?lat=36.5&lon=136.5&detailLat=35.68&detailLon=139.69"
+    f"?lat={st.session_state.lat:.2f}&lon={st.session_state.lon:.2f}"
+    f"&detailLat={st.session_state.lat:.4f}&detailLon={st.session_state.lon:.4f}"
     "&width=650&height=450&zoom=5&level=surface&overlay=rain"
     "&product=ecmwf&menu=&message=true&marker=&calendar=now"
     "&pressure=&type=map&location=coordinates&detail=&metricWind=default"
     "&metricTemp=default&radarRange=-1"
 )
 
-# Digital Typhoon (NII Informatics) – Himawari JPEG, public/no hotlink block, ~1h update
-# http://agora.ex.nii.ac.jp/digital-typhoon/latest/color/
-_dt_japan = "https://agora.ex.nii.ac.jp/digital-typhoon/latest/color/medium/JAPAN.jpg"
-_dt_fd    = "https://agora.ex.nii.ac.jp/digital-typhoon/latest/color/medium/FLDK.jpg"
-
 _sat_html = f"""
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   * {{ box-sizing:border-box; margin:0; padding:0; }}
   body {{ background:#0f172a; font-family:sans-serif; color:#94a3b8; }}
   .wrap {{ background:#0f172a; border-radius:10px; border:1px solid #334155; padding:12px; }}
   .hdr {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }}
-  .tabs {{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }}
-  .tab {{
-    padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12px;
-    background:#1e293b; border:1px solid #334155; color:#94a3b8; transition:.15s;
-    white-space:nowrap;
-  }}
-  .tab.active, .tab:hover {{ background:#3b82f6; border-color:#3b82f6; color:#fff; }}
-  .panel {{ display:none; }}
-  .panel.active {{ display:block; }}
-  .img-wrap {{
-    width:100%; border-radius:8px; overflow:hidden; background:#020817;
-    display:flex; align-items:center; justify-content:center; min-height:340px;
-    position:relative;
-  }}
-  .img-wrap img {{ width:100%; height:auto; display:block; cursor:zoom-in; }}
   .ts {{ font-size:11px; color:#475569; margin-top:5px; text-align:right; }}
   .links {{ margin-top:10px; font-size:12px; border-top:1px solid #1e293b; padding-top:8px; }}
   .links a {{ color:#60a5fa; margin-right:14px; text-decoration:none; font-size:11px; }}
   .links a:hover {{ text-decoration:underline; }}
-  .reload-btn {{
-    background:#1e293b; border:1px solid #334155; color:#94a3b8;
-    padding:4px 10px; border-radius:5px; cursor:pointer; font-size:12px;
-  }}
-  .reload-btn:hover {{ background:#334155; color:#e2e8f0; }}
-  #map-radar {{ height:420px; width:100%; border-radius:8px; }}
-  #windy-frame {{ width:100%; height:450px; border:none; border-radius:8px; display:block; }}
-  .err-box {{
-    display:none; text-align:center; padding:30px; color:#94a3b8; font-size:13px;
-    flex-direction:column; gap:12px; align-items:center; width:100%;
-  }}
-  .err-box a {{ color:#60a5fa; }}
-  .spinner {{
-    width:32px; height:32px; border:3px solid #334155;
-    border-top-color:#3b82f6; border-radius:50%;
-    animation: spin 0.8s linear infinite; margin:auto;
-  }}
-  @keyframes spin {{ to {{ transform:rotate(360deg); }} }}
-  .loading-wrap {{
-    position:absolute; inset:0; display:flex; align-items:center;
-    justify-content:center; background:#020817; z-index:2;
-  }}
+  #windy-frame {{ width:100%; height:460px; border:none; border-radius:8px; display:block; }}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="hdr">
     <span style="font-size:13px;color:#cbd5e1;font-weight:600;">
-      🛰️ Satellite &amp; Rain Radar
+      🌬️ Windy · ECMWF Rain &amp; Wind
       <span style="color:#475569;font-size:11px;font-weight:400;margin-left:6px;">{_hi_ts_label}</span>
     </span>
-    <button class="reload-btn" onclick="refreshAll()">🔄 更新</button>
   </div>
 
-  <div class="tabs">
-    <div class="tab active" onclick="showTab('radar')">🌧️ RainViewer</div>
-    <div class="tab"        onclick="showTab('windy')">💨 Windy</div>
-    <div class="tab"        onclick="showTab('japan')">🗾 Himawari Japan</div>
-    <div class="tab"        onclick="showTab('fd')">🌏 Full Disk</div>
-  </div>
-
-  <!-- TAB: RainViewer (Leaflet + RainViewer tile API) -->
-  <div id="tab-radar" class="panel active">
-    <div id="map-radar"></div>
-    <div class="ts" id="radar-ts">RainViewer · 読み込み中...</div>
-  </div>
-
-  <!-- TAB: Windy iframe -->
-  <div id="tab-windy" class="panel">
-    <div class="img-wrap" style="min-height:450px;display:block;">
-      <iframe id="windy-frame" src="{_windy_url}"
-        frameborder="0" allowfullscreen
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation">
-      </iframe>
-    </div>
-    <div class="ts">Windy.com · ECMWF · rain overlay · zoom/drag available</div>
-  </div>
-
-  <!-- TAB: Digital Typhoon – Himawari Japan (NII Informatics, open JPEG) -->
-  <div id="tab-japan" class="panel">
-    <div class="img-wrap" id="wrap-japan">
-      <div class="loading-wrap" id="spin-japan"><div class="spinner"></div></div>
-      <img id="img-japan"
-           src="{_dt_japan}?t={int(_now_jst.timestamp())}"
-           referrerpolicy="no-referrer"
-           alt="Himawari Japan"
-           style="display:none;"
-           onload="imgLoaded('spin-japan','img-japan')"
-           onerror="imgError('spin-japan','img-japan','err-japan')" />
-      <div class="err-box" id="err-japan">
-        ⚠️ 画像を取得できません<br>
-        <a href="http://agora.ex.nii.ac.jp/digital-typhoon/latest/color/" target="_blank">
-          Digital Typhoon (NII) を開く →
-        </a>
-      </div>
-    </div>
-    <div class="ts">Source: Digital Typhoon · NII Informatics · Himawari Japan IR · ~1h update</div>
-  </div>
-
-  <!-- TAB: Digital Typhoon – Full Disk -->
-  <div id="tab-fd" class="panel">
-    <div class="img-wrap" id="wrap-fd">
-      <div class="loading-wrap" id="spin-fd"><div class="spinner"></div></div>
-      <img id="img-fd"
-           src="{_dt_fd}?t={int(_now_jst.timestamp())}"
-           referrerpolicy="no-referrer"
-           alt="Himawari Full Disk"
-           style="display:none;"
-           onload="imgLoaded('spin-fd','img-fd')"
-           onerror="imgError('spin-fd','img-fd','err-fd')" />
-      <div class="err-box" id="err-fd">
-        ⚠️ 画像を取得できません<br>
-        <a href="http://agora.ex.nii.ac.jp/digital-typhoon/latest/color/" target="_blank">
-          Digital Typhoon (NII) を開く →
-        </a>
-      </div>
-    </div>
-    <div class="ts">Source: Digital Typhoon · NII Informatics · Himawari Full Disk IR · ~1h update</div>
-  </div>
+  <iframe id="windy-frame" src="{_windy_url}"
+    frameborder="0" allowfullscreen
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation">
+  </iframe>
+  <div class="ts">Windy.com · ECMWF · rain overlay · zoom/drag available</div>
 
   <div class="links">
-    <a href="http://agora.ex.nii.ac.jp/digital-typhoon/" target="_blank">🛰️ Digital Typhoon (NII)</a>
-    <a href="https://himawari8.nict.go.jp/" target="_blank">📡 NICT Himawari</a>
-    <a href="https://www.eorc.jaxa.jp/ptree/" target="_blank">🚀 JAXA P-Tree</a>
+    <a href="https://www.windy.com/?rain,{st.session_state.lat:.2f},{st.session_state.lon:.2f},5" target="_blank">🌬️ Windy を開く</a>
     <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank">🌧️ JMA 雨雲レーダー</a>
     <a href="https://weather-gpv.info/" target="_blank">📊 weather-gpv.info</a>
   </div>
 </div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-// ── Tab switching ────────────────────────────────────────────────────────────
-var _TABS = ['radar','windy','japan','fd'];
-function showTab(name) {{
-  _TABS.forEach(function(t) {{
-    document.getElementById('tab-' + t).classList.toggle('active', t === name);
-  }});
-  document.querySelectorAll('.tab').forEach(function(el, i) {{
-    el.classList.toggle('active', _TABS[i] === name);
-  }});
-  if (name === 'radar' && !_radarInited) initRadar();
-}}
-
-// ── Image load/error helpers ─────────────────────────────────────────────────
-function imgLoaded(spinId, imgId) {{
-  var sp = document.getElementById(spinId);
-  var im = document.getElementById(imgId);
-  if (sp) sp.style.display = 'none';
-  if (im) im.style.display = 'block';
-}}
-function imgError(spinId, imgId, errId) {{
-  var sp  = document.getElementById(spinId);
-  var im  = document.getElementById(imgId);
-  var err = document.getElementById(errId);
-  if (sp)  sp.style.display  = 'none';
-  if (im)  im.style.display  = 'none';
-  if (err) err.style.display = 'flex';
-}}
-
-// ── RainViewer radar ─────────────────────────────────────────────────────────
-var _radarInited = false, _radarMap = null, _radarLayer = null;
-
-function initRadar() {{
-  _radarInited = true;
-  _radarMap = L.map('map-radar', {{zoomControl:true}}).setView([36.5, 136.5], 5);
-  L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-    attribution:'© OpenStreetMap', maxZoom:12
-  }}).addTo(_radarMap);
-
-  fetch('https://api.rainviewer.com/public/weather-maps.json')
-    .then(function(r) {{ return r.json(); }})
-    .then(function(data) {{
-      var frames = data.radar && data.radar.past;
-      if (!frames || !frames.length) return;
-      var latest = frames[frames.length - 1];
-      var tileUrl = 'https://tilecache.rainviewer.com' + latest.path +
-                    '/512/{{z}}/{{x}}/{{y}}/4/1_1.png';
-      _radarLayer = L.tileLayer(tileUrl, {{
-        opacity: 0.75, attribution: '© RainViewer', tileSize:512, zoomOffset:0
-      }}).addTo(_radarMap);
-      var d  = new Date(latest.time * 1000);
-      var ts = d.toLocaleString('ja-JP', {{timeZone:'Asia/Tokyo',
-               month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}});
-      document.getElementById('radar-ts').textContent =
-        'RainViewer · ' + ts + ' JST · ~2min update · drag/zoom available';
-    }})
-    .catch(function(e) {{
-      document.getElementById('radar-ts').textContent = '⚠️ RainViewer API error: ' + e.message;
-    }});
-}}
-
-// ── Refresh ──────────────────────────────────────────────────────────────────
-function refreshAll() {{
-  if (_radarMap && _radarLayer) {{
-    _radarMap.removeLayer(_radarLayer);
-    _radarLayer = null; _radarInited = false;
-    initRadar();
-  }}
-  var ts = '?t=' + Date.now();
-  ['img-japan','img-fd'].forEach(function(id) {{
-    var el = document.getElementById(id);
-    if (el) {{
-      var b = el.src.split('?')[0];
-      var sp = id === 'img-japan' ? 'spin-japan' : 'spin-fd';
-      var sp_el = document.getElementById(sp);
-      if (sp_el) sp_el.style.display = 'flex';
-      el.style.display = 'none';
-      el.src = b + ts;
-    }}
-  }});
-}}
-
-window.addEventListener('load', function() {{ initRadar(); }});
-</script>
 </body>
 </html>
 """
-_components.html(_sat_html, height=580, scrolling=False)
+_components.html(_sat_html, height=560, scrolling=False)
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
