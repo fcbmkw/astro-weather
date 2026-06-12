@@ -2050,20 +2050,22 @@ with col_left:
 }
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
 
-/* ── NAV BOX: khung chứa 5 "ô" [⬅️][date][➡️][location][LPM] ───────────────
-   Giống khung Bortle: 1 container bo viền, các ô con tự flex-wrap.
-   - PC (rộng): 5 ô đủ chỗ → nằm 1 hàng
-   - Mobile (hẹp): ô location quá rộng → tự wrap xuống hàng 2, kéo theo LPM
-   Cấu trúc thực tế: .st-key-nav_box > stVerticalBlockBorderWrapper >
-                     stVerticalBlock > stElementContainer (x5)
-   → display:flex phải áp lên stVerticalBlock, không phải lớp wrapper ngoài. */
+/* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
+   nav_row1: ⬅️  date  ➡️   → luôn nằm 1 hàng (no-wrap)
+   nav_row2: location  LPM  → luôn nằm 1 hàng (no-wrap)
+   - PC (rộng ≥ 600px): nav_row1 và nav_row2 nằm cùng 1 hàng ngang
+   - iPhone (< 600px):  nav_row1 hàng trên, nav_row2 hàng dưới
+   Cấu trúc DOM: .st-key-nav_box → stVerticalBlock → stElementContainer ×2
+                 (mỗi cái wrap 1 sub-container nav_row1 / nav_row2)       */
+
+/* --- nav_box: outer flex row, wrap trên mobile --- */
 .st-key-nav_box,
 .st-key-nav_box > div,
 .st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"],
 .st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"] > div {
     width: 100% !important;
 }
-.st-key-nav_box [data-testid="stVerticalBlock"] {
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
@@ -2076,100 +2078,136 @@ with col_left:
     padding: 6px;
     box-sizing: border-box;
 }
-/* Mỗi widget container — bỏ margin mặc định, để flex tự co giãn */
-.st-key-nav_box [data-testid="stElementContainer"] {
+/* Mỗi stElementContainer con trực tiếp của nav_box → chiếm auto */
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
     margin: 0 !important;
-    width: auto !important;
     flex: 0 0 auto;
 }
-/* ⬅️ ➡️ — ô nhỏ cố định */
-.st-key-nav_box [data-testid="stElementContainer"]:has([data-testid="stButton"]) {
-    flex: 0 0 44px;
+
+/* --- nav_row1: ⬅️ date ➡️ — không bao giờ wrap, co lại theo nội dung --- */
+.st-key-nav1,
+.st-key-nav1 > div,
+.st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"] > div { width: auto !important; }
+.st-key-nav1 [data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: auto !important;
 }
-.st-key-nav_box [data-testid="stButton"] button {
-    width: 44px !important;
-    min-width: 0 !important;
-    padding: 0 !important;
+.st-key-nav1 [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
+.st-key-nav1 [data-testid="stButton"] button {
+    width: 44px !important; min-width: 0 !important; padding: 0 !important;
 }
-/* Date selectbox — co theo nội dung, không chiếm hết hàng */
-.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_date"]) {
-    flex: 0 1 auto;
-}
-.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_date"]) [data-testid="stSelectbox"] {
+.st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px; }
+.st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) { flex: 0 1 auto; }
+.st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) [data-testid="stSelectbox"] {
     width: fit-content !important;
 }
-/* Location selectbox — chiếm phần còn lại, wrap xuống hàng 2 trên mobile */
-.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
-    flex: 1 1 200px;
-}
-.st-key-nav_box [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
+
+/* --- nav_row2: location LPM — không bao giờ wrap nội bộ, chiếm phần còn lại --- */
+.st-key-nav2,
+.st-key-nav2 > div,
+.st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"] > div { width: 100% !important; }
+.st-key-nav2 [data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
     width: 100% !important;
 }
-/* LPM — ô nhỏ cố định, đi cùng hàng với location khi wrap */
-.st-key-nav_box [data-testid="stElementContainer"]:has(.lpm-btn) {
-    flex: 0 0 70px;
+.st-key-nav2 [data-testid="stElementContainer"] { margin: 0 !important; }
+.st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
+    flex: 1 1 0 !important; min-width: 0 !important;
 }
-.st-key-nav_box .lpm-btn {
-    margin: 0 !important;
+.st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
+    width: 100% !important;
+}
+.st-key-nav2 [data-testid="stElementContainer"]:has(.lpm-btn) {
+    flex: 0 0 70px !important;
+}
+
+/* nav_row2 chiếm phần còn lại của nav_box trên PC, xuống hàng trên mobile */
+/* Trên PC: nav_row1 auto-width, nav_row2 flex:1 → cùng 1 hàng */
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav1) {
+    flex: 0 0 auto !important;
+}
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav2) {
+    flex: 1 1 200px !important;
+    min-width: 200px !important;
+}
+/* Trên mobile: nav_row2 chiếm full width → tự wrap xuống hàng mới */
+@media (max-width: 600px) {
+    .st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav2) {
+        flex: 0 0 100% !important;
+        min-width: 100% !important;
+    }
 }
 
 </style>""", unsafe_allow_html=True)
 
-    # Nav controls — render trong 1 st.container, KHÔNG dùng st.columns.
-    # CSS bên dưới biến block con của container này thành flex-wrap row,
-    # giúp 5 widget tự xếp 1 hàng trên PC và 2 hàng trên mobile (giống
-    # khung Bortle: nhiều "ô" trong 1 khung, tự wrap theo độ rộng).
+    # Nav controls — render trong 1 st.container với 2 sub-container:
+    #   nav_row1: ⬅️  date  ➡️   (giữ nguyên 1 hàng cả PC lẫn mobile)
+    #   nav_row2: location  LPM  (giữ nguyên 1 hàng, wrap xuống hàng 2 trên mobile)
+    # CSS biến nav_box thành flex-wrap row; mỗi sub-container có flex-shrink:0
+    # và min-width phù hợp để không bị vỡ nội bộ.
     nav_box = st.container(key="nav_box")
     with nav_box:
-        def _go_prev():
-            if st.session_state.day_offset > 0:
-                st.session_state.day_offset -= 1
-                st.session_state.sel_date = date_options[st.session_state.day_offset]
+        with st.container(key="nav1"):
+            def _go_prev():
+                if st.session_state.day_offset > 0:
+                    st.session_state.day_offset -= 1
+                    st.session_state.sel_date = date_options[st.session_state.day_offset]
 
-        def _go_next():
-            if st.session_state.day_offset < 6:
-                st.session_state.day_offset += 1
-                st.session_state.sel_date = date_options[st.session_state.day_offset]
+            def _go_next():
+                if st.session_state.day_offset < 6:
+                    st.session_state.day_offset += 1
+                    st.session_state.sel_date = date_options[st.session_state.day_offset]
 
-        st.button("⬅️", key="btn_prev", on_click=_go_prev)
+            st.button("⬅️", key="btn_prev", on_click=_go_prev)
 
-        sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
-                                 label_visibility="collapsed",
-                                 key="sel_date")
-        new_off = date_options.index(sel_label)
-        if new_off != st.session_state.day_offset:
-            st.session_state.day_offset = new_off
-            st.rerun()
-
-        st.button("➡️", key="btn_next", on_click=_go_next)
-
-        loc_opts = list(LOCATION_DATABASE.keys())
-        if st.session_state.is_custom_point:
-            disp_opts = [f"📍 {st.session_state.location_name}"] + loc_opts
-            def_idx = 0
-        else:
-            disp_opts = loc_opts
-            def_idx = loc_opts.index(st.session_state.location_name) if st.session_state.location_name in loc_opts else 0
-        # Dùng dynamic key theo location_name → widget luôn sync với session state
-        loc_key = f"sel_loc_{st.session_state.location_name.replace(' ', '_')[:30]}"
-        sel_loc = st.selectbox("loc", disp_opts, index=def_idx,
-                               label_visibility="collapsed", key=loc_key)
-        if sel_loc in LOCATION_DATABASE:
-            nlat, nlon = LOCATION_DATABASE[sel_loc]
-            if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
-                st.session_state.lat, st.session_state.lon = nlat, nlon
-                st.session_state.map_center      = [nlat, nlon]
-                st.session_state.location_name   = sel_loc
-                st.session_state.is_custom_point = False
-                st.session_state._need_fly       = True
+            sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
+                                     label_visibility="collapsed",
+                                     key="sel_date")
+            new_off = date_options.index(sel_label)
+            if new_off != st.session_state.day_offset:
+                st.session_state.day_offset = new_off
                 st.rerun()
 
-        st.markdown(
-            f'<div class="lpm-btn">'
-            f'<a href="{_lpm_url}" target="_blank" rel="noopener" title="Mở Light Pollution Map tại vị trí này">🌃 LPM</a>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+            st.button("➡️", key="btn_next", on_click=_go_next)
+
+        with st.container(key="nav2"):
+            loc_opts = list(LOCATION_DATABASE.keys())
+            if st.session_state.is_custom_point:
+                disp_opts = [f"📍 {st.session_state.location_name}"] + loc_opts
+                def_idx = 0
+            else:
+                disp_opts = loc_opts
+                def_idx = loc_opts.index(st.session_state.location_name) if st.session_state.location_name in loc_opts else 0
+            # Dùng dynamic key theo location_name → widget luôn sync với session state
+            loc_key = f"sel_loc_{st.session_state.location_name.replace(' ', '_')[:30]}"
+            sel_loc = st.selectbox("loc", disp_opts, index=def_idx,
+                                   label_visibility="collapsed", key=loc_key)
+            if sel_loc in LOCATION_DATABASE:
+                nlat, nlon = LOCATION_DATABASE[sel_loc]
+                if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
+                    st.session_state.lat, st.session_state.lon = nlat, nlon
+                    st.session_state.map_center      = [nlat, nlon]
+                    st.session_state.location_name   = sel_loc
+                    st.session_state.is_custom_point = False
+                    st.session_state._need_fly       = True
+                    st.rerun()
+
+            st.markdown(
+                f'<div class="lpm-btn">'
+                f'<a href="{_lpm_url}" target="_blank" rel="noopener" title="Mở Light Pollution Map tại vị trí này">🌃 LPM</a>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
     # Table — custom styled HTML card
     if weather_table_data:
