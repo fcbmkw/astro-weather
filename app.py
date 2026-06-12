@@ -1431,6 +1431,24 @@ _KANJI_ALIAS = {
     "種差海岸": "Tanesashi Coast", "蕪島神社": "Kabushima Shrine", "厳美渓": "Genbikei Gorge",
     "栗駒山": "Mt. Kurikoma", "秋元湖": "Lake Akimoto", "秋元": "Akimoto",
     "磐梯山": "Bandai-san", "磐梯": "Bandai",
+    # ── Alternate / common place names (tên gọi phổ biến khác của địa danh) ──
+    "城ヶ島": "Jogashima", "伊豆大島": "Izu Oshima", "三浦半島": "Manazuru",
+    "富士山": "Fuji", "富士五湖": "Fuji Five Lakes", "河口湖": "Kawaguchiko",
+    "野尻湖": "Nojiriko", "美ヶ原高原": "Utsukushihara", "霧ヶ峰高原": "Kirigamine Highlands",
+    "白馬村": "Hakuba", "蓼科": "Tateshina", "車山": "Kurumayama",
+    "陽明門": "Oku-Nikko", "中禅寺湖": "Oku-Nikko", "華厳の滝": "Oku-Nikko",
+    "知床": "Shiretoko Pass", "摩周": "Lake Mashu", "屈斜路": "Lake Kussharo",
+    "阿蘇": "Aso Kusasenri", "霧島": "Kaimondake", "桜島": "Kagoshima",
+    "石垣島": "Ishigaki Hirakubozaki", "宮古島": "Miyakojima Higashi-Hennazaki",
+    "石垣": "Ishigaki Hirakubozaki", "宮古": "Miyakojima Higashi-Hennazaki",
+    "西表島": "Iriomote Hoshizuna Beach", "波照間": "Hateruma Observatory",
+    "与論島": "Yoron Island", "屋久島": "Kagoshima", "種子島": "Kagoshima",
+    "礪波": "Shogawa Gorge", "五箇山": "Gokayama Ainokura", "白川村": "Shirakawago",
+    "恵那峡": "Ena Ravine Bridge", "高山": "Hirayu Pass", "奥飛騨": "Hirayu Pass",
+    "天橋立": "Ine Funaya", "丹後": "Ine Funaya", "下田": "Shimoda",
+    "南伊豆": "Cape Aiai", "石廊崎": "Cape Aiai", "西伊豆": "Koganezaki",
+    "鳥羽": "Daiozaki Lighthouse", "志摩": "Daiozaki Lighthouse",
+    "天草": "Amaterasu Railway", "由布岳": "Hiruzen Highlands",
 }
 
 _loc_js_list = _json.dumps([
@@ -2033,33 +2051,56 @@ with col_left:
 .lpm-btn a:hover { background:rgba(124,58,237,0.35); }
 
 /* ── NAV ROW: 5 cột [Prev][date][Next][location][LPM] ──────────────────────
-   - PC (>= 640px): tất cả nằm 1 hàng (flex-wrap: nowrap)
+   - PC (>= 640px): tất cả nằm 1 hàng
    - Mobile (< 640px): wrap thành 2 hàng — 3 cột đầu (Prev/date/Next) chiếm
-     đủ 100% width nên buộc location+LPM wrap xuống hàng dưới.            */
+     đủ 100% width nên buộc location+LPM wrap xuống hàng dưới.
+   Streamlit có thể đổi data-testid giữa các version (stColumn / column) và
+   có thể tự set flex-direction:column trên mobile → cần override cả 2.    */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) {
     flex-wrap: wrap !important;
+    flex-direction: row !important;
     gap: 6px !important;
     row-gap: 6px !important;
 }
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div {
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+    > [data-testid="stColumn"],
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+    > [data-testid="column"] {
     min-width: 0 !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
 }
-/* Mobile: ép 3 cột đầu (Prev / date / Next) thành 1 hàng đầy đủ */
+/* Mobile: ép 3 cột đầu (Prev / date / Next) thành 1 hàng đầy đủ, location+LPM wrap xuống */
 @media (max-width: 640px) {
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(1) {
-        flex: 0 0 22% !important;
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="stColumn"]:nth-of-type(1),
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="column"]:nth-of-type(1) {
+        flex: 0 0 18% !important; width: 18% !important;
     }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(2) {
-        flex: 1 1 56% !important;
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="stColumn"]:nth-of-type(2),
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="column"]:nth-of-type(2) {
+        flex: 1 1 60% !important; width: 60% !important;
     }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(3) {
-        flex: 0 0 22% !important;
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="stColumn"]:nth-of-type(3),
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="column"]:nth-of-type(3) {
+        flex: 0 0 18% !important; width: 18% !important;
     }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(4) {
-        flex: 1 1 78% !important;
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="stColumn"]:nth-of-type(4),
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="column"]:nth-of-type(4) {
+        flex: 1 1 78% !important; width: 78% !important;
     }
-    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"]) > div:nth-child(5) {
-        flex: 0 0 18% !important;
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="stColumn"]:nth-of-type(5),
+    [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"][id*="sel_date"])
+        > [data-testid="column"]:nth-of-type(5) {
+        flex: 0 0 18% !important; width: 18% !important;
     }
 }
 
