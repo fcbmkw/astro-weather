@@ -1352,14 +1352,29 @@ class _TileControl(MacroElement):
 
 _TileControl(initial_tile=st.session_state.map_tile).add_to(m)
 
-# ── LPM FLOATING BUTTON — bottomright on map ─────────────────────────────────
+# ── LOCATION LABEL + LPM BUTTON — bottomright on map ────────────────────────
 _LPM_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
 (function(){
-  var LpmCtrl = L.Control.extend({
+  var InfoCtrl = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd: function(map) {
-      var a = L.DomUtil.create('a', '');
+      var wrap = L.DomUtil.create('div', '');
+      wrap.style.cssText = 'display:flex;align-items:center;gap:6px;'
+        + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
+        + 'border-radius:8px;padding:5px 8px;'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);max-width:260px;';
+      L.DomEvent.disableClickPropagation(wrap);
+
+      // 📍 location label
+      var loc = L.DomUtil.create('span', '', wrap);
+      loc.textContent = '{{ this.location_name }}';
+      loc.style.cssText = 'color:#e2e8f0;font-size:12px;font-weight:600;'
+        + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+        + 'max-width:180px;display:inline-block;';
+
+      // LPM link button
+      var a = L.DomUtil.create('a', '', wrap);
       a.href    = '{{ this.lpm_url }}';
       a.target  = '_blank';
       a.rel     = 'noopener';
@@ -1367,32 +1382,32 @@ _LPM_CTRL_TEMPLATE = Template("""
       a.textContent = 'LPM';
       a.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
         + 'background:rgba(124,58,237,0.22);border:1.5px solid rgba(124,58,237,0.65);'
-        + 'border-radius:8px;padding:4px 10px;text-decoration:none;'
+        + 'border-radius:6px;padding:2px 8px;text-decoration:none;'
         + 'color:#a78bfa;font-size:12px;font-weight:700;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.55);'
-        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;';
+        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
       a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
-      L.DomEvent.disableClickPropagation(a);
-      return a;
+
+      return wrap;
     }
   });
-  new LpmCtrl().addTo({{ this._parent.get_name() }});
+  new InfoCtrl().addTo({{ this._parent.get_name() }});
 })();
 {% endmacro %}
 """)
 
 class _LpmControl(MacroElement):
-    def __init__(self, lpm_url):
+    def __init__(self, lpm_url, location_name):
         super().__init__()
         self._name = '_LpmControl'
         self._template = _LPM_CTRL_TEMPLATE
         self.lpm_url = lpm_url
+        self.location_name = location_name
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 _lpm_url = (f"https://lightpollutionmap.app/"
             f"?lat={st.session_state.lat:.4f}&lng={st.session_state.lon:.4f}&zoom=10")
-_LpmControl(lpm_url=_lpm_url).add_to(m)
+_LpmControl(lpm_url=_lpm_url, location_name=st.session_state.location_name).add_to(m)
 
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
 import json as _json
@@ -1902,7 +1917,7 @@ with col_right:
         <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
         <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
         <div style="font-size:11px;color:#64748b;margin-top:6px;border-top:1px solid #334155;padding-top:5px;">
-            Estimate · Falchi et al. 2016 (lightpollutionmap.info) ±1 class
+            Estimate · Falchi et al. 2026 (lightpollutionmap.app) ±1 class
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -2069,17 +2084,7 @@ with col_left:
     font-weight: 700 !important;
     font-size: 12px !important;
 }
-/* ── Location selectbox: compact font ── */
-[data-testid="stSelectbox"]:has(select[id*="sel_loc"]) div[data-baseweb="select"] > div:first-child {
-    padding-top: 4px !important; padding-bottom: 4px !important;
-    padding-left: 6px !important; padding-right: 6px !important;
-}
-[data-testid="stSelectbox"]:has(select[id*="sel_loc"]) span {
-    font-size: 12px !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-}
+
 /* LPM button is now a floating map control (bottomright) */
 
 /* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
@@ -2139,61 +2144,11 @@ with col_left:
     width: fit-content !important;
 }
 
-/* --- nav_row2: location LPM — co theo nội dung, không bao giờ wrap nội bộ --- */
-.st-key-nav2,
-.st-key-nav2 > div,
-.st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"],
-.st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"] > div { width: auto !important; }
-.st-key-nav2 [data-testid="stVerticalBlock"] {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    gap: 6px !important;
-    width: auto !important;
-}
-.st-key-nav2 [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
-/* Location: co theo nội dung như date box */
-.st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
-    flex: 0 1 auto !important; min-width: 0 !important;
-}
-.st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
-    width: fit-content !important;
-}
-
-
-/* Cả nav1 và nav2 đều auto-width trên PC → cùng 1 hàng */
-.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav1),
-.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav2) {
-    flex: 0 0 auto !important;
-}
-/* Trên mobile: nav2 chiếm full width → wrap xuống hàng mới */
-@media (max-width: 600px) {
-    .st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.st-key-nav2) {
-        flex: 0 0 100% !important;
-        min-width: 100% !important;
-    }
-    /* Trên mobile nav2 stretch full, location lấp đầy */
-    .st-key-nav2 [data-testid="stVerticalBlock"] { width: 100% !important; }
-    .st-key-nav2,
-    .st-key-nav2 > div,
-    .st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"],
-    .st-key-nav2 [data-testid="stVerticalBlockBorderWrapper"] > div { width: 100% !important; }
-    .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) {
-        flex: 1 1 0 !important;
-    }
-    .st-key-nav2 [data-testid="stElementContainer"]:has(select[id*="sel_loc"]) [data-testid="stSelectbox"] {
-        width: 100% !important;
-    }
-}
+/* nav2 (location+LPM) removed — now shown as floating label on map */
 
 </style>""", unsafe_allow_html=True)
 
-    # Nav controls — render trong 1 st.container với 2 sub-container:
-    #   nav_row1: ⬅️  date  ➡️   (giữ nguyên 1 hàng cả PC lẫn mobile)
-    #   nav_row2: location  LPM  (giữ nguyên 1 hàng, wrap xuống hàng 2 trên mobile)
-    # CSS biến nav_box thành flex-wrap row; mỗi sub-container có flex-shrink:0
-    # và min-width phù hợp để không bị vỡ nội bộ.
+    # Nav controls — chỉ còn nav1: ⬅️  date  ➡️
     nav_box = st.container(key="nav_box")
     with nav_box:
         with st.container(key="nav1"):
@@ -2219,27 +2174,7 @@ with col_left:
 
             st.button("➡️", key="btn_next", on_click=_go_next)
 
-        with st.container(key="nav2"):
-            loc_opts = list(LOCATION_DATABASE.keys())
-            if st.session_state.is_custom_point:
-                disp_opts = [f"📍 {st.session_state.location_name}"] + loc_opts
-                def_idx = 0
-            else:
-                disp_opts = loc_opts
-                def_idx = loc_opts.index(st.session_state.location_name) if st.session_state.location_name in loc_opts else 0
-            # Dùng dynamic key theo location_name → widget luôn sync với session state
-            loc_key = f"sel_loc_{st.session_state.location_name.replace(' ', '_')[:30]}"
-            sel_loc = st.selectbox("loc", disp_opts, index=def_idx,
-                                   label_visibility="collapsed", key=loc_key)
-            if sel_loc in LOCATION_DATABASE:
-                nlat, nlon = LOCATION_DATABASE[sel_loc]
-                if abs(nlat-st.session_state.lat)>0.001 or abs(nlon-st.session_state.lon)>0.001 or st.session_state.is_custom_point:
-                    st.session_state.lat, st.session_state.lon = nlat, nlon
-                    st.session_state.map_center      = [nlat, nlon]
-                    st.session_state.location_name   = sel_loc
-                    st.session_state.is_custom_point = False
-                    st.session_state._need_fly       = True
-                    st.rerun()
+
 
 
 
