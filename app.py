@@ -1932,7 +1932,8 @@ map_data = st_folium(m, **_stfolium_kwargs)
 def _build_map_label(table_data):
     if not table_data:
         return None
-    row = table_data[0]
+    # Dự báo trước 1 tiếng: lấy slot index 1 nếu có, fallback index 0
+    row = table_data[1] if len(table_data) > 1 else table_data[0]
     stars_str  = row.get("📸", "")
     cloud_str  = row.get("☁️", "0%")
     precip_val = row.get("_precip", 0.0) or 0.0
@@ -1942,24 +1943,24 @@ def _build_map_label(table_data):
     is_rain    = precip_val >= 0.3
     is_dark    = cloud_pct >= 80
     if is_rain:
-        icon = "🌧️"; anim = "blink-warn"; color = "#f87171"
-        bg = "rgba(239,68,68,0.18)"; border = "rgba(239,68,68,0.55)"
+        icon = "🌧️"; anim = "blink-warn"; color = "#fca5a5"
+        bg = "rgba(30,10,10,0.82)"; border = "rgba(239,68,68,0.7)"
         text = f"Rain \u00b7 {cloud_pct}% cloud"
     elif is_dark:
-        icon = "☁️"; anim = "blink-warn"; color = "#fbbf24"
-        bg = "rgba(251,191,36,0.15)"; border = "rgba(251,191,36,0.5)"
+        icon = "☁️"; anim = "blink-warn"; color = "#fde68a"
+        bg = "rgba(20,15,5,0.82)"; border = "rgba(251,191,36,0.7)"
         text = f"{cloud_pct}% cloud"
     elif star_count >= 4:
-        icon = "😄"; anim = "blink-smile"; color = "#34d399"
-        bg = "rgba(52,211,153,0.15)"; border = "rgba(52,211,153,0.5)"
+        icon = "😄"; anim = "blink-smile"; color = "#6ee7b7"
+        bg = "rgba(5,20,15,0.82)"; border = "rgba(52,211,153,0.7)"
         text = f"{stars_str}"
     elif star_count == 3:
-        icon = "😊"; anim = "blink-smile"; color = "#34d399"
-        bg = "rgba(52,211,153,0.15)"; border = "rgba(52,211,153,0.5)"
+        icon = "😊"; anim = "blink-smile"; color = "#6ee7b7"
+        bg = "rgba(5,20,15,0.82)"; border = "rgba(52,211,153,0.7)"
         text = f"{stars_str}"
     else:
-        icon = "🌤️"; anim = "blink-neutral"; color = "#94a3b8"
-        bg = "rgba(148,163,184,0.12)"; border = "rgba(148,163,184,0.4)"
+        icon = "🌤️"; anim = "blink-neutral"; color = "#cbd5e1"
+        bg = "rgba(15,23,42,0.82)"; border = "rgba(148,163,184,0.55)"
         text = f"{stars_str} \u00b7 {cloud_pct}%"
     return {"icon": icon, "text": text, "anim": anim, "color": color,
             "bg": bg, "border": border, "time": time_lbl}
@@ -1969,16 +1970,18 @@ if _lbl:
     _warn_speed = "1.2s" if _lbl["anim"] == "blink-warn" else "1.8s"
     _html_label = f"""
 <style>
-@keyframes blink-warn   {{0%,100%{{opacity:1}}50%{{opacity:0.2}}}}
-@keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.7;transform:scale(1.1)}}}}
-@keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.5}}}}
+@keyframes blink-warn   {{0%,100%{{opacity:1}}50%{{opacity:0.25}}}}
+@keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.75;transform:scale(1.1)}}}}
+@keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.55}}}}
 .astro-maplabel{{
   position:absolute;top:10px;left:50%;transform:translateX(-50%);
   z-index:9999;pointer-events:none;
   display:flex;align-items:center;gap:7px;
-  padding:5px 14px 5px 10px;border-radius:20px;
+  padding:6px 16px 6px 11px;border-radius:20px;
   font-family:sans-serif;font-size:13px;font-weight:700;
-  white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.5);
+  white-space:nowrap;
+  box-shadow:0 2px 14px rgba(0,0,0,0.7);
+  backdrop-filter:blur(2px);
   background:{_lbl["bg"]};border:1.5px solid {_lbl["border"]};color:{_lbl["color"]};
 }}
 </style>
@@ -1986,7 +1989,7 @@ if _lbl:
 <div class="astro-maplabel">
   <span style="animation:{_lbl["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:16px;">{_lbl["icon"]}</span>
   <span style="letter-spacing:0.01em;">{_lbl["text"]}</span>
-  <span style="font-size:10px;opacity:0.6;font-weight:500;">@{_lbl["time"]}</span>
+  <span style="font-size:10px;opacity:0.7;font-weight:500;margin-left:2px;">@{_lbl["time"]}</span>
 </div>
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
