@@ -1401,13 +1401,10 @@ _TILE_CTRL_TEMPLATE = Template("""
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
         } else {
-          // When leaving Windy: fly Leaflet to last saved Windy position
-          if (prevMode === 'windy') {
-            var wlat  = parseFloat(_lsGet(LS_W_LAT,  map.getCenter().lat));
-            var wlon  = parseFloat(_lsGet(LS_W_LON,  map.getCenter().lng));
-            var wzoom = parseInt(  _lsGet(LS_W_ZOOM, map.getZoom()), 10);
-            map.setView([wlat, wlon], wzoom, {animate: false});
-          }
+          // When leaving Windy: keep Leaflet at the position it had when Windy was entered.
+          // (Windy is cross-origin iframe — cannot read its internal pan/zoom state.
+          //  Leaflet already holds the correct view from when user switched TO Windy,
+          //  or from the last searchbox flyTo — both call map.setView + flyWindy in sync.)
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
           current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
