@@ -1388,15 +1388,20 @@ _TILE_CTRL_TEMPLATE = Template("""
         _ensureWindyFrame(mapEl);
 
         if (mode === 'windy') {
-          // Sync: fly Windy to current Leaflet view (only when coming FROM sat/street)
-          if (prevMode && prevMode !== 'windy') {
-            var c = map.getCenter();
-            window.flyWindy(c.lat, c.lng, map.getZoom());
+          // Always sync Windy to current Leaflet view when entering Windy mode.
+          // This ensures Windy->Satellite can later return to the right spot.
+          // On init (prevMode already 'windy'), only sync if LS hasn't been set yet.
+          var c = map.getCenter();
+          var z = map.getZoom();
+          var needSync = (prevMode !== 'windy') ||
+                         (_lsGet(LS_W_LAT, null) === null);
+          if (needSync) {
+            window.flyWindy(c.lat, c.lng, z);
           }
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
         } else {
-          // Sync: when leaving Windy, fly Leaflet to last saved Windy position
+          // When leaving Windy: fly Leaflet to last saved Windy position
           if (prevMode === 'windy') {
             var wlat  = parseFloat(_lsGet(LS_W_LAT,  map.getCenter().lat));
             var wlon  = parseFloat(_lsGet(LS_W_LON,  map.getCenter().lng));
@@ -1467,12 +1472,16 @@ _LPM_CTRL_TEMPLATE = Template("""
         + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);max-width:260px;';
       L.DomEvent.disableClickPropagation(wrap);
 
-      // 📍 location label
+      // 📍 pin + location label
+      var pin = L.DomUtil.create('span', '', wrap);
+      pin.textContent = '\uD83D\uDCCD';   // 📍
+      pin.style.cssText = 'font-size:13px;flex-shrink:0;line-height:1;';
+
       var loc = L.DomUtil.create('span', '', wrap);
       loc.textContent = '{{ this.location_name }}';
       loc.style.cssText = 'color:#e2e8f0;font-size:12px;font-weight:600;'
         + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
-        + 'max-width:180px;display:inline-block;';
+        + 'max-width:160px;display:inline-block;';
 
       // LPM link button
       var a = L.DomUtil.create('a', '', wrap);
@@ -1705,7 +1714,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         }, 900);
       }
 
-      function _buildDropdown(results) {
+      function _buildDropdown(results, isTopList) {
+        isTopList = !!isTopList;
         dropdown.innerHTML = '';
         _items = [];
         _activeIdx = -1;
@@ -1716,7 +1726,13 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.style.display = 'block';
           return;
         }
-        results.slice(0, 30).forEach(function(item, i) {
+        // Header label
+        var hdr = L.DomUtil.create('div', '', dropdown);
+        hdr.style.cssText = 'padding:5px 14px 3px;font-size:10px;color:#475569;'
+          + 'font-weight:700;letter-spacing:0.05em;text-transform:uppercase;'
+          + 'border-bottom:1px solid rgba(51,65,85,0.5);';
+        hdr.textContent = isTopList ? 'Nearby favorites' : 'Results';
+        results.slice(0, isTopList ? 10 : 30).forEach(function(item, i) {
           var el = L.DomUtil.create('div', '', dropdown);
           el.style.cssText = (
             'padding:7px 14px;cursor:pointer;font-size:12px;'
@@ -1775,6 +1791,23 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       }
 
       // ── Input events ───────────────────────────────────────────────────────
+      // Show top-10 on focus (when input is empty)
+      L.DomEvent.on(inp, 'focus', function(){
+        if (inp.value.trim() === '') {
+          var top10 = _DB.slice(0, 10);
+          _buildDropdown(top10, true);
+        }
+      });
+
+      L.DomEvent.on(inp, 'blur', function(){
+        // Slight delay so click on dropdown item fires first
+        setTimeout(function(){
+          if (inp.value.trim() === '') {
+            dropdown.style.display = 'none';
+          }
+        }, 200);
+      });
+
       L.DomEvent.on(inp, 'input', function(){
         var qRaw = inp.value.trim();
         var q = qRaw.toLowerCase();
