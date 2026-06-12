@@ -1433,9 +1433,9 @@ _TILE_CTRL_TEMPLATE = Template("""
       });
 
       map.whenReady(function(){
-        var saved = _lsGet(LS_TILE, '{{ this.initial_tile }}');
+        var saved = _lsGet(LS_TILE, 'windy');
         if (saved !== 'satellite' && saved !== 'street' && saved !== 'windy') {
-          saved = '{{ this.initial_tile }}';
+          saved = 'windy';
         }
         switchTile(saved);
       });
@@ -1684,7 +1684,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         'position:absolute;top:36px;left:0;z-index:9999;'
         + 'background:rgba(15,23,42,0.97);border:1px solid #334155;'
         + 'border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.7);'
-        + 'max-height:280px;overflow-y:auto;min-width:260px;display:none;'
+        + 'max-height:400px;overflow-y:auto;min-width:260px;display:none;'
       );
 
       var _activeIdx = -1;
@@ -1730,8 +1730,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         hdr.style.cssText = 'padding:5px 14px 3px;font-size:10px;color:#475569;'
           + 'font-weight:700;letter-spacing:0.05em;text-transform:uppercase;'
           + 'border-bottom:1px solid rgba(51,65,85,0.5);';
-        hdr.textContent = isTopList ? 'Nearby favorites' : 'Results';
-        results.slice(0, isTopList ? 10 : 30).forEach(function(item, i) {
+        hdr.textContent = isTopList ? 'All locations (' + _DB.length + ')' : 'Results';
+        results.slice(0, isTopList ? _DB.length : 30).forEach(function(item, i) {
           var el = L.DomUtil.create('div', '', dropdown);
           el.style.cssText = (
             'padding:7px 14px;cursor:pointer;font-size:12px;'
@@ -1791,11 +1791,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       }
 
       // ── Input events ───────────────────────────────────────────────────────
-      // Show top-10 on focus (when input is empty)
+      // Show all locations on focus (when input is empty)
       L.DomEvent.on(inp, 'focus', function(){
         if (inp.value.trim() === '') {
-          var top10 = _DB.slice(0, 10);
-          _buildDropdown(top10, true);
+          _buildDropdown(_DB, true);
         }
       });
 
