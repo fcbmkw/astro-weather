@@ -1472,9 +1472,9 @@ _LPM_CTRL_TEMPLATE = Template("""
         + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);max-width:260px;';
       L.DomEvent.disableClickPropagation(wrap);
 
-      // 📍 pin + location label
+      // pin + location label
       var pin = L.DomUtil.create('span', '', wrap);
-      pin.textContent = '\uD83D\uDCCD';   // 📍
+      pin.innerHTML = '&#128205;';   // 📍 via HTML entity (avoids Unicode encode issues)
       pin.style.cssText = 'font-size:13px;flex-shrink:0;line-height:1;';
 
       var loc = L.DomUtil.create('span', '', wrap);
@@ -1768,7 +1768,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               dropdown.innerHTML = '';
               var found = L.DomUtil.create('div', '', dropdown);
               found.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;';
-              found.textContent = '📍 ' + data[0].display_name;
+              found.textContent = data[0].display_name;
+              found.innerHTML = '&#128205; ' + data[0].display_name;
               dropdown.style.display = 'block';
               setTimeout(function(){
                 map.fire('click', { latlng: L.latLng(lat, lon) });
