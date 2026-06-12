@@ -1368,7 +1368,7 @@ _TILE_CTRL_TEMPLATE = Template("""
       var div = L.DomUtil.create('div', '');
       div.style.cssText = 'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
         + 'border:1px solid #334155;border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin-bottom:52px;';
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin-bottom:38px;';
       L.DomEvent.disableClickPropagation(div);
 
       var tiles = {
@@ -1466,7 +1466,7 @@ _LPM_CTRL_TEMPLATE = Template("""
       wrap.style.cssText = 'display:flex;align-items:center;gap:6px;'
         + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
         + 'border-radius:8px;padding:5px 8px;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin-bottom:52px;';
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);margin-bottom:38px;';
       L.DomEvent.disableClickPropagation(wrap);
 
       // pin + location label
