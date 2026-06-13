@@ -2395,6 +2395,9 @@ def _build_night_verdict(table_data):
     Trả về dict với verdict, good_hours, total_hours, icon, màu sắc."""
     if not table_data:
         return None
+    # 13 slots = 18:00..23:00 + 00:00..06:00, nhưng "đêm" chỉ tính 12 giờ (18:00→06:00).
+    # Slot 06:00 cuối chỉ là điểm mốc kết thúc (đã là sáng), không tính vào giờ clear.
+    table_data = table_data[:-1] if len(table_data) > 12 else table_data
     total = len(table_data)
     good_hours = 0
     rain_hours = 0
