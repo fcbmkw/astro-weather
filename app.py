@@ -295,23 +295,6 @@ st.set_page_config(page_title="Astro Map Pro", page_icon="🌌", layout="wide", 
 st.markdown("""
 <style>
     .block-container { padding-top: 0.8rem; padding-bottom: 0.8rem; padding-left: 2rem; padding-right: 2rem; }
-    /* ── Smooth transition overlay khi Streamlit rerun ── */
-    #astro-loading-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(10, 14, 22, 0.55);
-        backdrop-filter: blur(2px);
-        z-index: 99999;
-        display: flex; align-items: center; justify-content: center;
-        opacity: 0; pointer-events: none;
-        transition: opacity 0.18s ease;
-    }
-    #astro-loading-overlay.show { opacity: 1; pointer-events: all; }
-    #astro-loading-overlay .alo-txt {
-        color: #60a5fa; font-size: 14px; font-weight: 600;
-        font-family: sans-serif; letter-spacing: 0.05em;
-        animation: alo-pulse 1.1s ease-in-out infinite;
-    }
-    @keyframes alo-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
     iframe { width: 100% !important; }
     .stTable table { width: 100% !important; margin-bottom: 0px !important; }
     .metric-card {
@@ -1431,7 +1414,6 @@ moon_pct, moon_text = get_moon_phase_percent(target_date)
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
 use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
-# Không dùng spinner — data đã cache 30 phút, spinner chỉ gây flash thêm
 hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(
     st.session_state.lat, st.session_state.lon, st.session_state.weather_source
 )
@@ -1621,22 +1603,19 @@ def _make_slots_for_offset(base_jst, day_off):
         (nd.year, nd.month, nd.day,  6, "06:00", nd.strftime("%Y-%m-%d")),
     ])
 
-# Prefetch các ngày KHÁC ngày hiện tại (ngày hiện tại sẽ được tính ngay bên dưới)
-# Khi vừa đổi location (_skip_prefetch=True): skip HOÀN TOÀN để trang render
-# nhanh trước. Lần rerun tiếp theo mới prefetch theo thứ tự ngày liền kề trước.
+# Prefetch các ngày KHÁC: skip hoàn toàn ngay sau khi đổi location,
+# lần rerun tiếp theo mới prefetch theo thứ tự ngày liền kề trước.
 if st.session_state._skip_prefetch:
-    # Vừa đổi location → skip prefetch lần này, reset flag
     st.session_state._skip_prefetch = False
 else:
-    # Prefetch theo thứ tự ưu tiên: ngày liền kề trước/sau, rồi các ngày xa
     _day_off = st.session_state.day_offset
-    _priority_order = []
-    if _day_off + 1 < 7: _priority_order.append(_day_off + 1)
-    if _day_off - 1 >= 0: _priority_order.append(_day_off - 1)
+    _prio = []
+    if _day_off + 1 < 7: _prio.append(_day_off + 1)
+    if _day_off - 1 >= 0: _prio.append(_day_off - 1)
     for _p in range(7):
-        if _p not in _priority_order and _p != _day_off:
-            _priority_order.append(_p)
-    for _poff in _priority_order:
+        if _p not in _prio and _p != _day_off:
+            _prio.append(_p)
+    for _poff in _prio:
         try:
             _build_night_data(
                 st.session_state.lat, st.session_state.lon,
@@ -2427,52 +2406,6 @@ if st.session_state._need_fly:
     st.session_state._need_fly = False   # reset ngay — chỉ fly 1 lần
 map_data = st_folium(m, **_stfolium_kwargs)
 
-# ── LOADING OVERLAY — hiện khi click map, ẩn khi Streamlit đã render xong ──
-st.markdown("""
-<div id="astro-loading-overlay">
-  <span class="alo-txt">🌌 Loading...</span>
-</div>
-<script>
-(function(){
-  var overlay = document.getElementById("astro-loading-overlay");
-  if (!overlay) return;
-
-  // Bắt click bên trong map iframe (streamlit_folium dùng iframe)
-  function _attachToMap() {
-    var frames = document.querySelectorAll("iframe");
-    frames.forEach(function(f) {
-      try {
-        var fd = f.contentDocument || f.contentWindow.document;
-        fd.addEventListener("click", function() {
-          overlay.classList.add("show");
-          // Auto-hide sau 10s phòng không detect được xong
-          setTimeout(function(){ overlay.classList.remove("show"); }, 10000);
-        }, true);
-      } catch(e) {}  // cross-origin iframe bị block là bình thường
-    });
-  }
-
-  // Ẩn overlay khi Streamlit báo xong (stStatusWidget biến mất)
-  var obs = new MutationObserver(function(muts) {
-    muts.forEach(function(m) {
-      m.removedNodes.forEach(function(node) {
-        if (node.nodeType === 1) {
-          overlay.classList.remove("show");
-        }
-      });
-    });
-    // Thêm listener cho iframe mới nếu có
-    _attachToMap();
-  });
-  obs.observe(document.body, { childList: true, subtree: true });
-
-  // Gắn ngay lần đầu (delay nhỏ để iframe kịp render)
-  setTimeout(_attachToMap, 1500);
-  setTimeout(_attachToMap, 3000);
-})();
-</script>
-""", unsafe_allow_html=True)
-
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
 def _build_night_verdict(table_data, sun_alts=None):
     """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00.
@@ -2679,536 +2612,528 @@ if map_data:
                 st.session_state.sel_date        = date_options[0]
                 st.rerun()
 
-
-@st.fragment
-def _weather_panel():
-    """Fragment: re-render chỉ phần này khi đổi ngày — không reload map."""
-    # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
-    st.markdown("""
-        <style>
-            /* Ép bảng chiếm toàn bộ chiều rộng nhưng cột 2 (Mây) chỉ chiếm 10% */
-            [data-testid="stTable"] table { width: 100% !important; table-layout: fixed; }
-            [data-testid="stTable"] td:nth-child(2), [data-testid="stTable"] th:nth-child(2) { width: 10% !important; }
-            /* Đảm bảo cột 📸 Đánh giá có đủ chỗ hiển thị sao */
-            [data-testid="stTable"] td:nth-child(5), [data-testid="stTable"] th:nth-child(5) { width: 35% !important; }
-        </style>
-    """, unsafe_allow_html=True)
-    col_left, col_right = st.columns([2.5, 1.1])
-    
-    with col_right:
-        # Bortle — model chỉ chính xác trong lãnh thổ Nhật Bản, ẩn nếu ở ngoài
-        _in_japan = (24.0 <= st.session_state.lat <= 46.0 and 122.0 <= st.session_state.lon <= 154.0)
-        if _in_japan:
-            st.markdown(f"""
-            <div class="metric-card">
-                <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
-                <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
-                <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
-                <div style="font-size:11px;color:#64748b;margin-top:6px;border-top:1px solid #334155;padding-top:5px;">
-                    Estimate · Falchi et al. 2026 (lightpollutionmap.app) ±1 class
-                </div>
-            </div>""", unsafe_allow_html=True)
-    
-        # Moon
-        st.markdown(f"""
-        <div class="metric-card">
-            <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌙 MOON PHASE</span>
-            <div style="font-size:28px;font-weight:bold;color:#fbbf24;margin-top:5px;">{moon_pct}%</div>
-            <div style="font-size:12px;color:#cbd5e1;margin-top:4px;font-style:italic;">{moon_text}</div>
-        </div>""", unsafe_allow_html=True)
-    
-        # Location
-        st.markdown(f"""
-        <div class="metric-card">
-            <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 POSITION & COORDINATE</span>
-            <div style="font-size:15px;font-weight:bold;color:#f43f5e;margin-top:4px;margin-bottom:4px;">📍 {_strip_loc_num(st.session_state.location_name)}</div>
-            <div class="geo-highlight">
-                <span style="color:#60a5fa;">LON:</span> {round(st.session_state.lon,4)}<br>
-                <span style="color:#34d399;">LAT:</span> {round(st.session_state.lat,4)}
-        </div>""", unsafe_allow_html=True)
-    
-        # Weather source selectbox + source label
-        # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
-        source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Blend (JMA+ECMWF+GFS)"]
-        cur_src = st.session_state.weather_source
-        if cur_src not in source_options:
-            cur_src = "JMA"
-        src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('🔀','')}"
-        chosen = st.selectbox("src", source_options,
-                              index=source_options.index(cur_src),
-                              label_visibility="collapsed", key=src_key)
-        if chosen != st.session_state.weather_source:
-            st.session_state.weather_source = chosen
-            st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
-            st.rerun()
-    
-        # 7-Day Forecast Table — replaces Random Overlap Assumption
-        def _cloud_status_icon(cloud_pct, precip=0.0):
-            """Return weather icon + label based on cloud cover and precipitation."""
-            if precip is not None and precip > 2.0:
-                if cloud_pct > 70:
-                    return "\u26c8\ufe0f", "Storm"
-                return "\U0001f327\ufe0f", "Rainy"
-            if cloud_pct <= 20:
-                return "\u2600\ufe0f", "Sunny"
-            elif cloud_pct <= 45:
-                return "\u26c5", "Partly"
-            elif cloud_pct <= 70:
-                return "\U0001f325\ufe0f", "Cloudy"
-            else:
-                return "\u2601\ufe0f", "Overcast"
-    
-        # Build 7-day daily summary from hourly_data
-        JST_now = datetime.now(JST)
-        _7day_rows = []
-        for _doff in range(7):
-            _d = (JST_now + timedelta(days=_doff)).replace(tzinfo=None)
-            _dpfx = _d.strftime("%Y-%m-%d")
-            _day_label = _d.strftime("%a %d/%m")
-    
-            _temps, _clouds, _precips = [], [], []
-            _tlist = hourly_data.get("time", []) if hourly_data else []
-            for _i, _t in enumerate(_tlist):
-                if _t.startswith(_dpfx):
-                    _hr = int(_t[11:13])
-                    for _sfx in ["_jma_msm", "_gfs_seamless", "_ecmwf_ifs025"]:
-                        _v = _get_raw(hourly_data, "temperature_2m", _sfx, _i)
-                        if _v is not None:
-                            _temps.append((_hr, _v))
-                            break
-                    else:
-                        _raw_t = hourly_data.get("temperature_2m", [])
-                        if _i < len(_raw_t) and _raw_t[_i] is not None:
-                            _temps.append((_hr, float(_raw_t[_i])))
-                    _cv, _ = get_val(hourly_data, "cloud_cover", _i, prefer_jma)
-                    _clouds.append(_cv)
-                    for _sfx in ["_gfs_seamless", "_jma_msm", "_ecmwf_ifs025"]:
-                        _pv = _get_raw(hourly_data, "precipitation", _sfx, _i)
-                        if _pv is not None:
-                            _precips.append(_pv)
-                            break
-    
-            if _temps:
-                _noon = min(_temps, key=lambda x: abs(x[0] - 12))
-                _temp_noon = round(_noon[1], 1)
-                _temp_min  = round(min(v for _, v in _temps), 1)
-                _temp_max  = round(max(v for _, v in _temps), 1)
-            else:
-                _temp_noon = _temp_min = _temp_max = None
-    
-            _avg_cloud = round(sum(_clouds) / len(_clouds)) if _clouds else 0
-            _total_precip = round(sum(_precips), 1) if _precips else 0.0
-            _icon, _status = _cloud_status_icon(_avg_cloud, _total_precip)
-    
-            if _temp_max is not None and _temp_max < 3.0 and _total_precip > 0.5:
-                _icon, _status = "\u2744\ufe0f", "Snowy"
-    
-            _7day_rows.append({
-                "day": _day_label,
-                "icon": _icon,
-                "status": _status,
-                "temp_max": _temp_max,
-                "temp_min": _temp_min,
-                "cloud": _avg_cloud,
-            })
-    
-        if _7day_rows:
-            _rows7 = ""
-            for _r in _7day_rows:
-                _tmax_str = f"{_r['temp_max']}\u00b0" if _r['temp_max'] is not None else "\u2014"
-                _tmin_str = f"{_r['temp_min']}\u00b0" if _r['temp_min'] is not None else "\u2014"
-                _cloud_color = '#22c55e' if _r['cloud'] <= 25 else ('#eab308' if _r['cloud'] <= 50 else ('#f97316' if _r['cloud'] <= 75 else '#ef4444'))
-                _rows7 += (
-                    f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;'
-                    f'background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 6px;'
-                    f'border:1px solid #1e293b;flex:1;min-width:0;">'
-                    f'<div style="font-size:11px;color:#94a3b8;font-weight:600;white-space:nowrap;'
-                    f'overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;">{_r["day"]}</div>'
-                    f'<div style="font-size:26px;line-height:1.1;">{_r["icon"]}</div>'
-                    f'<div style="font-size:11px;color:#cbd5e1;font-weight:500;">{_r["status"]}</div>'
-                    f'<div style="font-size:13px;font-weight:700;color:#f97316;">{_tmax_str}</div>'
-                    f'<div style="font-size:11px;color:#60a5fa;">{_tmin_str}</div>'
-                    f'<div style="font-size:10px;color:{_cloud_color};margin-top:2px;">{_r["cloud"]}%</div>'
-                    f'</div>'
-                )
-            _forecast_html = (
-                '<div style="margin-top:8px;">'
-                '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
-                '\U0001f5d3\ufe0f 7-DAY FORECAST</div>'
-                '<div style="display:flex;gap:4px;width:100%;">'
-                + _rows7 +
-                '</div>'
-                '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
-                '\u2191 High &nbsp;\u2193 Low &nbsp;\u2601 Cloud%</div>'
-                '</div>'
-            )
-            st.markdown(_forecast_html, unsafe_allow_html=True)
-    
-    
-    with col_left:
-        # Inject CSS:
-        # 1. Orange styling for date selectbox (nav2)
-        # 2. Compact styling for location selectbox (nav3) — smaller font, tighter padding
-        st.markdown("""
+# ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
+st.markdown("""
     <style>
-    /* ── Pull col_left content closer to map ── */
-    .st-key-nav_box { margin-top: -58px !important; }
-    
-    /* ── Date selectbox: shrink to fit content ── */
-    [data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
-        width: fit-content !important;
-        min-width: 0 !important;
-    }
-    [data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] {
-        width: fit-content !important;
-        min-width: 0 !important;
-    }
-    [data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child {
-        background: rgba(154,52,18,0.60) !important;
-        border: 1.5px solid rgba(234,88,12,0.75) !important;
-        box-shadow: 0 0 8px rgba(234,88,12,0.18) !important;
-        padding-left: 6px !important;
-        padding-right: 6px !important;
-    }
-    [data-testid="stSelectbox"]:has(select[id*="sel_date"]) span {
-        color: #fb923c !important;
-        font-weight: 700 !important;
-        font-size: 12px !important;
-    }
-    
-    /* LPM button is now a floating map control (bottomright) */
-    
-    /* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
-       nav_row1: ⬅️  date  ➡️   → luôn nằm 1 hàng (no-wrap)
-       nav_row2: location  LPM  → luôn nằm 1 hàng (no-wrap)
-       - PC (rộng ≥ 600px): nav_row1 và nav_row2 nằm cùng 1 hàng ngang
-       - iPhone (< 600px):  nav_row1 hàng trên, nav_row2 hàng dưới
-       Cấu trúc DOM: .st-key-nav_box → stVerticalBlock → stElementContainer ×2
-                     (mỗi cái wrap 1 sub-container nav_row1 / nav_row2)       */
-    
-    /* --- nav_box: outer flex row, wrap trên mobile --- */
-    .st-key-nav_box,
-    .st-key-nav_box > div,
-    .st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"],
-    .st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"] > div {
-        width: 100% !important;
-    }
-    .st-key-nav_box > div > [data-testid="stVerticalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: wrap !important;
-        align-items: center !important;
-        gap: 6px !important;
-        width: 100% !important;
-        background: rgba(255,255,255,0.03);
-        border: 1px solid #1e293b;
-        border-radius: 10px;
-        padding: 6px;
-        box-sizing: border-box;
-    }
-    /* Mỗi stElementContainer con trực tiếp của nav_box → chiếm auto */
-    .st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
-        margin: 0 !important;
-        flex: 0 0 auto;
-    }
-    
-    /* --- nav_row1: ⬅️ date ➡️ — không bao giờ wrap, co lại theo nội dung --- */
-    .st-key-nav1,
-    .st-key-nav1 > div,
-    .st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"],
-    .st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"] > div { width: auto !important; }
-    .st-key-nav1 [data-testid="stVerticalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
-        gap: 6px !important;
-        width: auto !important;
-    }
-    .st-key-nav1 [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
-    .st-key-nav1 [data-testid="stButton"] button {
-        width: 44px !important; min-width: 0 !important; padding: 0 !important;
-    }
-    .st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px; }
-    .st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) { flex: 0 1 auto; }
-    .st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) [data-testid="stSelectbox"] {
-        width: fit-content !important;
-    }
-    
-    /* nav2 (location+LPM) removed — now shown as floating label on map */
-    
-    </style>""", unsafe_allow_html=True)
-    
-        # Nav controls — chỉ còn nav1: ⬅️  date  ➡️
-        nav_box = st.container(key="nav_box")
-        with nav_box:
-            with st.container(key="nav1"):
-                def _go_prev():
-                    if st.session_state.day_offset > 0:
-                        st.session_state.day_offset -= 1
-                        st.session_state.sel_date = date_options[st.session_state.day_offset]
-    
-                def _go_next():
-                    if st.session_state.day_offset < 6:
-                        st.session_state.day_offset += 1
-                        st.session_state.sel_date = date_options[st.session_state.day_offset]
-    
-                st.button("⬅️", key="btn_prev", on_click=_go_prev)
-    
-                sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
-                                         label_visibility="collapsed",
-                                         key="sel_date")
-                new_off = date_options.index(sel_label)
-                if new_off != st.session_state.day_offset:
-                    st.session_state.day_offset = new_off
-                    st.rerun()
-    
-                st.button("➡️", key="btn_next", on_click=_go_next)
-    
-    
-    
-    
-    
-        # Table — custom styled HTML card
-        if weather_table_data:
-            # Hiện badge nếu đang dùng fallback endpoint
-            if _ep_label == "no_jma":
-                st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
-                            'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                            '⚠️ JMA MSM サーバーエラー — 代わりに <b>ECMWF + GFS</b> を使用しています</div>',
-                            unsafe_allow_html=True)
-            elif _ep_label == "gfs_only":
-                st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
-                            'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                            '⚠️ JMA/ECMWF サーバーエラー — 代わりに <b>GFS のみ</b> を使用しています</div>',
-                            unsafe_allow_html=True)
-            def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None):
-                pct = int(pct_str.replace('%',''))
-                if precip_val is not None and precip_val > 0.5:
-                    if temp_val is not None and temp_val < 1.0:
-                        icon, col = '\u2744\ufe0f', '#93c5fd'
-                    elif pct > 70:
-                        icon, col = '\u26c8\ufe0f', '#f87171'
-                    else:
-                        icon, col = '\U0001f327\ufe0f', '#60a5fa'
-                elif pct <= 20:
-                    icon, col = '\u2600\ufe0f', '#fbbf24'
-                elif pct <= 45:
-                    icon, col = '\u26c5', '#fcd34d'
-                elif pct <= 70:
-                    icon, col = '\U0001f325\ufe0f', '#94a3b8'
-                else:
-                    icon, col = '\u2601\ufe0f', '#64748b'
-                return (f'<div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">'
-                        f'<span style="font-size:15px;line-height:1;">{icon}</span>'
-                        f'<span style="font-size:11px;color:{col};font-weight:600;">{pct_str}</span>'
-                        f'</div>')
-    
-            def _wind_icon(ws_str):
-                ws = float(ws_str.replace('m/s',''))
-                if ws < 2:   icon,col = '','#94a3b8'
-                elif ws < 5: icon,col = '','#60a5fa'
-                else:        icon,col = '','#f97316'
-                return f'<span style="color:{col}">{icon} {ws_str}</span>'
-    
-            rows_html = ''
-            for i, row in enumerate(weather_table_data):
-                bg = 'rgba(234,88,12,0.10)' if i % 2 == 0 else 'rgba(194,65,12,0.06)'
-                time_lbl = row['⏰']
-                cloud_cell = _cloud_icon_cell(row['☁️'], row.get('_precip', 0.0), row.get('_temp'))
-                humid_val  = row['💧']
-                wind_cell  = _wind_icon(row['💨'])
-                stars      = row['📸']
-                rows_html += (
-                    f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
-                    f'<td style="padding:8px 8px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
-                    f'<td style="padding:8px 8px;overflow:hidden;">{cloud_cell}</td>'
-                    f'<td style="padding:8px 8px;color:#fb923c;">{humid_val}</td>'
-                    f'<td style="padding:8px 8px;color:#fb923c;">{wind_cell}</td>'
-                    f'<td style="padding:8px 8px;font-size:16px;letter-spacing:1px;">{stars}</td>'
-                    f'</tr>'
-                )
-    
-            table_html = f"""
-    <div style="background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;overflow:hidden;margin-bottom:8px;box-shadow:0 0 20px rgba(234,88,12,0.10);">
-      <table style="width:100%;border-collapse:collapse;font-size:14px;font-family:'Segoe UI',sans-serif;table-layout:fixed;">
-        <thead>
-          <tr style="background:linear-gradient(90deg,rgba(154,52,18,0.90),rgba(120,40,10,0.75));border-bottom:2px solid rgba(234,88,12,0.55);">
-            <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:14%;">⏰</th>
-            <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:20%;">🌤️</th>
-            <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:13%;">💧</th>
-            <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
-            <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
-          </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-    </div>"""
-            st.markdown(table_html, unsafe_allow_html=True)
-        else:
-            # Hiển thị nguyên nhân thực tế thay vì hardcode "502 Bad Gateway"
-            if _last_error == "timeout":
-                _err_title = "⚠️ Open-Meteo API がタイムアウトしました"
-                _err_detail = (
-                    'リクエストが <b>25秒</b> 以内に応答しませんでした。'
-                    'サーバーが混雑している可能性があります。<br><br>'
-                    '<span style="color:#94a3b8;">通常は数分で回復します。'
-                    '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
-                )
-            elif _last_error and _last_error.startswith("HTTP 5"):
-                _code = _last_error.split(" ")[1]
-                _err_title = f"⚠️ Open-Meteo API が一時的に応答していません"
-                _err_detail = (
-                    f'サーバー <code style="color:#fbbf24;">api.open-meteo.com</code> が '
-                    f'<b>{_code} エラー</b> を返しました — これは提供元側の問題で、'
-                    'アプリ側のエラーではありません。<br><br>'
-                    '<span style="color:#94a3b8;">通常5～30分で自動的に回復します。'
-                    '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
-                )
-            elif _last_error and _last_error.startswith("connection_error"):
-                _err_title = "⚠️ Open-Meteo API に接続できません"
-                _err_detail = (
-                    'ネットワーク接続エラーが発生しました。'
-                    'インターネット接続を確認してください。<br><br>'
-                    '<span style="color:#94a3b8;"><b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
-                )
-            else:
-                _err_title = "⚠️ Open-Meteo API が一時的に応答していません"
-                _err_detail = (
-                    f'予期しないエラーが発生しました'
-                    + (f'（詳細: <code style="color:#fbbf24;">{_last_error}</code>）' if _last_error else '')
-                    + '。<br><br>'
-                    '<span style="color:#94a3b8;">通常は数分で回復します。'
-                    '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
-                )
-            st.markdown(f"""
-    <div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
-        <div style="font-size:18px;font-weight:700;color:#ef4444;margin-bottom:8px;">
-            {_err_title}
-        </div>
-        <div style="color:#cbd5e1;font-size:14px;line-height:1.7;">
-            {_err_detail}
-        </div>
+        /* Ép bảng chiếm toàn bộ chiều rộng nhưng cột 2 (Mây) chỉ chiếm 10% */
+        [data-testid="stTable"] table { width: 100% !important; table-layout: fixed; }
+        [data-testid="stTable"] td:nth-child(2), [data-testid="stTable"] th:nth-child(2) { width: 10% !important; }
+        /* Đảm bảo cột 📸 Đánh giá có đủ chỗ hiển thị sao */
+        [data-testid="stTable"] td:nth-child(5), [data-testid="stTable"] th:nth-child(5) { width: 35% !important; }
+    </style>
+""", unsafe_allow_html=True)
+col_left, col_right = st.columns([2.5, 1.1])
+
+with col_right:
+    # Bortle — model chỉ chính xác trong lãnh thổ Nhật Bản, ẩn nếu ở ngoài
+    _in_japan = (24.0 <= st.session_state.lat <= 46.0 and 122.0 <= st.session_state.lon <= 154.0)
+    if _in_japan:
+        st.markdown(f"""
+        <div class="metric-card">
+            <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
+            <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
+            <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
+            <div style="font-size:11px;color:#64748b;margin-top:6px;border-top:1px solid #334155;padding-top:5px;">
+                Estimate · Falchi et al. 2026 (lightpollutionmap.app) ±1 class
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    # Moon
+    st.markdown(f"""
+    <div class="metric-card">
+        <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌙 MOON PHASE</span>
+        <div style="font-size:28px;font-weight:bold;color:#fbbf24;margin-top:5px;">{moon_pct}%</div>
+        <div style="font-size:12px;color:#cbd5e1;margin-top:4px;font-style:italic;">{moon_text}</div>
     </div>""", unsafe_allow_html=True)
-            if st.button("🔄 再試行", key="btn_retry_weather"):
-                st.cache_data.clear()
-                st.rerun(scope="app")
-    
-    # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE(°)")
-    
-    import plotly.graph_objects as go
-    
-    # ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
-    # Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
-    def _sun_bright_opacity(sun_alt):
-        if sun_alt <= -13:
-            return 0.0
-        op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
-        return round(min(max(op, 0.0), 0.50), 3)
-    
-    fig = go.Figure()
-    
-    # ── Background brightness bands (vrect per slot) ─────────────────────────────
-    _x_positions = list(range(len(hours_labels)))
-    for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
-        _op = _sun_bright_opacity(_sa)
-        if _op > 0.005:
-            fig.add_vrect(
-                x0=_i - 0.5, x1=_i + 0.5,
-                fillcolor="rgba(251,146,60,1.0)",
-                opacity=_op,
-                layer="below",
-                line_width=0,
+
+    # Location
+    st.markdown(f"""
+    <div class="metric-card">
+        <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 POSITION & COORDINATE</span>
+        <div style="font-size:15px;font-weight:bold;color:#f43f5e;margin-top:4px;margin-bottom:4px;">📍 {_strip_loc_num(st.session_state.location_name)}</div>
+        <div class="geo-highlight">
+            <span style="color:#60a5fa;">LON:</span> {round(st.session_state.lon,4)}<br>
+            <span style="color:#34d399;">LAT:</span> {round(st.session_state.lat,4)}
+    </div>""", unsafe_allow_html=True)
+
+    # Weather source selectbox + source label
+    # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
+    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Blend (JMA+ECMWF+GFS)"]
+    cur_src = st.session_state.weather_source
+    if cur_src not in source_options:
+        cur_src = "JMA"
+    src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('🔀','')}"
+    chosen = st.selectbox("src", source_options,
+                          index=source_options.index(cur_src),
+                          label_visibility="collapsed", key=src_key)
+    if chosen != st.session_state.weather_source:
+        st.session_state.weather_source = chosen
+        st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
+        st.rerun()
+
+    # 7-Day Forecast Table — replaces Random Overlap Assumption
+    def _cloud_status_icon(cloud_pct, precip=0.0):
+        """Return weather icon + label based on cloud cover and precipitation."""
+        if precip is not None and precip > 2.0:
+            if cloud_pct > 70:
+                return "\u26c8\ufe0f", "Storm"
+            return "\U0001f327\ufe0f", "Rainy"
+        if cloud_pct <= 20:
+            return "\u2600\ufe0f", "Sunny"
+        elif cloud_pct <= 45:
+            return "\u26c5", "Partly"
+        elif cloud_pct <= 70:
+            return "\U0001f325\ufe0f", "Cloudy"
+        else:
+            return "\u2601\ufe0f", "Overcast"
+
+    # Build 7-day daily summary from hourly_data
+    JST_now = datetime.now(JST)
+    _7day_rows = []
+    for _doff in range(7):
+        _d = (JST_now + timedelta(days=_doff)).replace(tzinfo=None)
+        _dpfx = _d.strftime("%Y-%m-%d")
+        _day_label = _d.strftime("%a %d/%m")
+
+        _temps, _clouds, _precips = [], [], []
+        _tlist = hourly_data.get("time", []) if hourly_data else []
+        for _i, _t in enumerate(_tlist):
+            if _t.startswith(_dpfx):
+                _hr = int(_t[11:13])
+                for _sfx in ["_jma_msm", "_gfs_seamless", "_ecmwf_ifs025"]:
+                    _v = _get_raw(hourly_data, "temperature_2m", _sfx, _i)
+                    if _v is not None:
+                        _temps.append((_hr, _v))
+                        break
+                else:
+                    _raw_t = hourly_data.get("temperature_2m", [])
+                    if _i < len(_raw_t) and _raw_t[_i] is not None:
+                        _temps.append((_hr, float(_raw_t[_i])))
+                _cv, _ = get_val(hourly_data, "cloud_cover", _i, prefer_jma)
+                _clouds.append(_cv)
+                for _sfx in ["_gfs_seamless", "_jma_msm", "_ecmwf_ifs025"]:
+                    _pv = _get_raw(hourly_data, "precipitation", _sfx, _i)
+                    if _pv is not None:
+                        _precips.append(_pv)
+                        break
+
+        if _temps:
+            _noon = min(_temps, key=lambda x: abs(x[0] - 12))
+            _temp_noon = round(_noon[1], 1)
+            _temp_min  = round(min(v for _, v in _temps), 1)
+            _temp_max  = round(max(v for _, v in _temps), 1)
+        else:
+            _temp_noon = _temp_min = _temp_max = None
+
+        _avg_cloud = round(sum(_clouds) / len(_clouds)) if _clouds else 0
+        _total_precip = round(sum(_precips), 1) if _precips else 0.0
+        _icon, _status = _cloud_status_icon(_avg_cloud, _total_precip)
+
+        if _temp_max is not None and _temp_max < 3.0 and _total_precip > 0.5:
+            _icon, _status = "\u2744\ufe0f", "Snowy"
+
+        _7day_rows.append({
+            "day": _day_label,
+            "icon": _icon,
+            "status": _status,
+            "temp_max": _temp_max,
+            "temp_min": _temp_min,
+            "cloud": _avg_cloud,
+        })
+
+    if _7day_rows:
+        _rows7 = ""
+        for _r in _7day_rows:
+            _tmax_str = f"{_r['temp_max']}\u00b0" if _r['temp_max'] is not None else "\u2014"
+            _tmin_str = f"{_r['temp_min']}\u00b0" if _r['temp_min'] is not None else "\u2014"
+            _cloud_color = '#22c55e' if _r['cloud'] <= 25 else ('#eab308' if _r['cloud'] <= 50 else ('#f97316' if _r['cloud'] <= 75 else '#ef4444'))
+            _rows7 += (
+                f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;'
+                f'background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 6px;'
+                f'border:1px solid #1e293b;flex:1;min-width:0;">'
+                f'<div style="font-size:11px;color:#94a3b8;font-weight:600;white-space:nowrap;'
+                f'overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;">{_r["day"]}</div>'
+                f'<div style="font-size:26px;line-height:1.1;">{_r["icon"]}</div>'
+                f'<div style="font-size:11px;color:#cbd5e1;font-weight:500;">{_r["status"]}</div>'
+                f'<div style="font-size:13px;font-weight:700;color:#f97316;">{_tmax_str}</div>'
+                f'<div style="font-size:11px;color:#60a5fa;">{_tmin_str}</div>'
+                f'<div style="font-size:10px;color:{_cloud_color};margin-top:2px;">{_r["cloud"]}%</div>'
+                f'</div>'
             )
-    
-    # ── Moon: filled area ─────────────────────────────────────────────────────────
-    fig.add_trace(go.Scatter(
-        x=_x_positions, y=moon_altitudes,
-        mode='lines',
-        name='🌙 Moon',
-        line=dict(color='#fbbf24', width=2.5),
-        fill='tozeroy',
-        fillcolor='rgba(251,191,36,0.20)',
-        hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
-        customdata=hours_labels,
-    ))
-    
-    # ── Sun: dashed blue line ─────────────────────────────────────────────────────
-    fig.add_trace(go.Scatter(
-        x=_x_positions, y=sun_altitudes,
-        mode='lines',
-        name='☀️ Sun',
-        line=dict(color='#38bdf8', width=2.5, dash='dash'),
-        hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
-        customdata=hours_labels,
-    ))
-    
-    # ── Milky Way GC: dashed purple ───────────────────────────────────────────────
-    fig.add_trace(go.Scatter(
-        x=_x_positions, y=milkyway_altitudes,
-        mode='lines',
-        name='🌌 MW GC',
-        line=dict(color='#a78bfa', width=2.0, dash='dot'),
-        hovertemplate='%{customdata}<br>MW GC: %{y:.1f}°<extra></extra>',
-        customdata=hours_labels,
-    ))
-    
-    # ── Horizon rule ──────────────────────────────────────────────────────────────
-    fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
-    
-    # ── -13° rule ─────────────────────────────────────────────────────────────────
-    fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
-                  annotation_text="−13° full dark", annotation_font_color="rgba(251,146,60,0.7)",
-                  annotation_position="bottom right")
-    
-    # ── Layout ────────────────────────────────────────────────────────────────────
-    fig.update_layout(
-        height=480,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(15,23,42,0.0)',
-        font=dict(color='#94a3b8', size=12),
-        xaxis=dict(
-            tickmode='array',
-            tickvals=_x_positions,
-            ticktext=hours_labels,
-            gridcolor='rgba(71,85,105,0.3)',
-            title='Time 18:00 ~ 06:00',
-            title_font_color='#94a3b8',
-        ),
-        yaxis=dict(
-            gridcolor='rgba(71,85,105,0.3)',
-            title=None,
-            zeroline=False,
-        ),
-        legend=dict(
-            orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
-            font=dict(color='#cbd5e1'),
-            bgcolor='rgba(0,0,0,0)',
-        ),
-        margin=dict(l=50, r=20, t=40, b=40),
-        hovermode='x unified',
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Legend note
-    st.markdown(
-        "<div style='text-align:center;font-size:12px;color:#94a3b8;margin-top:-8px;'>"
-        "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
-        "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
-        "<span style='color:#a78bfa;'>·····</span> Milky Way &nbsp;&nbsp;|&nbsp;&nbsp;"
-        "<span style='color:rgba(251,146,60,0.8);'>▓▒░</span> Sky brightness gradient (trully dark when Sun &lt;−13°)</div>",
-        unsafe_allow_html=True
-    )
-    
-    
-    
-    
+        _forecast_html = (
+            '<div style="margin-top:8px;">'
+            '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
+            '\U0001f5d3\ufe0f 7-DAY FORECAST</div>'
+            '<div style="display:flex;gap:4px;width:100%;">'
+            + _rows7 +
+            '</div>'
+            '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
+            '\u2191 High &nbsp;\u2193 Low &nbsp;\u2601 Cloud%</div>'
+            '</div>'
+        )
+        st.markdown(_forecast_html, unsafe_allow_html=True)
 
 
-_weather_panel()
+with col_left:
+    # Inject CSS:
+    # 1. Orange styling for date selectbox (nav2)
+    # 2. Compact styling for location selectbox (nav3) — smaller font, tighter padding
+    st.markdown("""
+<style>
+/* ── Pull col_left content closer to map ── */
+.st-key-nav_box { margin-top: -58px !important; }
+
+/* ── Date selectbox: shrink to fit content ── */
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
+    width: fit-content !important;
+    min-width: 0 !important;
+}
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] {
+    width: fit-content !important;
+    min-width: 0 !important;
+}
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child {
+    background: rgba(154,52,18,0.60) !important;
+    border: 1.5px solid rgba(234,88,12,0.75) !important;
+    box-shadow: 0 0 8px rgba(234,88,12,0.18) !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+}
+[data-testid="stSelectbox"]:has(select[id*="sel_date"]) span {
+    color: #fb923c !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+}
+
+/* LPM button is now a floating map control (bottomright) */
+
+/* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
+   nav_row1: ⬅️  date  ➡️   → luôn nằm 1 hàng (no-wrap)
+   nav_row2: location  LPM  → luôn nằm 1 hàng (no-wrap)
+   - PC (rộng ≥ 600px): nav_row1 và nav_row2 nằm cùng 1 hàng ngang
+   - iPhone (< 600px):  nav_row1 hàng trên, nav_row2 hàng dưới
+   Cấu trúc DOM: .st-key-nav_box → stVerticalBlock → stElementContainer ×2
+                 (mỗi cái wrap 1 sub-container nav_row1 / nav_row2)       */
+
+/* --- nav_box: outer flex row, wrap trên mobile --- */
+.st-key-nav_box,
+.st-key-nav_box > div,
+.st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-nav_box [data-testid="stVerticalBlockBorderWrapper"] > div {
+    width: 100% !important;
+}
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 6px;
+    box-sizing: border-box;
+}
+/* Mỗi stElementContainer con trực tiếp của nav_box → chiếm auto */
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
+    margin: 0 !important;
+    flex: 0 0 auto;
+}
+
+/* --- nav_row1: ⬅️ date ➡️ — không bao giờ wrap, co lại theo nội dung --- */
+.st-key-nav1,
+.st-key-nav1 > div,
+.st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"] > div { width: auto !important; }
+.st-key-nav1 [data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: auto !important;
+}
+.st-key-nav1 [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
+.st-key-nav1 [data-testid="stButton"] button {
+    width: 44px !important; min-width: 0 !important; padding: 0 !important;
+}
+.st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px; }
+.st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) { flex: 0 1 auto; }
+.st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) [data-testid="stSelectbox"] {
+    width: fit-content !important;
+}
+
+/* nav2 (location+LPM) removed — now shown as floating label on map */
+
+</style>""", unsafe_allow_html=True)
+
+    # Nav controls — chỉ còn nav1: ⬅️  date  ➡️
+    nav_box = st.container(key="nav_box")
+    with nav_box:
+        with st.container(key="nav1"):
+            def _go_prev():
+                if st.session_state.day_offset > 0:
+                    st.session_state.day_offset -= 1
+                    st.session_state.sel_date = date_options[st.session_state.day_offset]
+
+            def _go_next():
+                if st.session_state.day_offset < 6:
+                    st.session_state.day_offset += 1
+                    st.session_state.sel_date = date_options[st.session_state.day_offset]
+
+            st.button("⬅️", key="btn_prev", on_click=_go_prev)
+
+            sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
+                                     label_visibility="collapsed",
+                                     key="sel_date")
+            new_off = date_options.index(sel_label)
+            if new_off != st.session_state.day_offset:
+                st.session_state.day_offset = new_off
+                st.rerun()
+
+            st.button("➡️", key="btn_next", on_click=_go_next)
+
+
+
+
+
+    # Table — custom styled HTML card
+    if weather_table_data:
+        # Hiện badge nếu đang dùng fallback endpoint
+        if _ep_label == "no_jma":
+            st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
+                        'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
+                        '⚠️ JMA MSM サーバーエラー — 代わりに <b>ECMWF + GFS</b> を使用しています</div>',
+                        unsafe_allow_html=True)
+        elif _ep_label == "gfs_only":
+            st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
+                        'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
+                        '⚠️ JMA/ECMWF サーバーエラー — 代わりに <b>GFS のみ</b> を使用しています</div>',
+                        unsafe_allow_html=True)
+        def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None):
+            pct = int(pct_str.replace('%',''))
+            if precip_val is not None and precip_val > 0.5:
+                if temp_val is not None and temp_val < 1.0:
+                    icon, col = '\u2744\ufe0f', '#93c5fd'
+                elif pct > 70:
+                    icon, col = '\u26c8\ufe0f', '#f87171'
+                else:
+                    icon, col = '\U0001f327\ufe0f', '#60a5fa'
+            elif pct <= 20:
+                icon, col = '\u2600\ufe0f', '#fbbf24'
+            elif pct <= 45:
+                icon, col = '\u26c5', '#fcd34d'
+            elif pct <= 70:
+                icon, col = '\U0001f325\ufe0f', '#94a3b8'
+            else:
+                icon, col = '\u2601\ufe0f', '#64748b'
+            return (f'<div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">'
+                    f'<span style="font-size:15px;line-height:1;">{icon}</span>'
+                    f'<span style="font-size:11px;color:{col};font-weight:600;">{pct_str}</span>'
+                    f'</div>')
+
+        def _wind_icon(ws_str):
+            ws = float(ws_str.replace('m/s',''))
+            if ws < 2:   icon,col = '','#94a3b8'
+            elif ws < 5: icon,col = '','#60a5fa'
+            else:        icon,col = '','#f97316'
+            return f'<span style="color:{col}">{icon} {ws_str}</span>'
+
+        rows_html = ''
+        for i, row in enumerate(weather_table_data):
+            bg = 'rgba(234,88,12,0.10)' if i % 2 == 0 else 'rgba(194,65,12,0.06)'
+            time_lbl = row['⏰']
+            cloud_cell = _cloud_icon_cell(row['☁️'], row.get('_precip', 0.0), row.get('_temp'))
+            humid_val  = row['💧']
+            wind_cell  = _wind_icon(row['💨'])
+            stars      = row['📸']
+            rows_html += (
+                f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
+                f'<td style="padding:8px 8px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
+                f'<td style="padding:8px 8px;overflow:hidden;">{cloud_cell}</td>'
+                f'<td style="padding:8px 8px;color:#fb923c;">{humid_val}</td>'
+                f'<td style="padding:8px 8px;color:#fb923c;">{wind_cell}</td>'
+                f'<td style="padding:8px 8px;font-size:16px;letter-spacing:1px;">{stars}</td>'
+                f'</tr>'
+            )
+
+        table_html = f"""
+<div style="background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;overflow:hidden;margin-bottom:8px;box-shadow:0 0 20px rgba(234,88,12,0.10);">
+  <table style="width:100%;border-collapse:collapse;font-size:14px;font-family:'Segoe UI',sans-serif;table-layout:fixed;">
+    <thead>
+      <tr style="background:linear-gradient(90deg,rgba(154,52,18,0.90),rgba(120,40,10,0.75));border-bottom:2px solid rgba(234,88,12,0.55);">
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:14%;">⏰</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:20%;">🌤️</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:13%;">💧</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
+        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
+      </tr>
+    </thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+</div>"""
+        st.markdown(table_html, unsafe_allow_html=True)
+    else:
+        # Hiển thị nguyên nhân thực tế thay vì hardcode "502 Bad Gateway"
+        if _last_error == "timeout":
+            _err_title = "⚠️ Open-Meteo API がタイムアウトしました"
+            _err_detail = (
+                'リクエストが <b>25秒</b> 以内に応答しませんでした。'
+                'サーバーが混雑している可能性があります。<br><br>'
+                '<span style="color:#94a3b8;">通常は数分で回復します。'
+                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        elif _last_error and _last_error.startswith("HTTP 5"):
+            _code = _last_error.split(" ")[1]
+            _err_title = f"⚠️ Open-Meteo API が一時的に応答していません"
+            _err_detail = (
+                f'サーバー <code style="color:#fbbf24;">api.open-meteo.com</code> が '
+                f'<b>{_code} エラー</b> を返しました — これは提供元側の問題で、'
+                'アプリ側のエラーではありません。<br><br>'
+                '<span style="color:#94a3b8;">通常5～30分で自動的に回復します。'
+                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        elif _last_error and _last_error.startswith("connection_error"):
+            _err_title = "⚠️ Open-Meteo API に接続できません"
+            _err_detail = (
+                'ネットワーク接続エラーが発生しました。'
+                'インターネット接続を確認してください。<br><br>'
+                '<span style="color:#94a3b8;"><b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        else:
+            _err_title = "⚠️ Open-Meteo API が一時的に応答していません"
+            _err_detail = (
+                f'予期しないエラーが発生しました'
+                + (f'（詳細: <code style="color:#fbbf24;">{_last_error}</code>）' if _last_error else '')
+                + '。<br><br>'
+                '<span style="color:#94a3b8;">通常は数分で回復します。'
+                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+            )
+        st.markdown(f"""
+<div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
+    <div style="font-size:18px;font-weight:700;color:#ef4444;margin-bottom:8px;">
+        {_err_title}
+    </div>
+    <div style="color:#cbd5e1;font-size:14px;line-height:1.7;">
+        {_err_detail}
+    </div>
+</div>""", unsafe_allow_html=True)
+        if st.button("🔄 再試行", key="btn_retry_weather"):
+            st.cache_data.clear()
+            st.rerun()
+
+# ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
+st.markdown("---")
+st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE(°)")
+
+import plotly.graph_objects as go
+
+# ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
+# Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
+def _sun_bright_opacity(sun_alt):
+    if sun_alt <= -13:
+        return 0.0
+    op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
+    return round(min(max(op, 0.0), 0.50), 3)
+
+fig = go.Figure()
+
+# ── Background brightness bands (vrect per slot) ─────────────────────────────
+_x_positions = list(range(len(hours_labels)))
+for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
+    _op = _sun_bright_opacity(_sa)
+    if _op > 0.005:
+        fig.add_vrect(
+            x0=_i - 0.5, x1=_i + 0.5,
+            fillcolor="rgba(251,146,60,1.0)",
+            opacity=_op,
+            layer="below",
+            line_width=0,
+        )
+
+# ── Moon: filled area ─────────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=moon_altitudes,
+    mode='lines',
+    name='🌙 Moon',
+    line=dict(color='#fbbf24', width=2.5),
+    fill='tozeroy',
+    fillcolor='rgba(251,191,36,0.20)',
+    hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Sun: dashed blue line ─────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=sun_altitudes,
+    mode='lines',
+    name='☀️ Sun',
+    line=dict(color='#38bdf8', width=2.5, dash='dash'),
+    hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Milky Way GC: dashed purple ───────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=milkyway_altitudes,
+    mode='lines',
+    name='🌌 MW GC',
+    line=dict(color='#a78bfa', width=2.0, dash='dot'),
+    hovertemplate='%{customdata}<br>MW GC: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Horizon rule ──────────────────────────────────────────────────────────────
+fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
+
+# ── -13° rule ─────────────────────────────────────────────────────────────────
+fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
+              annotation_text="−13° full dark", annotation_font_color="rgba(251,146,60,0.7)",
+              annotation_position="bottom right")
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+fig.update_layout(
+    height=480,
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(15,23,42,0.0)',
+    font=dict(color='#94a3b8', size=12),
+    xaxis=dict(
+        tickmode='array',
+        tickvals=_x_positions,
+        ticktext=hours_labels,
+        gridcolor='rgba(71,85,105,0.3)',
+        title='Time 18:00 ~ 06:00',
+        title_font_color='#94a3b8',
+    ),
+    yaxis=dict(
+        gridcolor='rgba(71,85,105,0.3)',
+        title=None,
+        zeroline=False,
+    ),
+    legend=dict(
+        orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
+        font=dict(color='#cbd5e1'),
+        bgcolor='rgba(0,0,0,0)',
+    ),
+    margin=dict(l=50, r=20, t=40, b=40),
+    hovermode='x unified',
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# Legend note
+st.markdown(
+    "<div style='text-align:center;font-size:12px;color:#94a3b8;margin-top:-8px;'>"
+    "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
+    "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
+    "<span style='color:#a78bfa;'>·····</span> Milky Way &nbsp;&nbsp;|&nbsp;&nbsp;"
+    "<span style='color:rgba(251,146,60,0.8);'>▓▒░</span> Sky brightness gradient (trully dark when Sun &lt;−13°)</div>",
+    unsafe_allow_html=True
+)
+
+
+
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: insta: fcbmkw</div>', unsafe_allow_html=True)
