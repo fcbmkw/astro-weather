@@ -2409,31 +2409,31 @@ def _build_night_verdict(table_data):
         icon = "🌌"; stars = "★★★★"
         color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
         bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
-        sub   = f"{good_hours}h clear / {total}h"
+        sub   = f"{good_hours}h clear"
     elif good_hours >= 3:
         tier = "WORTH IT"
         icon = "📷"; stars = "★★★"
         color = "#86efac"; border = "rgba(134,239,172,0.70)"
         bg    = "rgba(5,20,12,0.88)"; anim = "blink-smile"
-        sub   = f"{good_hours}h clear / {total}h"
+        sub   = f"{good_hours}h clear"
     elif good_hours >= 1:
         tier = "MARGINAL"
         icon = "🌤️"; stars = "★★"
         color = "#fde68a"; border = "rgba(251,191,36,0.65)"
         bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
-        sub   = f"only {good_hours}h clear / {total}h"
+        sub   = f"only {good_hours}h clear"
     elif rain_hours >= int(total * 0.5):
         tier = "RAINY NIGHT"
         icon = "🌧️"; stars = "✕"
         color = "#fca5a5"; border = "rgba(239,68,68,0.70)"
         bg    = "rgba(30,8,8,0.88)"; anim = "blink-warn"
-        sub   = f"{rain_hours}h rain / {total}h"
+        sub   = f"{rain_hours}h rain"
     else:
         tier = "CLOUDY NIGHT"
         icon = "☁️"; stars = "✕"
         color = "#94a3b8"; border = "rgba(148,163,184,0.55)"
         bg    = "rgba(10,14,22,0.88)"; anim = "blink-warn"
-        sub   = f"0h clear / {total}h"
+        sub   = "0h clear"
 
     return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
             "color": color, "border": border, "bg": bg, "anim": anim,
@@ -2441,6 +2441,12 @@ def _build_night_verdict(table_data):
 
 _verdict = _build_night_verdict(weather_table_data)
 if _verdict:
+    # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
+    if st.session_state.day_offset == 0:
+        _date_label = "Tonight"
+    else:
+        _date_label = target_date.strftime("%-m/%-d") + " night"
+
     _warn_speed = "1.1s" if _verdict["anim"] == "blink-warn" else "1.9s"
     _html_label = f"""
 <style>
@@ -2450,23 +2456,28 @@ if _verdict:
 .astro-maplabel{{
   position:absolute;top:15px;left:50%;transform:translateX(-50%);
   z-index:9999;pointer-events:none;
-  display:flex;align-items:center;gap:8px;
-  padding:6px 18px 6px 12px;border-radius:22px;
-  font-family:sans-serif;font-size:13px;font-weight:700;
+  display:inline-flex;flex-direction:column;align-items:center;gap:1px;
+  padding:5px 18px 6px 14px;border-radius:22px;
+  font-family:sans-serif;
   white-space:nowrap;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);
   backdrop-filter:blur(3px);
   background:{_verdict["bg"]};border:1.5px solid {_verdict["border"]};color:{_verdict["color"]};
 }}
+.astro-maplabel-top{{ font-size:9px;opacity:0.55;font-weight:600;letter-spacing:0.04em;line-height:1.2; }}
+.astro-maplabel-main{{ display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;line-height:1.3; }}
 .astro-maplabel-stars{{ font-size:11px;opacity:0.85;letter-spacing:1px; }}
 .astro-maplabel-sub{{ font-size:10px;opacity:0.65;font-weight:500; }}
 </style>
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9999;">
 <div class="astro-maplabel">
-  <span style="animation:{_verdict["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:17px;">{_verdict["icon"]}</span>
-  <span>{_verdict["tier"]}</span>
-  <span class="astro-maplabel-stars">{_verdict["stars"]}</span>
-  <span class="astro-maplabel-sub">{_verdict["sub"]}</span>
+  <span class="astro-maplabel-top">{_date_label}</span>
+  <div class="astro-maplabel-main">
+    <span style="animation:{_verdict["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:17px;">{_verdict["icon"]}</span>
+    <span>{_verdict["tier"]}</span>
+    <span class="astro-maplabel-stars">{_verdict["stars"]}</span>
+    <span class="astro-maplabel-sub">{_verdict["sub"]}</span>
+  </div>
 </div>
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
@@ -2553,10 +2564,6 @@ st.markdown("""
 col_left, col_right = st.columns([2.5, 1.1])
 
 with col_right:
-    # Pull col_right first card up 10px to align with col_left
-    st.markdown("""<style>
-    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div:nth-child(2) > div:first-child { margin-top: -10px !important; }
-    </style>""", unsafe_allow_html=True)
     # Bortle
     st.markdown(f"""
     <div class="metric-card">
