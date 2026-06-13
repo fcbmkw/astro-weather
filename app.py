@@ -134,7 +134,7 @@ LOCATION_DATABASE = {
     "121. Naruko Gorge 鳴子峡, Miyagi": [38.7480, 140.7190],
     "122. Izunuma 伊豆沼, Miyagi": [38.7350, 141.1030],
     "123. Mt. Haguro 羽黒山, Yamagata": [38.7025, 139.9838],
-    "124. Zao Okama 蔵王御釜, Yamagata": [38.1420, 140.4400],
+    "124. Funagata-yama 船形山展望台, Miyagi": [38.6430, 140.5870],
     "125. Tadami Bridge 只見線第一橋梁, Fukushima": [37.3445, 139.3150],
     "126. Goshikinuma 五色沼, Fukushima": [37.6550, 140.0720],
     "127. Inawashiro Lake 猪苗代湖, Fukushima": [37.5460, 140.1040],
@@ -144,7 +144,7 @@ LOCATION_DATABASE = {
     "131. Mitsukejima 見附島, Ishikawa": [37.3961, 137.2474],
     "132. Senmaida 白米千枚田, Ishikawa": [37.4252, 136.9996],
     "133. Rokkozaki 禄剛崎, Ishikawa": [37.5289, 137.3261],
-    "134. Shirakawa Hachiman 白川八幡神社, Gifu": [36.2588, 136.9073],
+    "134. Hakusan Chokaisanso 白山チブリ尾根避難小屋, Ishikawa": [36.1560, 136.7490],
     "135. Ena Ravine Bridge 恵那峡大橋展望台, Gifu": [35.4859, 137.4118],
     "136. Daibo Pass 大望峠, Nagano": [36.7340, 137.9660],
     "137. Norikura Kogen 乗鞍高原, Nagano": [36.1205, 137.6310],
@@ -156,10 +156,10 @@ LOCATION_DATABASE = {
     "143. Hashiguiiwa 橋杭岩, Wakayama": [33.4754, 135.7830],
     "144. Takeda Castle 竹田城跡, Hyogo": [35.3004, 134.8290],
     "145. Ine Funaya 伊根の舟屋, Kyoto": [35.6730, 135.2910],
-    "146. Lake Shinji 宍道湖, Shimane": [35.4560, 132.9760],
-    "147. Hashiguiiwa 橋杭岩, Wakayama": [33.4754, 135.7830],
-    "148. Takeda Castle 竹田城跡, Hyogo": [35.3004, 134.8290],
-    "149. Ine Funaya 伊根の舟屋, Kyoto": [35.6730, 135.2910],
+    "146. Nima Sand Museum 仁摩サンドミュージアム, Shimane": [35.1230, 132.4940],
+    "147. Shionomisaki Cape 潮岬, Wakayama": [33.4364, 135.7706],
+    "148. Nariai-ji Temple 成相寺展望台, Kyoto": [35.5968, 135.2013],
+    "149. Kumihama Bay 久美浜湾, Kyoto": [35.6180, 134.9030],
     "150. Kashiwajima 柏島, Kochi": [32.7492, 132.6278],
     "151. Tsunoshima Bridge 角島大橋, Yamaguchi": [34.3578, 130.8398],
     "152. Motonosumi Shrine 元乃隅神社, Yamaguchi": [34.3435, 131.0387],
@@ -183,14 +183,14 @@ LOCATION_DATABASE = {
     "170. Kabushima Shrine 蕪島神社, Aomori": [40.5410, 141.5575],
     "171. Genbikei Gorge 厳美渓, Iwate": [38.9870, 141.1076],
     "172. Mt. Kurikoma 栗駒山, Miyagi": [38.9615, 140.7886],
-    "173. Lake Akimoto 秋元湖, Fukushima": [37.6625, 140.0536],
+    "173. Tengendai 天元台高原, Yamagata": [37.8820, 139.9940],
     "174. Bandai-san 磐梯山, Fukushima": [37.6008, 140.0722],
     "175. Akan International Crane 釧路湿原, Hokkaido": [43.0560, 144.2560],
     "176. Lake Akan 阿寒湖, Hokkaido": [43.4380, 144.0950],
     "177. Cape Ochiishi 落石岬, Hokkaido": [43.1700, 145.5100],
     "178. Lake Toya 洞爺湖, Hokkaido": [42.5970, 140.8540],
     "179. Noboribetsu Jigokudani 登別地獄谷, Hokkaido": [42.4940, 141.1510],
-    "180. Cape Muroto 室戸岬灯台, Kochi": [33.2500, 134.1750],
+    "180. Muroto Geopark 室戸ジオパーク, Kochi": [33.3140, 134.1580],
     "181. Sadamisaki Peninsula 佐田岬, Ehime": [33.3440, 132.0230],
     "182. Mt. Ishizuchi 石鎚山, Ehime": [33.7650, 133.1180],
     "183. Iya Valley 祖谷のかずら橋, Tokushima": [33.8730, 133.8340],
@@ -209,7 +209,7 @@ LOCATION_DATABASE = {
     "196. Dogo Onsen 道後温泉, Ehime": [33.8500, 132.7850],
     "197. Shimanto River 四万十川, Kochi": [33.0030, 132.9340],
     "198. Beppu Hells 別府地獄めぐり, Oita": [33.3130, 131.4880],
-    "199. Takachiho Gorge 高千穂峡, Miyazaki": [32.7090, 131.3140],
+    "199. Kunimigaoka 国見ヶ丘, Miyazaki": [32.7510, 131.3300],
     "200. Kirishima Shrine 霧島神宮, Kagoshima": [31.8590, 130.8710],
     "201. Yakushima Shiratani 屋久島, Kagoshima": [30.3450, 130.5690],
     "202. Amami Oshima 奄美大島, Kagoshima": [28.3750, 129.4670],
@@ -217,7 +217,7 @@ LOCATION_DATABASE = {
     "204. Iriomote Jungle カヌーツアー, Okinawa": [24.3500, 123.8500],
     "205. Okunoshima Rabbit 大久野島, Hiroshima": [34.3050, 132.9930],
     "206. Mitani Valley 三谷峡, Okayama": [34.8560, 133.7250],
-    "207. Tottori Sand Museum 砂の美術館, Tottori": [35.5420, 134.2340],
+    "207. Uradome Coast 浦富海岸, Tottori": [35.5880, 134.4600],
     "208. Izumo Taisha 出雲大社, Shimane": [35.4010, 132.6850],
     "209. Adachi Museum of Art 足立美術館, Shimane": [35.4670, 133.2030],
     "210. Oki Islands 隠岐の島, Shimane": [36.2160, 133.2330],
@@ -234,7 +234,7 @@ LOCATION_DATABASE = {
     "221. Koka Ninja Village 甲賀の里忍術村, Shiga": [34.9330, 136.2230],
     "222. Nara Park 奈良公園, Nara": [34.6850, 135.8360],
     "223. Horyuji Temple 法隆寺, Nara": [34.6140, 135.7360],
-    "224. Mt. Koya 金剛峯寺, Wakayama": [34.2150, 135.5860],
+    "224. Dorokyo Gorge 瀞峡, Wakayama": [33.9070, 135.8500],
     "225. Akashi Kaikyo Bridge 明石海峡大橋, Hyogo": [34.6150, 135.0160],
     "226. Tottori Daisen 大山, Tottori": [35.3780, 133.5350],
     "227. Okayama Korakuen 岡山後楽園, Okayama": [34.6670, 133.9350],
@@ -242,7 +242,7 @@ LOCATION_DATABASE = {
     "229. Miyajima 厳島神社, Hiroshima": [34.2970, 132.3190],
     "230. Kintaikyo Bridge 錦帯橋, Yamaguchi": [34.1670, 132.1790],
     "231. Kotohira-gu 金刀比羅宮, Kagawa": [34.1810, 133.8050],
-    "232. Iya Kazurabashi 祖谷のかずら橋, Tokushima": [33.8730, 133.8340],
+    "232. Oboke Gorge 大歩危峡, Tokushima": [33.9120, 133.8420],
     "233. Kochi Castle 高知城, Kochi": [33.5600, 133.5310],
     "234. Katsurahama Beach 桂浜, Kochi": [33.4980, 133.5710],
     "235. Fukuoka Castle Ruins 福岡城跡, Fukuoka": [33.5840, 130.3800],
@@ -250,7 +250,7 @@ LOCATION_DATABASE = {
     "237. Karatsu Castle 唐津城, Saga": [33.4540, 129.9770],
     "238. Yoshinogari Historical 吉野ヶ里歴史公園, Saga": [33.2200, 130.3860],
     "239. Nagasaki Glover Garden グラバー園, Nagasaki": [32.7360, 129.8680],
-    "240. Mount Aso 阿蘇中岳火口, Kumamoto": [32.8870, 131.0960],
+    "240. Kuju Highlands 久住高原, Oita": [32.9880, 131.2400],
     "241. Kumamoto Castle 熊本城, Kumamoto": [32.8060, 130.7040],
     "242. Usuki Stone Buddhas 臼杵石仏, Oita": [33.0900, 131.7850],
     "243. Sakurajima 桜島溶岩なぎさ遊歩道, Kagoshima": [31.5880, 130.5850],
@@ -627,7 +627,7 @@ def calculate_accurate_bortle(lat, lon):
         (38.7480, 140.7190): (3.0, 21.80), # 121 Naruko Gorge, Miyagi
         (38.7350, 141.1030): (3.0, 21.70), # 122 Izunuma, Miyagi
         (38.7025, 139.9838): (3.0, 21.80), # 123 Mt. Haguro, Yamagata
-        (38.1420, 140.4400): (3.0, 21.80), # 124 Zao Okama, Yamagata
+        (38.6430, 140.5870): (3.0, 21.80), # 124 Funagata-yama, Miyagi
         (37.3445, 139.3150): (3.0, 21.80), # 125 Tadami Bridge, Fukushima
         (37.6550, 140.0720): (3.0, 21.75), # 126 Goshikinuma, Fukushima
         (37.5460, 140.1040): (3.0, 21.75), # 127 Inawashiro Lake, Fukushima
@@ -637,7 +637,7 @@ def calculate_accurate_bortle(lat, lon):
         (37.3961, 137.2474): (3.0, 21.80), # 131 Mitsukejima, Ishikawa
         (37.4252, 136.9996): (3.0, 21.80), # 132 Senmaida, Ishikawa
         (37.5289, 137.3261): (3.0, 21.80), # 133 Rokkozaki, Ishikawa
-        (36.2588, 136.9073): (3.0, 21.80), # 134 Shirakawa Hachiman, Gifu
+        (36.1560, 136.7490): (2.5, 21.95), # 134 Hakusan Chokaisanso, Ishikawa
         (35.4859, 137.4118): (3.5, 21.60), # 135 Ena Ravine, Gifu
         (36.7340, 137.9660): (3.0, 21.85), # 136 Daibo Pass, Nagano
         (36.1205, 137.6310): (2.5, 21.95), # 137 Norikura Kogen, Nagano
@@ -646,9 +646,13 @@ def calculate_accurate_bortle(lat, lon):
         (35.1134, 140.1988): (4.0, 21.20), # 140 Kobentenjima, Chiba
         (35.4322, 132.6290): (3.0, 21.80), # 141 Izumo Hinomisaki, Shimane
         (35.4560, 132.9760): (3.0, 21.75), # 142 Lake Shinji, Shimane
+        (35.1230, 132.4940): (3.0, 21.80), # 146 Nima Sand Museum, Shimane
         (33.4754, 135.7830): (3.0, 21.80), # 143 Hashiguiiwa, Wakayama
+        (33.4364, 135.7706): (3.0, 21.80), # 147 Shionomisaki Cape, Wakayama
         (35.3004, 134.8290): (3.0, 21.80), # 144 Takeda Castle, Hyogo
         (35.6730, 135.2910): (3.5, 21.60), # 145 Ine Funaya, Kyoto
+        (35.5968, 135.2013): (3.0, 21.75), # 148 Nariai-ji, Kyoto
+        (35.6180, 134.9030): (3.0, 21.70), # 149 Kumihama Bay, Kyoto
         (32.7492, 132.6278): (2.5, 21.95), # 150 Kashiwajima, Kochi
         (34.3578, 130.8398): (3.0, 21.80), # 151 Tsunoshima Bridge, Yamaguchi
         (34.3435, 131.0387): (3.0, 21.80), # 152 Motonosumi Shrine, Yamaguchi
@@ -672,7 +676,7 @@ def calculate_accurate_bortle(lat, lon):
         (40.5410, 141.5575): (3.0, 21.80), # 170 Kabushima Shrine, Aomori
         (38.9870, 141.1076): (3.0, 21.80), # 171 Genbikei Gorge, Iwate
         (38.9615, 140.7886): (3.0, 21.80), # 172 Mt. Kurikoma, Miyagi
-        (37.6625, 140.0536): (3.0, 21.75), # 173 Lake Akimoto, Fukushima
+        (37.8820, 139.9940): (3.0, 21.80), # 173 Tengendai, Yamagata
         (37.6008, 140.0722): (3.0, 21.75), # 174 Bandai-san, Fukushima
         
         # ── 175-250: Dữ liệu Bortle và SQM bổ sung ────────────────────────────
@@ -681,10 +685,11 @@ def calculate_accurate_bortle(lat, lon):
         (43.1700, 145.5100): (2.0, 21.85), # 177 Cape Ochiishi
         (42.5970, 140.8540): (3.0, 21.50), # 178 Lake Toya
         (42.4940, 141.1510): (3.0, 21.45), # 179 Noboribetsu Jigokudani
-        (33.2500, 134.1750): (2.5, 21.60), # 180 Cape Muroto Lighthouse
+        (33.3140, 134.1580): (2.5, 21.90), # 180 Muroto Geopark, Kochi
         (33.3440, 132.0230): (2.5, 21.65), # 181 Sadamisaki Peninsula
         (33.7650, 133.1180): (2.0, 21.80), # 182 Mt. Ishizuchi
         (33.8730, 133.8340): (2.5, 21.60), # 183 Iya Valley
+        (33.9120, 133.8420): (3.0, 21.70), # 232 Oboke Gorge, Tokushima
         (34.2380, 134.6540): (3.5, 21.20), # 184 Naruto Whirlpools
         (33.8560, 134.0930): (2.0, 21.75), # 185 Mt. Tsurugi
         (34.6570, 132.2530): (3.0, 21.40), # 186 Sandankyo Gorge
@@ -700,7 +705,7 @@ def calculate_accurate_bortle(lat, lon):
         (33.8500, 132.7850): (4.0, 20.50), # 196 Dogo Onsen
         (33.0030, 132.9340): (2.0, 21.80), # 197 Shimanto River
         (33.3130, 131.4880): (3.5, 21.00), # 198 Beppu Hells
-        (32.7090, 131.3140): (2.5, 21.60), # 199 Takachiho Gorge
+        (32.7510, 131.3300): (2.5, 21.70), # 199 Kunimigaoka, Miyazaki
         (31.8590, 130.8710): (2.5, 21.65), # 200 Kirishima Shrine
         (30.3450, 130.5690): (2.0, 21.80), # 201 Yakushima
         (28.3750, 129.4670): (2.5, 21.60), # 202 Amami Oshima
@@ -708,7 +713,7 @@ def calculate_accurate_bortle(lat, lon):
         (24.3500, 123.8500): (2.0, 21.85), # 204 Iriomote Jungle
         (34.3050, 132.9930): (3.5, 21.10), # 205 Okunoshima
         (34.8560, 133.7250): (2.5, 21.60), # 206 Mitani Valley
-        (35.5420, 134.2340): (3.0, 21.30), # 207 Tottori Sand Museum
+        (35.5880, 134.4600): (3.0, 21.80), # 207 Uradome Coast, Tottori
         (35.4010, 132.6850): (3.0, 21.30), # 208 Izumo Taisha
         (35.4670, 133.2030): (3.0, 21.20), # 209 Adachi Museum
         (36.2160, 133.2330): (2.0, 21.75), # 210 Oki Islands
@@ -725,7 +730,7 @@ def calculate_accurate_bortle(lat, lon):
         (34.9330, 136.2230): (3.5, 21.10), # 221 Koka Ninja Village
         (34.6850, 135.8360): (4.0, 20.80), # 222 Nara Park
         (34.6140, 135.7360): (4.0, 20.80), # 223 Horyuji Temple
-        (34.2150, 135.5860): (2.5, 21.60), # 224 Mt. Koya
+        (33.9070, 135.8500): (2.5, 21.85), # 224 Dorokyo Gorge, Wakayama
         (34.6150, 135.0160): (4.0, 20.70), # 225 Akashi Kaikyo Bridge
         (35.3780, 133.5350): (2.5, 21.60), # 226 Tottori Daisen
         (34.6670, 133.9350): (4.0, 20.70), # 227 Okayama Korakuen
@@ -741,7 +746,7 @@ def calculate_accurate_bortle(lat, lon):
         (33.4540, 129.9770): (3.5, 21.10), # 237 Karatsu Castle
         (33.2200, 130.3860): (3.5, 21.10), # 238 Yoshinogari
         (32.7360, 129.8680): (4.0, 20.70), # 239 Nagasaki Glover
-        (32.8870, 131.0960): (2.0, 21.80), # 240 Mount Aso
+        (32.9880, 131.2400): (2.5, 21.90), # 240 Kuju Highlands, Oita
         (32.8060, 130.7040): (4.0, 20.70), # 241 Kumamoto Castle
         (33.0900, 131.7850): (3.0, 21.30), # 242 Usuki Stone Buddhas
         (31.5880, 130.5850): (3.0, 21.40), # 243 Sakurajima Volcano
@@ -1887,6 +1892,63 @@ _KANJI_ALIAS = {
     "種差海岸": "Tanesashi Coast", "蕪島神社": "Kabushima Shrine", "厳美渓": "Genbikei Gorge",
     "栗駒山": "Mt. Kurikoma", "秋元湖": "Lake Akimoto", "秋元": "Akimoto",
     "磐梯山": "Bandai-san", "磐梯": "Bandai",
+    # ── Locations 101-250 (added in v5.80+) ────────────────────────────────
+    # Hokkaido
+    "能取": "Cape Notoro", "知床": "Shiretoko Pass", "野付": "Notsuke Peninsula",
+    "サロマ": "Lake Saroma", "釧路湿原": "Akan Crane", "阿寒湖": "Lake Akan",
+    "落石岬": "Cape Ochiishi", "洞爺湖": "Lake Toya", "登別地獄谷": "Noboribetsu Jigokudani",
+    "青い池": "Shirogane Blue Pond", "三国峠": "Mikuni Pass",
+    # Tohoku (101-174)
+    "船形山": "Funagata-yama",
+    # Ishikawa / Toyama / Fukui
+    "白山": "Hakusan Chokaisanso", "雨晴": "Amaharashi Coast",
+    "見附島": "Mitsukejima", "千枚田": "Senmaida", "禄剛": "Rokkozaki",
+    "庄川峡": "Shogawa Gorge", "五箇山": "Gokayama Ainokura",
+    "東尋坊": "Tojinbo", "永平寺": "Eiheiji Temple",
+    # Nagano (additional)
+    "大望峠": "Daibo Pass", "乗鞍高原": "Norikura Kogen", "白馬大池": "Shirouma Oike",
+    "野島崎": "Nojimazaki",
+    # Shimane / Tottori / Okayama / Hiroshima
+    "日御碕": "Izumo Hinomisaki", "仁摩": "Nima Sand Museum",
+    "出雲大社": "Izumo Taisha", "足立美術館": "Adachi Museum", "隠岐": "Oki Islands",
+    "大山": "Tottori Daisen", "蒜山": "Hiruzen Highlands",
+    "鞆の浦": "Tomonoura", "三段峡": "Sandankyo Gorge", "大久野島": "Okunoshima",
+    "三谷峡": "Mitani Valley",
+    # Wakayama / Mie / Nara
+    "潮岬": "Shionomisaki Cape", "那智の滝": "Nachi Falls",
+    "三段壁": "Sandanbeki", "高野山": "Mt. Koya",
+    "伊勢神宮": "Ise Jingu",
+    # Kyoto / Hyogo
+    "成相寺": "Nariai-ji Temple", "天橋立": "Amanohashidate",
+    "久美浜": "Kumihama Bay", "城崎": "Kinosaki Onsen",
+    "姫路城": "Himeji Castle", "明石海峡大橋": "Akashi Kaikyo Bridge",
+    # Shiga / Gifu
+    "琵琶湖": "Lake Biwa Terrace", "彦根城": "Hikone Castle",
+    "郡上八幡": "Gujo Hachiman", "馬籠宿": "Magome-juku",
+    # Kagawa / Tokushima / Ehime / Kochi
+    "父母ヶ浜": "Chichibugahama", "金刀比羅宮": "Kotohira-gu",
+    "大歩危峡": "Oboke Gorge", "祖谷": "Iya Valley",
+    "石鎚山": "Mt. Ishizuchi", "道後温泉": "Dogo Onsen", "佐田岬": "Sadamisaki Peninsula",
+    "室戸ジオパーク": "Muroto Geopark", "桂浜": "Katsurahama Beach",
+    "足摺": "Ashizuri Cape", "四万十": "Shimanto River",
+    # Yamaguchi / Kyushu
+    "角島大橋": "Tsunoshima Bridge", "元乃隅": "Motonosumi Shrine",
+    "秋吉台": "Akiyoshidai Karst", "錦帯橋": "Kintaikyo Bridge",
+    "太宰府": "Dazaifu Tenmangu", "唐津城": "Karatsu Castle",
+    "吉野ヶ里": "Yoshinogari", "グラバー園": "Nagasaki Glover",
+    "久住高原": "Kuju Highlands",
+    "熊本城": "Kumamoto Castle", "臼杵石仏": "Usuki Stone Buddhas",
+    "別府地獄": "Beppu Hells", "高千穂峡": "Takachiho Gorge",
+    "都井岬": "Cape Toi", "桜島溶岩": "Sakurajima",
+    "霧島神宮": "Kirishima Shrine", "屋久島": "Yakushima",
+    "奄美大島": "Amami Oshima",
+    # Okinawa
+    "首里城": "Shuri Castle", "斎場御嶽": "Sefa-utaki",
+    "万座毛": "Cape Manzamo", "中城城": "Nakagusuku Castle",
+    "勝連城": "Katsuren Castle", "座喜味城": "Zakimi Castle",
+    "真栄田岬": "Cape Maeda", "慶良間": "Kerama Islands",
+    "ジャングル": "Iriomote Jungle",
+
     # ── Alternate / common place names (tên gọi phổ biến khác của địa danh) ──
     "城ヶ島": "Jogashima", "伊豆大島": "Izu Oshima", "三浦半島": "Manazuru",
     "富士山": "Fuji", "富士五湖": "Fuji Five Lakes", "河口湖": "Kawaguchiko",
@@ -2257,11 +2319,25 @@ if st.session_state._need_fly:
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — Weather valuation badge ────────────────────────────
-def _build_map_label(table_data):
+def _build_map_label(table_data, current_hour=None):
     if not table_data:
         return None
-    # Dự báo trước 1 tiếng: lấy slot index 1 nếu có, fallback index 0
-    row = table_data[1] if len(table_data) > 1 else table_data[0]
+    # Start from 18:00; if current time >= 19:00, switch to 19:00+ slot
+    row = table_data[0]  # default: 18:00
+    if current_hour is not None and current_hour >= 19:
+        # Find first slot that is >= current hour
+        for _r in table_data:
+            _t = _r.get("⏰", "00:00")
+            try:
+                _h = int(_t.split(":")[0])
+                # Handle midnight wrap: 0-6 are next day, treat as 24+
+                if _h < 12:
+                    _h += 24
+                if _h >= current_hour:
+                    row = _r
+                    break
+            except Exception:
+                pass
     stars_str  = row.get("📸", "")
     cloud_str  = row.get("☁️", "0%")
     precip_val = row.get("_precip", 0.0) or 0.0
@@ -2293,7 +2369,7 @@ def _build_map_label(table_data):
     return {"icon": icon, "text": text, "anim": anim, "color": color,
             "bg": bg, "border": border, "time": time_lbl}
 
-_lbl = _build_map_label(weather_table_data)
+_lbl = _build_map_label(weather_table_data, current_hour=_now_jst.hour if st.session_state.day_offset == 0 else None)
 if _lbl:
     _warn_speed = "1.2s" if _lbl["anim"] == "blink-warn" else "1.8s"
     _html_label = f"""
@@ -2317,7 +2393,7 @@ if _lbl:
 <div class="astro-maplabel">
   <span style="animation:{_lbl["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:16px;">{_lbl["icon"]}</span>
   <span style="letter-spacing:0.01em;">{_lbl["text"]}</span>
-  <span style="font-size:10px;opacity:0.7;font-weight:500;margin-left:2px;">@{_lbl["time"]}</span>
+  <span style="display:inline-flex;flex-direction:column;align-items:center;gap:0px;margin-left:2px;"><span style="font-size:9px;opacity:0.55;font-weight:500;line-height:1.1;">{target_date.strftime("%m/%d")}</span><span style="font-size:10px;opacity:0.7;font-weight:500;line-height:1.2;">@{_lbl["time"]}</span></span>
 </div>
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
