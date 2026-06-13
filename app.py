@@ -2551,6 +2551,8 @@ if map_data:
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.session_state._need_fly       = False
+                st.session_state.day_offset      = 0
+                st.session_state.sel_date        = date_options[0]
                 st.rerun()
         else:
             # Tooltip không match sao nào → reset để lần sau click cùng sao vẫn work
@@ -2574,6 +2576,8 @@ if map_data:
                 st.session_state.location_name   = bname
                 st.session_state.is_custom_point = False
                 st.session_state._last_tip       = None
+                st.session_state.day_offset      = 0
+                st.session_state.sel_date        = date_options[0]
                 st.rerun()
         else:
             if abs(c_lat - st.session_state.lat) > 0.0001 or abs(c_lon - st.session_state.lon) > 0.0001:
@@ -2583,6 +2587,8 @@ if map_data:
                 st.session_state.location_name   = fetch_location_name(c_lat, c_lon)
                 st.session_state.is_custom_point = True
                 st.session_state._last_tip       = None
+                st.session_state.day_offset      = 0
+                st.session_state.sel_date        = date_options[0]
                 st.rerun()
 
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
