@@ -2389,19 +2389,28 @@ if st.session_state._need_fly:
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
-def _build_night_verdict(table_data):
+def _build_night_verdict(table_data, sun_alts=None):
     """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00.
-    'Giờ tốt' = slot có cloud ≤ 25% VÀ precip < 0.3mm.
+    'Giờ tốt' = slot trời đã tối thiên văn (sun_alt ≤ -12°), cloud ≤ 25% VÀ precip < 0.3mm.
     Trả về dict với verdict, good_hours, total_hours, icon, màu sắc."""
     if not table_data:
         return None
     # 13 slots = 18:00..23:00 + 00:00..06:00, nhưng "đêm" chỉ tính 12 giờ (18:00→06:00).
     # Slot 06:00 cuối chỉ là điểm mốc kết thúc (đã là sáng), không tính vào giờ clear.
-    table_data = table_data[:-1] if len(table_data) > 12 else table_data
-    total = len(table_data)
+    if len(table_data) > 12:
+        table_data = table_data[:-1]
+        if sun_alts is not None:
+            sun_alts = sun_alts[:-1]
+    if sun_alts is None:
+        sun_alts = [-90] * len(table_data)
+    total = 0
     good_hours = 0
     rain_hours = 0
-    for r in table_data:
+    for r, sa in zip(table_data, sun_alts):
+        # Chỉ tính các slot trời đã tối thiên văn thực sự (sun_alt ≤ -12°)
+        if sa is not None and sa > -12:
+            continue
+        total += 1
         cloud_str = r.get("☁️", "100%")
         precip    = r.get("_precip", 0.0) or 0.0
         cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
@@ -2409,6 +2418,14 @@ def _build_night_verdict(table_data):
             rain_hours += 1
         elif cloud_pct <= 25:
             good_hours += 1
+
+    # ── Không có khung giờ tối thiên văn (đêm hè, trời sáng suốt) ──────────────
+    if total == 0:
+        return {"tier": "TOO BRIGHT", "icon": "🌃", "stars": "✕",
+                "sub": "no astro-dark",
+                "color": "#94a3b8", "border": "rgba(148,163,184,0.55)",
+                "bg": "rgba(10,14,22,0.88)", "anim": "blink-warn",
+                "good_hours": 0, "total": 0}
 
     # ── Tier logic ────────────────────────────────────────────────────────────
     if good_hours >= 5:
@@ -2447,16 +2464,16 @@ def _build_night_verdict(table_data):
             "good_hours": good_hours, "total": total}
 
 if st.session_state.day_offset == 0:
-    (_full_table_data, *_rest_full) = _build_night_data(
+    (_full_table_data, _full_hours_labels, _full_moon_alt, _full_sun_alt, *_rest_full) = _build_night_data(
         st.session_state.lat, st.session_state.lon,
         tuple(_full_night_slots),
         _hourly_frozen,
         st.session_state.weather_source,
         loc_utc_offset_h,
     )
-    _verdict = _build_night_verdict(_full_table_data)
+    _verdict = _build_night_verdict(_full_table_data, _full_sun_alt)
 else:
-    _verdict = _build_night_verdict(weather_table_data)
+    _verdict = _build_night_verdict(weather_table_data, sun_altitudes)
 if _verdict:
     # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
     if st.session_state.day_offset == 0:
