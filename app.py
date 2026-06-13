@@ -2291,6 +2291,7 @@ m.get_root().html.add_child(folium.Element("""
     max-width: 240px !important;
 }
 .leaflet-tooltip::before { display: none !important; }
+.leaflet-control-attribution { display: none !important; }
 </style>
 """))
 
@@ -2442,7 +2443,7 @@ if _lbl:
   background:{_lbl["bg"]};border:1.5px solid {_lbl["border"]};color:{_lbl["color"]};
 }}
 </style>
-<div style="position:relative;margin-top:-624px;height:0;overflow:visible;z-index:9999;">
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9999;">
 <div class="astro-maplabel">
   <span style="animation:{_lbl["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:16px;">{_lbl["icon"]}</span>
   <span style="letter-spacing:0.01em;">{_lbl["text"]}</span>
@@ -2687,7 +2688,7 @@ with col_left:
     st.markdown("""
 <style>
 /* ── Pull col_left content closer to map ── */
-.st-key-nav_box { margin-top: -14px !important; }
+.st-key-nav_box { margin-top: -38px !important; }
 
 /* ── Date selectbox: shrink to fit content ── */
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
