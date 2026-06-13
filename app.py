@@ -2386,22 +2386,16 @@ if st.session_state._need_fly:
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
-def _build_night_verdict(table_data, sun_alts=None):
+def _build_night_verdict(table_data):
     """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00.
-    'Giờ tốt' = slot trời đã tối (sun_alt <= -12°), cloud ≤ 25% VÀ precip < 0.3mm.
+    'Giờ tốt' = slot có cloud ≤ 25% VÀ precip < 0.3mm.
     Trả về dict với verdict, good_hours, total_hours, icon, màu sắc."""
     if not table_data:
         return None
-    if sun_alts is None:
-        sun_alts = [None] * len(table_data)
+    total = len(table_data)
     good_hours = 0
     rain_hours = 0
-    total = 0
-    for r, sa in zip(table_data, sun_alts):
-        # Chỉ tính các slot trời đã thực sự tối (bỏ qua slot còn sáng, ví dụ 18:00 mùa hè)
-        if sa is not None and sa > -12:
-            continue
-        total += 1
+    for r in table_data:
         cloud_str = r.get("☁️", "100%")
         precip    = r.get("_precip", 0.0) or 0.0
         cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
@@ -2447,22 +2441,22 @@ def _build_night_verdict(table_data, sun_alts=None):
             "good_hours": good_hours, "total": total}
 
 if st.session_state.day_offset == 0:
-    (_full_table_data, _full_hours_labels, _full_moon_alt, _full_sun_alt, *_rest_full) = _build_night_data(
+    (_full_table_data, *_rest_full) = _build_night_data(
         st.session_state.lat, st.session_state.lon,
         tuple(_full_night_slots),
         _hourly_frozen,
         st.session_state.weather_source,
         loc_utc_offset_h,
     )
-    _verdict = _build_night_verdict(_full_table_data, _full_sun_alt)
+    _verdict = _build_night_verdict(_full_table_data)
 else:
-    _verdict = _build_night_verdict(weather_table_data, sun_altitudes)
+    _verdict = _build_night_verdict(weather_table_data)
 if _verdict:
     # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
     if st.session_state.day_offset == 0:
         _date_label = "Tonight"
     else:
-        _date_label = f"{target_date.month}月{target_date.day}日"
+        _date_label = f"{target_date.month}月{target_date.day}日夜"
 
     _warn_speed = "1.1s" if _verdict["anim"] == "blink-warn" else "1.9s"
     _html_label = f"""
@@ -2735,7 +2729,7 @@ with col_left:
     st.markdown("""
 <style>
 /* ── Pull col_left content closer to map ── */
-.st-key-nav_box { margin-top: -38px !important; }
+.st-key-nav_box { margin-top: -58px !important; }
 
 /* ── Date selectbox: shrink to fit content ── */
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
