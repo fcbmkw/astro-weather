@@ -158,7 +158,7 @@ LOCATION_DATABASE = {
     "145. Ine Funaya 伊根の舟屋, Kyoto": [35.6730, 135.2910],
     "146. Nima Sand Museum 仁摩サンドミュージアム, Shimane": [35.1230, 132.4940],
     "147. Shionomisaki Cape 潮岬, Wakayama": [33.4364, 135.7706],
-    "148. Nariai-ji Temple 成相寺展望台, Kyoto": [35.5968, 135.2013],
+    "148. Gomasan 五老ヶ岳展望台, Kyoto": [35.4670, 135.3880],
     "149. Kumihama Bay 久美浜湾, Kyoto": [35.6180, 134.9030],
     "150. Kashiwajima 柏島, Kochi": [32.7492, 132.6278],
     "151. Tsunoshima Bridge 角島大橋, Yamaguchi": [34.3578, 130.8398],
@@ -203,10 +203,10 @@ LOCATION_DATABASE = {
     "190. Koyasan 高野山奥之院, Wakayama": [34.2190, 135.5940],
     "191. Amanohashidate 天橋立, Kyoto": [35.5670, 135.1950],
     "192. Kinosaki Onsen 城崎温泉, Hyogo": [35.6320, 134.8080],
-    "193. Himeji Castle 姫路城, Hyogo": [34.8390, 134.6930],
+    "193. Shiso Highlands 宍粟 一宮山, Hyogo": [35.1240, 134.3620],
     "194. Shodoshima Olive Park 小豆島, Kagawa": [34.4840, 134.2980],
-    "195. Ritsurin Garden 栗林公園, Kagawa": [34.3320, 134.0480],
-    "196. Dogo Onsen 道後温泉, Ehime": [33.8500, 132.7850],
+    "195. Yashima Plateau 屋島展望台, Kagawa": [34.3690, 134.1050],
+    "196. Omogo Valley 面河渓谷, Ehime": [33.7100, 133.0640],
     "197. Shimanto River 四万十川, Kochi": [33.0030, 132.9340],
     "198. Beppu Hells 別府地獄めぐり, Oita": [33.3130, 131.4880],
     "199. Kunimigaoka 国見ヶ丘, Miyazaki": [32.7510, 131.3300],
@@ -219,46 +219,46 @@ LOCATION_DATABASE = {
     "206. Mitani Valley 三谷峡, Okayama": [34.8560, 133.7250],
     "207. Uradome Coast 浦富海岸, Tottori": [35.5880, 134.4600],
     "208. Izumo Taisha 出雲大社, Shimane": [35.4010, 132.6850],
-    "209. Adachi Museum of Art 足立美術館, Shimane": [35.4670, 133.2030],
+    "209. Nita Pass 仁多峠 Okuizumo, Shimane": [35.2050, 133.0620],
     "210. Oki Islands 隠岐の島, Shimane": [36.2160, 133.2330],
     "211. Dogo Islands 隠岐・島後, Shimane": [36.2500, 133.3000],
     "212. Ise Jingu 伊勢神宮, Mie": [34.4600, 136.7230],
-    "213. Nabana no Sato なばなの里, Mie": [35.1050, 136.7020],
+    "213. Akame Falls 赤目四十八滝, Mie": [34.5910, 136.1390],
     "214. Gujo Hachiman 郡上八幡, Gifu": [35.7480, 136.9550],
     "215. Magome-juku 馬籠宿, Gifu": [35.4950, 137.5670],
-    "216. Kenrokuen 兼六園, Ishikawa": [36.5640, 136.6620],
+    "216. Noto Kongo 能登金剛, Ishikawa": [37.1820, 136.7810],
     "217. Eiheiji Temple 永平寺, Fukui": [36.0540, 136.3570],
     "218. Tojinbo 東尋坊, Fukui": [36.2370, 136.1260],
     "219. Lake Biwa Biwako Terrace 琵琶湖, Shiga": [35.2090, 135.9180],
-    "220. Hikone Castle 彦根城, Shiga": [35.2750, 136.2560],
+    "220. Ibuki-yama 伊吹山, Shiga": [35.4190, 136.4060],
     "221. Koka Ninja Village 甲賀の里忍術村, Shiga": [34.9330, 136.2230],
-    "222. Nara Park 奈良公園, Nara": [34.6850, 135.8360],
-    "223. Horyuji Temple 法隆寺, Nara": [34.6140, 135.7360],
+    "222. Kasugayama Forest 春日山原始林, Nara": [34.6880, 135.8650],
+    "223. Tonomine 多武峰展望台, Nara": [34.4580, 135.8990],
     "224. Dorokyo Gorge 瀞峡, Wakayama": [33.9070, 135.8500],
     "225. Akashi Kaikyo Bridge 明石海峡大橋, Hyogo": [34.6150, 135.0160],
     "226. Tottori Daisen 大山, Tottori": [35.3780, 133.5350],
-    "227. Okayama Korakuen 岡山後楽園, Okayama": [34.6670, 133.9350],
-    "228. Kurashiki Bikan 倉敷美観地区, Okayama": [34.5950, 133.7710],
+    "227. Washuzan Hill 鷲羽山展望台, Okayama": [34.3620, 133.6920],
+    "228. Kibiji Plateau 吉備高原, Okayama": [34.8270, 133.7930],
     "229. Miyajima 厳島神社, Hiroshima": [34.2970, 132.3190],
     "230. Kintaikyo Bridge 錦帯橋, Yamaguchi": [34.1670, 132.1790],
-    "231. Kotohira-gu 金刀比羅宮, Kagawa": [34.1810, 133.8050],
+    "231. Chichigashima 父ヶ島 展望岩, Kagawa": [34.1310, 133.5870],
     "232. Oboke Gorge 大歩危峡, Tokushima": [33.9120, 133.8420],
-    "233. Kochi Castle 高知城, Kochi": [33.5600, 133.5310],
+    "233. Godaisan Park 五台山展望台, Kochi": [33.5540, 133.5760],
     "234. Katsurahama Beach 桂浜, Kochi": [33.4980, 133.5710],
-    "235. Fukuoka Castle Ruins 福岡城跡, Fukuoka": [33.5840, 130.3800],
-    "236. Dazaifu Tenmangu 太宰府天満宮, Fukuoka": [33.5200, 130.5280],
+    "235. Atago-yama 愛宕山展望台, Fukuoka": [33.5910, 130.3490],
+    "236. Sefuri-san 背振山, Fukuoka": [33.4880, 130.4640],
     "237. Karatsu Castle 唐津城, Saga": [33.4540, 129.9770],
-    "238. Yoshinogari Historical 吉野ヶ里歴史公園, Saga": [33.2200, 130.3860],
-    "239. Nagasaki Glover Garden グラバー園, Nagasaki": [32.7360, 129.8680],
+    "238. Tenzan 天山展望台, Saga": [33.4070, 130.2300],
+    "239. Mt. Unzen 雲仙普賢岳, Nagasaki": [32.7560, 130.2970],
     "240. Kuju Highlands 久住高原, Oita": [32.9880, 131.2400],
-    "241. Kumamoto Castle 熊本城, Kumamoto": [32.8060, 130.7040],
-    "242. Usuki Stone Buddhas 臼杵石仏, Oita": [33.0900, 131.7850],
+    "241. Kinposan 金峰山展望台, Kumamoto": [32.8580, 130.5730],
+    "242. Tsurumi-dake 鶴見岳, Oita": [33.2890, 131.4320],
     "243. Sakurajima 桜島溶岩なぎさ遊歩道, Kagoshima": [31.5880, 130.5850],
-    "244. Shuri Castle 首里城, Okinawa": [26.2160, 127.7170],
+    "244. Yonaha-dake 与那覇岳, Okinawa": [26.6840, 128.1550],
     "245. Sefa-utaki 斎場御嶽, Okinawa": [26.1730, 127.8280],
     "246. Cape Manzamo 万座毛, Okinawa": [26.5040, 127.8500],
     "247. Nakagusuku Castle 中城城跡, Okinawa": [26.2860, 127.7950],
-    "248. Katsuren Castle 勝連城跡, Okinawa": [26.3130, 127.8760],
+    "248. Katsuren Castle 勝連城跡, Okinawa": [26.3253, 127.8644],
     "249. Zakimi Castle 座喜味城跡, Okinawa": [26.4110, 127.7420],
     "250. Cape Maeda 真栄田岬, Okinawa": [26.4460, 127.7800],  
 }
@@ -651,7 +651,7 @@ def calculate_accurate_bortle(lat, lon):
         (33.4364, 135.7706): (3.0, 21.80), # 147 Shionomisaki Cape, Wakayama
         (35.3004, 134.8290): (3.0, 21.80), # 144 Takeda Castle, Hyogo
         (35.6730, 135.2910): (3.5, 21.60), # 145 Ine Funaya, Kyoto
-        (35.5968, 135.2013): (3.0, 21.75), # 148 Nariai-ji, Kyoto
+        (35.4670, 135.3880): (3.5, 21.60), # 148 Gomasan, Kyoto
         (35.6180, 134.9030): (3.0, 21.70), # 149 Kumihama Bay, Kyoto
         (32.7492, 132.6278): (2.5, 21.95), # 150 Kashiwajima, Kochi
         (34.3578, 130.8398): (3.0, 21.80), # 151 Tsunoshima Bridge, Yamaguchi
@@ -699,10 +699,10 @@ def calculate_accurate_bortle(lat, lon):
         (34.2190, 135.5940): (2.5, 21.65), # 190 Koyasan
         (35.5670, 135.1950): (3.5, 21.10), # 191 Amanohashidate
         (35.6320, 134.8080): (3.0, 21.30), # 192 Kinosaki Onsen
-        (34.8390, 134.6930): (4.0, 20.80), # 193 Himeji Castle
+        (35.1240, 134.3620): (2.5, 21.85), # 193 Shiso Highlands, Hyogo
         (34.4840, 134.2980): (3.0, 21.20), # 194 Shodoshima Olive Park
-        (34.3320, 134.0480): (4.0, 20.50), # 195 Ritsurin Garden
-        (33.8500, 132.7850): (4.0, 20.50), # 196 Dogo Onsen
+        (34.3690, 134.1050): (3.5, 21.20), # 195 Yashima Plateau, Kagawa
+        (33.7100, 133.0640): (2.5, 21.80), # 196 Omogo Valley, Ehime
         (33.0030, 132.9340): (2.0, 21.80), # 197 Shimanto River
         (33.3130, 131.4880): (3.5, 21.00), # 198 Beppu Hells
         (32.7510, 131.3300): (2.5, 21.70), # 199 Kunimigaoka, Miyazaki
@@ -715,46 +715,46 @@ def calculate_accurate_bortle(lat, lon):
         (34.8560, 133.7250): (2.5, 21.60), # 206 Mitani Valley
         (35.5880, 134.4600): (3.0, 21.80), # 207 Uradome Coast, Tottori
         (35.4010, 132.6850): (3.0, 21.30), # 208 Izumo Taisha
-        (35.4670, 133.2030): (3.0, 21.20), # 209 Adachi Museum
+        (35.2050, 133.0620): (2.5, 21.90), # 209 Nita Pass, Shimane
         (36.2160, 133.2330): (2.0, 21.75), # 210 Oki Islands
         (36.2500, 133.3000): (2.0, 21.75), # 211 Dogo Islands
         (34.4600, 136.7230): (3.5, 21.00), # 212 Ise Jingu
-        (35.1050, 136.7020): (4.5, 20.50), # 213 Nabana no Sato
+        (34.5910, 136.1390): (3.0, 21.70), # 213 Akame Falls, Mie
         (35.7480, 136.9550): (3.0, 21.40), # 214 Gujo Hachiman
         (35.4950, 137.5670): (3.0, 21.30), # 215 Magome-juku
-        (36.5640, 136.6620): (4.0, 20.80), # 216 Kenrokuen
+        (37.1820, 136.7810): (3.0, 21.75), # 216 Noto Kongo, Ishikawa
         (36.0540, 136.3570): (3.0, 21.40), # 217 Eiheiji Temple
         (36.2370, 136.1260): (3.0, 21.40), # 218 Tojinbo
         (35.2090, 135.9180): (3.0, 21.40), # 219 Lake Biwa Terrace
-        (35.2750, 136.2560): (3.5, 21.10), # 220 Hikone Castle
+        (35.4190, 136.4060): (3.0, 21.80), # 220 Ibuki-yama, Shiga
         (34.9330, 136.2230): (3.5, 21.10), # 221 Koka Ninja Village
-        (34.6850, 135.8360): (4.0, 20.80), # 222 Nara Park
-        (34.6140, 135.7360): (4.0, 20.80), # 223 Horyuji Temple
+        (34.6880, 135.8650): (3.5, 21.30), # 222 Kasugayama Forest, Nara
+        (34.4580, 135.8990): (3.0, 21.60), # 223 Tonomine, Nara
         (33.9070, 135.8500): (2.5, 21.85), # 224 Dorokyo Gorge, Wakayama
         (34.6150, 135.0160): (4.0, 20.70), # 225 Akashi Kaikyo Bridge
         (35.3780, 133.5350): (2.5, 21.60), # 226 Tottori Daisen
-        (34.6670, 133.9350): (4.0, 20.70), # 227 Okayama Korakuen
-        (34.5950, 133.7710): (4.0, 20.70), # 228 Kurashiki Bikan
+        (34.3620, 133.6920): (3.0, 21.70), # 227 Washuzan Hill, Okayama
+        (34.8270, 133.7930): (3.5, 21.40), # 228 Kibiji Plateau, Okayama
         (34.2970, 132.3190): (3.5, 21.00), # 229 Miyajima
         (34.1670, 132.1790): (3.5, 21.10), # 230 Kintaikyo Bridge
-        (34.1810, 133.8050): (3.0, 21.40), # 231 Kotohira-gu
+        (34.1310, 133.5870): (3.5, 21.30), # 231 Chichigashima, Kagawa
         (33.8730, 133.8340): (2.5, 21.60), # 232 Iya Kazurabashi
-        (33.5600, 133.5310): (4.0, 20.80), # 233 Kochi Castle
+        (33.5540, 133.5760): (4.0, 21.00), # 233 Godaisan Park, Kochi
         (33.4980, 133.5710): (3.5, 21.10), # 234 Katsurahama Beach
-        (33.5840, 130.3800): (4.5, 20.20), # 235 Fukuoka Castle
-        (33.5200, 130.5280): (4.0, 20.70), # 236 Dazaifu Tenmangu
+        (33.5910, 130.3490): (4.0, 20.60), # 235 Atago-yama, Fukuoka
+        (33.4880, 130.4640): (3.0, 21.70), # 236 Sefuri-san, Fukuoka
         (33.4540, 129.9770): (3.5, 21.10), # 237 Karatsu Castle
-        (33.2200, 130.3860): (3.5, 21.10), # 238 Yoshinogari
-        (32.7360, 129.8680): (4.0, 20.70), # 239 Nagasaki Glover
+        (33.4070, 130.2300): (3.0, 21.70), # 238 Tenzan, Saga
+        (32.7560, 130.2970): (2.5, 21.85), # 239 Mt. Unzen, Nagasaki
         (32.9880, 131.2400): (2.5, 21.90), # 240 Kuju Highlands, Oita
-        (32.8060, 130.7040): (4.0, 20.70), # 241 Kumamoto Castle
-        (33.0900, 131.7850): (3.0, 21.30), # 242 Usuki Stone Buddhas
+        (32.8580, 130.5730): (3.0, 21.60), # 241 Kinposan, Kumamoto
+        (33.2890, 131.4320): (3.0, 21.60), # 242 Tsurumi-dake, Oita
         (31.5880, 130.5850): (3.0, 21.40), # 243 Sakurajima Volcano
-        (26.2160, 127.7170): (4.5, 20.50), # 244 Shuri Castle
+        (26.6840, 128.1550): (3.0, 21.40), # 244 Yonaha-dake, Okinawa
         (26.1730, 127.8280): (3.0, 21.30), # 245 Sefa-utaki
         (26.5040, 127.8500): (3.0, 21.30), # 246 Cape Manzamo
         (26.2860, 127.7950): (3.5, 21.10), # 247 Nakagusuku Castle
-        (26.3130, 127.8760): (3.5, 21.10), # 248 Katsuren Castle
+        (26.3253, 127.8644): (3.0, 21.30), # 248 Katsuren Castle (hill, darker)
         (26.4110, 127.7420): (3.5, 21.10), # 249 Zakimi Castle
         (26.4460, 127.7800): (3.0, 21.30), # 250 Cape Maeda
     }
@@ -2229,6 +2229,7 @@ _SearchControl(loc_list=_loc_js_list, alias_dict=_kanji_alias_js).add_to(m)
 # ── CSS cho tooltip (hover) ────────────────────────────────────────────────────
 m.get_root().html.add_child(folium.Element("""
 <style>
+.leaflet-control-attribution { display: none !important; }
 .leaflet-tooltip {
     background: white !important;
     border: 1px solid #cbd5e1 !important;
@@ -2378,7 +2379,7 @@ if _lbl:
 @keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.75;transform:scale(1.1)}}}}
 @keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.55}}}}
 .astro-maplabel{{
-  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  position:absolute;top:6px;left:50%;transform:translateX(-50%);
   z-index:9999;pointer-events:none;
   display:flex;align-items:center;gap:7px;
   padding:6px 16px 6px 11px;border-radius:20px;
@@ -2389,7 +2390,7 @@ if _lbl:
   background:{_lbl["bg"]};border:1.5px solid {_lbl["border"]};color:{_lbl["color"]};
 }}
 </style>
-<div style="position:relative;margin-top:-604px;height:0;overflow:visible;z-index:9999;">
+<div style="position:relative;margin-top:-602px;height:0;overflow:visible;z-index:9999;">
 <div class="astro-maplabel">
   <span style="animation:{_lbl["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:16px;">{_lbl["icon"]}</span>
   <span style="letter-spacing:0.01em;">{_lbl["text"]}</span>
@@ -2470,7 +2471,9 @@ if map_data:
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
 st.markdown("""
     <style>
-        /* Ép bảng chiếm toàn bộ chiều rộng nhưng cột 2 (Mây) chỉ chiếm 10% */
+        /* Pull columns up to reduce gap from map */
+    [data-testid="stHorizontalBlock"] { margin-top: -12px !important; }
+    /* Ép bảng chiếm toàn bộ chiều rộng nhưng cột 2 (Mây) chỉ chiếm 10% */
         [data-testid="stTable"] table { width: 100% !important; table-layout: fixed; }
         [data-testid="stTable"] td:nth-child(2), [data-testid="stTable"] th:nth-child(2) { width: 10% !important; }
         /* Đảm bảo cột 📸 Đánh giá có đủ chỗ hiển thị sao */
