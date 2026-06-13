@@ -2350,9 +2350,12 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
                     f'display:block;margin-bottom:6px;">')
     else:
         img_html = ""
-    tooltip_html = (f'<div style="font-family:sans-serif;font-size:13px;font-weight:600;'
-                    f'color:#1e293b;max-width:230px;line-height:1.4;">'
-                    f'{img_html}{_strip_loc_num(loc_name)}</div>')
+    _loc_label = _strip_loc_num(loc_name)
+    _label_fs = 13 if len(_loc_label) <= 28 else (11 if len(_loc_label) <= 38 else 9.5)
+    tooltip_html = (f'<div style="font-family:sans-serif;font-size:{_label_fs}px;font-weight:600;'
+                    f'color:#1e293b;max-width:230px;line-height:1.35;'
+                    f'white-space:normal;word-break:break-word;overflow-wrap:break-word;">'
+                    f'{img_html}{_loc_label}</div>')
     folium.Marker(
         loc_coords,
         icon=folium.DivIcon(
