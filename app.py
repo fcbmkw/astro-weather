@@ -345,7 +345,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
-             ("_need_fly", False)]:
+             ("_need_fly", False), ("_skip_prefetch", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1602,15 +1602,20 @@ def _make_slots_for_offset(base_jst, day_off):
     ])
 
 # Prefetch các ngày KHÁC ngày hiện tại (ngày hiện tại sẽ được tính ngay bên dưới)
-for _poff in range(7):
-    if _poff != st.session_state.day_offset:
-        _build_night_data(
-            st.session_state.lat, st.session_state.lon,
-            _make_slots_for_offset(_night_base_jst, _poff),
-            _hourly_frozen,
-            st.session_state.weather_source,
-            loc_utc_offset_h,
-        )
+# Bỏ qua ngay sau khi đổi vị trí (location mới) để trang load nhanh hơn —
+# cache sẽ được làm nóng dần khi user bấm Previous/Next.
+if st.session_state._skip_prefetch:
+    st.session_state._skip_prefetch = False
+else:
+    for _poff in range(7):
+        if _poff != st.session_state.day_offset:
+            _build_night_data(
+                st.session_state.lat, st.session_state.lon,
+                _make_slots_for_offset(_night_base_jst, _poff),
+                _hourly_frozen,
+                st.session_state.weather_source,
+                loc_utc_offset_h,
+            )
 
 (weather_table_data, hours_labels, moon_altitudes, sun_altitudes,
  milkyway_altitudes, current_cloud_debug, sources_used) = _build_night_data(
@@ -2555,6 +2560,7 @@ if map_data:
                 st.session_state.is_custom_point = False
                 st.session_state._need_fly       = False
                 st.session_state.day_offset      = 0
+                st.session_state._skip_prefetch  = True
                 st.session_state.sel_date        = date_options[0]
                 st.rerun()
         else:
@@ -2580,6 +2586,7 @@ if map_data:
                 st.session_state.is_custom_point = False
                 st.session_state._last_tip       = None
                 st.session_state.day_offset      = 0
+                st.session_state._skip_prefetch  = True
                 st.session_state.sel_date        = date_options[0]
                 st.rerun()
         else:
@@ -2591,6 +2598,7 @@ if map_data:
                 st.session_state.is_custom_point = True
                 st.session_state._last_tip       = None
                 st.session_state.day_offset      = 0
+                st.session_state._skip_prefetch  = True
                 st.session_state.sel_date        = date_options[0]
                 st.rerun()
 
