@@ -1465,6 +1465,7 @@ def _slot_is_future(yr, mo, dy, hr):
     slot_dt = datetime(yr, mo, dy, hr, 0) + timedelta(hours=1)
     return slot_dt > _now_naive
 
+_full_night_slots = list(desired_slots)
 if st.session_state.day_offset == 0:
     desired_slots = [(yr,mo,dy,hr,lbl,dpfx) for yr,mo,dy,hr,lbl,dpfx in desired_slots
                      if _slot_is_future(yr,mo,dy,hr)]
@@ -2376,7 +2377,7 @@ if not is_bookmark:
 # Chỉ return những gì cần xử lý click. Zoom/center được lưu qua _need_fly flag.
 _map_key = "astro_map_main"
 _stfolium_kwargs = dict(
-    width='stretch', height=600, key=_map_key,
+    width='stretch', height=585, key=_map_key,
     returned_objects=["last_clicked", "last_object_clicked_tooltip"],
 )
 if st.session_state._need_fly:
@@ -2439,13 +2440,23 @@ def _build_night_verdict(table_data):
             "color": color, "border": border, "bg": bg, "anim": anim,
             "good_hours": good_hours, "total": total}
 
-_verdict = _build_night_verdict(weather_table_data)
+if st.session_state.day_offset == 0:
+    (_full_table_data, *_rest_full) = _build_night_data(
+        st.session_state.lat, st.session_state.lon,
+        tuple(_full_night_slots),
+        _hourly_frozen,
+        st.session_state.weather_source,
+        loc_utc_offset_h,
+    )
+    _verdict = _build_night_verdict(_full_table_data)
+else:
+    _verdict = _build_night_verdict(weather_table_data)
 if _verdict:
     # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
     if st.session_state.day_offset == 0:
         _date_label = "Tonight"
     else:
-        _date_label = target_date.strftime("%-m/%-d") + " night"
+        _date_label = f"{target_date.month}月{target_date.day}日"
 
     _warn_speed = "1.1s" if _verdict["anim"] == "blink-warn" else "1.9s"
     _html_label = f"""
