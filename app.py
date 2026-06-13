@@ -2377,7 +2377,7 @@ if not is_bookmark:
 # Chỉ return những gì cần xử lý click. Zoom/center được lưu qua _need_fly flag.
 _map_key = "astro_map_main"
 _stfolium_kwargs = dict(
-    width='stretch', height=585, key=_map_key,
+    width='stretch', height=575, key=_map_key,
     returned_objects=["last_clicked", "last_object_clicked_tooltip"],
 )
 if st.session_state._need_fly:
@@ -2386,16 +2386,22 @@ if st.session_state._need_fly:
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
-def _build_night_verdict(table_data):
+def _build_night_verdict(table_data, sun_alts=None):
     """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00.
-    'Giờ tốt' = slot có cloud ≤ 25% VÀ precip < 0.3mm.
+    'Giờ tốt' = slot trời đã tối (sun_alt <= -12°), cloud ≤ 25% VÀ precip < 0.3mm.
     Trả về dict với verdict, good_hours, total_hours, icon, màu sắc."""
     if not table_data:
         return None
-    total = len(table_data)
+    if sun_alts is None:
+        sun_alts = [None] * len(table_data)
     good_hours = 0
     rain_hours = 0
-    for r in table_data:
+    total = 0
+    for r, sa in zip(table_data, sun_alts):
+        # Chỉ tính các slot trời đã thực sự tối (bỏ qua slot còn sáng, ví dụ 18:00 mùa hè)
+        if sa is not None and sa > -12:
+            continue
+        total += 1
         cloud_str = r.get("☁️", "100%")
         precip    = r.get("_precip", 0.0) or 0.0
         cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
@@ -2441,16 +2447,16 @@ def _build_night_verdict(table_data):
             "good_hours": good_hours, "total": total}
 
 if st.session_state.day_offset == 0:
-    (_full_table_data, *_rest_full) = _build_night_data(
+    (_full_table_data, _full_hours_labels, _full_moon_alt, _full_sun_alt, *_rest_full) = _build_night_data(
         st.session_state.lat, st.session_state.lon,
         tuple(_full_night_slots),
         _hourly_frozen,
         st.session_state.weather_source,
         loc_utc_offset_h,
     )
-    _verdict = _build_night_verdict(_full_table_data)
+    _verdict = _build_night_verdict(_full_table_data, _full_sun_alt)
 else:
-    _verdict = _build_night_verdict(weather_table_data)
+    _verdict = _build_night_verdict(weather_table_data, sun_altitudes)
 if _verdict:
     # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
     if st.session_state.day_offset == 0:
@@ -2465,7 +2471,7 @@ if _verdict:
 @keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.80;transform:scale(1.05)}}}}
 @keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.55}}}}
 .astro-maplabel{{
-  position:absolute;top:15px;left:50%;transform:translateX(-50%);
+  position:absolute;top:40px;left:50%;transform:translateX(-50%);
   z-index:9999;pointer-events:none;
   display:inline-flex;flex-direction:column;align-items:center;gap:1px;
   padding:5px 18px 6px 14px;border-radius:22px;
