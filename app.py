@@ -1297,7 +1297,7 @@ def _fetch_weather_raw(lat, lon):
         for attempt in range(3):   # 3 lần thử mỗi endpoint (network có thể chập chờn)
             try:
                 # Multi-model request (full/no_jma) nặng hơn, cần timeout dài hơn
-                _timeout = 25 if ep_label != "gfs_only" else 12
+                _timeout = 12 if ep_label != "gfs_only" else 8
                 res = requests.get(url, headers=headers, timeout=_timeout)
                 if res.status_code == 200:
                     j = res.json()
@@ -1414,7 +1414,8 @@ moon_pct, moon_text = get_moon_phase_percent(target_date)
 prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
 use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
-hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
+with st.spinner("Loading weather data..."):
+    hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(st.session_state.lat, st.session_state.lon, st.session_state.weather_source)
 
 # ── AUTO-DETECT JMA COVERAGE cho ngày được chọn ───────────────────────────────
 # JMA MSM chỉ có ~3-4 ngày. Nếu user chọn JMA nhưng ngày đó JMA toàn null
@@ -2615,16 +2616,18 @@ st.markdown("""
 col_left, col_right = st.columns([2.5, 1.1])
 
 with col_right:
-    # Bortle
-    st.markdown(f"""
-    <div class="metric-card">
-        <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
-        <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
-        <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
-        <div style="font-size:11px;color:#64748b;margin-top:6px;border-top:1px solid #334155;padding-top:5px;">
-            Estimate · Falchi et al. 2026 (lightpollutionmap.app) ±1 class
-        </div>
-    </div>""", unsafe_allow_html=True)
+    # Bortle — model chỉ chính xác trong lãnh thổ Nhật Bản, ẩn nếu ở ngoài
+    _in_japan = (24.0 <= st.session_state.lat <= 46.0 and 122.0 <= st.session_state.lon <= 154.0)
+    if _in_japan:
+        st.markdown(f"""
+        <div class="metric-card">
+            <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
+            <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
+            <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
+            <div style="font-size:11px;color:#64748b;margin-top:6px;border-top:1px solid #334155;padding-top:5px;">
+                Estimate · Falchi et al. 2026 (lightpollutionmap.app) ±1 class
+            </div>
+        </div>""", unsafe_allow_html=True)
 
     # Moon
     st.markdown(f"""
