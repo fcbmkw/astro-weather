@@ -338,7 +338,7 @@ st.markdown("""
 
 # ── SESSION STATE ────────────────────────────────────────────────────────────
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
-             ("map_center", [35.6895, 139.6917]), ("zoom", 8),
+             ("map_center", [35.6895, 139.6917]), ("zoom", 7),
              ("day_offset", 0), ("location_name", "Tokyo, Japan"),
              ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"),
              ("active_source_used", "JMA"),
@@ -1398,8 +1398,11 @@ if _now_jst.hour < 6:
 else:
     _night_base_jst = _now_jst
 # date_options i=0 → tonight (18:00 of _night_base_jst)
+_jp_wd = ["月", "火", "水", "木", "金", "土", "日"]
+def _jp_date(d, suffix):
+    return f"{d.month}月{d.day}日{suffix}({_jp_wd[d.weekday()]})"
 date_options = [
-    f"{(_night_base_jst+timedelta(days=i)).strftime('%-m月%-d日(%a)')} → {(_night_base_jst+timedelta(days=i+1)).strftime('%-m月%-d日(%a)')}"
+    f"{_jp_date(_night_base_jst+timedelta(days=i), '夜')} → {_jp_date(_night_base_jst+timedelta(days=i+1), '朝')}"
     for i in range(7)
 ]
 
