@@ -2384,82 +2384,89 @@ if st.session_state._need_fly:
     st.session_state._need_fly = False   # reset ngay — chỉ fly 1 lần
 map_data = st_folium(m, **_stfolium_kwargs)
 
-# ── TOP-CENTER MAP LABEL — Weather valuation badge ────────────────────────────
-def _build_map_label(table_data, current_hour=None):
+# ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
+def _build_night_verdict(table_data):
+    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00.
+    'Giờ tốt' = slot có cloud ≤ 25% VÀ precip < 0.3mm.
+    Trả về dict với verdict, good_hours, total_hours, icon, màu sắc."""
     if not table_data:
         return None
-    # Start from 18:00; if current time >= 19:00, switch to 19:00+ slot
-    row = table_data[0]  # default: 18:00
-    if current_hour is not None and current_hour >= 19:
-        # Find first slot that is >= current hour
-        for _r in table_data:
-            _t = _r.get("⏰", "00:00")
-            try:
-                _h = int(_t.split(":")[0])
-                # Handle midnight wrap: 0-6 are next day, treat as 24+
-                if _h < 12:
-                    _h += 24
-                if _h >= current_hour:
-                    row = _r
-                    break
-            except Exception:
-                pass
-    stars_str  = row.get("📸", "")
-    cloud_str  = row.get("☁️", "0%")
-    precip_val = row.get("_precip", 0.0) or 0.0
-    time_lbl   = row.get("⏰", "")
-    star_count = stars_str.count("⭐")
-    cloud_pct  = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 0
-    is_rain    = precip_val >= 0.3
-    is_dark    = cloud_pct >= 80
-    if is_rain:
-        icon = "🌧️"; anim = "blink-warn"; color = "#fca5a5"
-        bg = "rgba(30,10,10,0.82)"; border = "rgba(239,68,68,0.7)"
-        text = f"Rain \u00b7 {cloud_pct}% cloud"
-    elif is_dark:
-        icon = "☁️"; anim = "blink-warn"; color = "#fde68a"
-        bg = "rgba(20,15,5,0.82)"; border = "rgba(251,191,36,0.7)"
-        text = f"{cloud_pct}% cloud"
-    elif star_count >= 4:
-        icon = "😄"; anim = "blink-smile"; color = "#6ee7b7"
-        bg = "rgba(5,20,15,0.82)"; border = "rgba(52,211,153,0.7)"
-        text = f"{stars_str}"
-    elif star_count == 3:
-        icon = "😊"; anim = "blink-smile"; color = "#6ee7b7"
-        bg = "rgba(5,20,15,0.82)"; border = "rgba(52,211,153,0.7)"
-        text = f"{stars_str}"
-    else:
-        icon = "🌤️"; anim = "blink-neutral"; color = "#cbd5e1"
-        bg = "rgba(15,23,42,0.82)"; border = "rgba(148,163,184,0.55)"
-        text = f"{stars_str} \u00b7 {cloud_pct}%"
-    return {"icon": icon, "text": text, "anim": anim, "color": color,
-            "bg": bg, "border": border, "time": time_lbl}
+    total = len(table_data)
+    good_hours = 0
+    rain_hours = 0
+    for r in table_data:
+        cloud_str = r.get("☁️", "100%")
+        precip    = r.get("_precip", 0.0) or 0.0
+        cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
+        if precip >= 0.3:
+            rain_hours += 1
+        elif cloud_pct <= 25:
+            good_hours += 1
 
-_lbl = _build_map_label(weather_table_data, current_hour=_now_jst.hour if st.session_state.day_offset == 0 else None)
-if _lbl:
-    _warn_speed = "1.2s" if _lbl["anim"] == "blink-warn" else "1.8s"
+    # ── Tier logic ────────────────────────────────────────────────────────────
+    if good_hours >= 5:
+        tier = "GREAT NIGHT"
+        icon = "🌌"; stars = "★★★★"
+        color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
+        bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
+        sub   = f"{good_hours}h clear / {total}h"
+    elif good_hours >= 3:
+        tier = "WORTH IT"
+        icon = "📷"; stars = "★★★"
+        color = "#86efac"; border = "rgba(134,239,172,0.70)"
+        bg    = "rgba(5,20,12,0.88)"; anim = "blink-smile"
+        sub   = f"{good_hours}h clear / {total}h"
+    elif good_hours >= 1:
+        tier = "MARGINAL"
+        icon = "🌤️"; stars = "★★"
+        color = "#fde68a"; border = "rgba(251,191,36,0.65)"
+        bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
+        sub   = f"only {good_hours}h clear / {total}h"
+    elif rain_hours >= int(total * 0.5):
+        tier = "RAINY NIGHT"
+        icon = "🌧️"; stars = "✕"
+        color = "#fca5a5"; border = "rgba(239,68,68,0.70)"
+        bg    = "rgba(30,8,8,0.88)"; anim = "blink-warn"
+        sub   = f"{rain_hours}h rain / {total}h"
+    else:
+        tier = "CLOUDY NIGHT"
+        icon = "☁️"; stars = "✕"
+        color = "#94a3b8"; border = "rgba(148,163,184,0.55)"
+        bg    = "rgba(10,14,22,0.88)"; anim = "blink-warn"
+        sub   = f"0h clear / {total}h"
+
+    return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
+            "color": color, "border": border, "bg": bg, "anim": anim,
+            "good_hours": good_hours, "total": total}
+
+_verdict = _build_night_verdict(weather_table_data)
+if _verdict:
+    _warn_speed = "1.1s" if _verdict["anim"] == "blink-warn" else "1.9s"
     _html_label = f"""
 <style>
 @keyframes blink-warn   {{0%,100%{{opacity:1}}50%{{opacity:0.25}}}}
-@keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.75;transform:scale(1.1)}}}}
+@keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.80;transform:scale(1.05)}}}}
 @keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.55}}}}
 .astro-maplabel{{
   position:absolute;top:15px;left:50%;transform:translateX(-50%);
   z-index:9999;pointer-events:none;
-  display:flex;align-items:center;gap:7px;
-  padding:6px 16px 6px 11px;border-radius:20px;
+  display:flex;align-items:center;gap:8px;
+  padding:6px 18px 6px 12px;border-radius:22px;
   font-family:sans-serif;font-size:13px;font-weight:700;
   white-space:nowrap;
-  box-shadow:0 2px 14px rgba(0,0,0,0.7);
-  backdrop-filter:blur(2px);
-  background:{_lbl["bg"]};border:1.5px solid {_lbl["border"]};color:{_lbl["color"]};
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);
+  backdrop-filter:blur(3px);
+  background:{_verdict["bg"]};border:1.5px solid {_verdict["border"]};color:{_verdict["color"]};
 }}
+.astro-maplabel-stars{{ font-size:11px;opacity:0.85;letter-spacing:1px; }}
+.astro-maplabel-sub{{ font-size:10px;opacity:0.65;font-weight:500; }}
 </style>
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9999;">
 <div class="astro-maplabel">
-  <span style="animation:{_lbl["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:16px;">{_lbl["icon"]}</span>
-  <span style="letter-spacing:0.01em;">{_lbl["text"]}</span>
-  <span style="display:inline-flex;flex-direction:column;align-items:center;gap:0px;margin-left:2px;"><span style="font-size:9px;opacity:0.55;font-weight:500;line-height:1.1;">{target_date.strftime("%m/%d")}</span><span style="font-size:10px;opacity:0.7;font-weight:500;line-height:1.2;">@{_lbl["time"]}</span></span>
+  <span style="animation:{_verdict["anim"]} {_warn_speed} ease-in-out infinite;display:inline-block;font-size:17px;">{_verdict["icon"]}</span>
+  <span>{_verdict["tier"]}</span>
+  <span class="astro-maplabel-stars">{_verdict["stars"]}</span>
+  <span class="astro-maplabel-sub">{_verdict["sub"]}</span>
 </div>
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
@@ -2546,9 +2553,9 @@ st.markdown("""
 col_left, col_right = st.columns([2.5, 1.1])
 
 with col_right:
-    # Pull first element up 10px
+    # Pull col_right first card up 10px to align with col_left
     st.markdown("""<style>
-    [data-testid="column"]:nth-of-type(2) > div > div > div > div:first-child [data-testid="stMarkdownContainer"] > div { margin-top: -10px; }
+    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div:nth-child(2) > div:first-child { margin-top: -10px !important; }
     </style>""", unsafe_allow_html=True)
     # Bortle
     st.markdown(f"""
