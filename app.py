@@ -223,7 +223,7 @@ LOCATION_DATABASE = {
     "210. Oki Islands 隠岐の島, Shimane": [36.2160, 133.2330],
     "211. Dogo Islands 隠岐・島後, Shimane": [36.2500, 133.3000],
     "212. Ise Jingu 伊勢神宮, Mie": [34.4600, 136.7230],
-    "213. Nabana no Sato なばなの里, Mie": [35.1050, 136.7020],
+    "213. Ryugadake Observatory 竜ヶ岳展望台, Yamanashi": [35.4561, 138.6102],
     "214. Gujo Hachiman 郡上八幡, Gifu": [35.7480, 136.9550],
     "215. Magome-juku 馬籠宿, Gifu": [35.4950, 137.5670],
     "216. Kenrokuen 兼六園, Ishikawa": [36.5640, 136.6620],
@@ -232,20 +232,20 @@ LOCATION_DATABASE = {
     "219. Lake Biwa Biwako Terrace 琵琶湖, Shiga": [35.2090, 135.9180],
     "220. Hikone Castle 彦根城, Shiga": [35.2750, 136.2560],
     "221. Koka Ninja Village 甲賀の里忍術村, Shiga": [34.9330, 136.2230],
-    "222. Nara Park 奈良公園, Nara": [34.6850, 135.8360],
-    "223. Horyuji Temple 法隆寺, Nara": [34.6140, 135.7360],
+    "222. Iide Mountains 飯豊連峰, Yamagata": [37.8520, 139.7830],
+    "223. Takachiho Gorge 高千穂峡, Miyazaki": [32.7058, 131.3081],
     "224. Dorokyo Gorge 瀞峡, Wakayama": [33.9070, 135.8500],
     "225. Akashi Kaikyo Bridge 明石海峡大橋, Hyogo": [34.6150, 135.0160],
     "226. Tottori Daisen 大山, Tottori": [35.3780, 133.5350],
-    "227. Okayama Korakuen 岡山後楽園, Okayama": [34.6670, 133.9350],
-    "228. Kurashiki Bikan 倉敷美観地区, Okayama": [34.5950, 133.7710],
+    "227. Tsuno Plateau 津野山高原, Kochi": [33.4120, 133.0560],
+    "228. Kawakami Village 川上村星空, Nara": [34.0560, 135.9740],
     "229. Miyajima 厳島神社, Hiroshima": [34.2970, 132.3190],
     "230. Kintaikyo Bridge 錦帯橋, Yamaguchi": [34.1670, 132.1790],
     "231. Kotohira-gu 金刀比羅宮, Kagawa": [34.1810, 133.8050],
     "232. Oboke Gorge 大歩危峡, Tokushima": [33.9120, 133.8420],
     "233. Kochi Castle 高知城, Kochi": [33.5600, 133.5310],
     "234. Katsurahama Beach 桂浜, Kochi": [33.4980, 133.5710],
-    "235. Fukuoka Castle Ruins 福岡城跡, Fukuoka": [33.5840, 130.3800],
+    "235. Hinokage Starfield 日之影星空, Miyazaki": [32.6290, 131.3870],
     "236. Dazaifu Tenmangu 太宰府天満宮, Fukuoka": [33.5200, 130.5280],
     "237. Karatsu Castle 唐津城, Saga": [33.4540, 129.9770],
     "238. Yoshinogari Historical 吉野ヶ里歴史公園, Saga": [33.2200, 130.3860],
@@ -743,7 +743,7 @@ def calculate_accurate_bortle(lat, lon):
         (36.2160, 133.2330): (2.0, 21.75), # 210 Oki Islands
         (36.2500, 133.3000): (2.0, 21.75), # 211 Dogo Islands
         (34.4600, 136.7230): (3.5, 21.00), # 212 Ise Jingu
-        (35.1050, 136.7020): (4.5, 20.50), # 213 Nabana no Sato
+        (35.4561, 138.6102): (2.0, 22.00), # 213 Ryugadake Observatory, Yamanashi (1485m, near Shoji-ko)
         (35.7480, 136.9550): (3.0, 21.40), # 214 Gujo Hachiman
         (35.4950, 137.5670): (3.0, 21.30), # 215 Magome-juku
         (36.5640, 136.6620): (4.0, 20.80), # 216 Kenrokuen
@@ -752,20 +752,20 @@ def calculate_accurate_bortle(lat, lon):
         (35.2090, 135.9180): (3.0, 21.40), # 219 Lake Biwa Terrace
         (35.2750, 136.2560): (3.5, 21.10), # 220 Hikone Castle
         (34.9330, 136.2230): (3.5, 21.10), # 221 Koka Ninja Village
-        (34.6850, 135.8360): (4.0, 20.80), # 222 Nara Park
-        (34.6140, 135.7360): (4.0, 20.80), # 223 Horyuji Temple
+        (37.8520, 139.7830): (2.0, 21.95), # 222 Iide Mountains, Yamagata (deep Tohoku mountains)
+        (32.7058, 131.3081): (2.5, 21.80), # 223 Takachiho Gorge, Miyazaki (mountain valley)
         (33.9070, 135.8500): (2.5, 21.85), # 224 Dorokyo Gorge, Wakayama
         (34.6150, 135.0160): (4.0, 20.70), # 225 Akashi Kaikyo Bridge
         (35.3780, 133.5350): (2.5, 21.60), # 226 Tottori Daisen
-        (34.6670, 133.9350): (4.0, 20.70), # 227 Okayama Korakuen
-        (34.5950, 133.7710): (4.0, 20.70), # 228 Kurashiki Bikan
+        (33.4120, 133.0560): (2.0, 21.90), # 227 Tsuno Plateau, Kochi (Shikoku highlands)
+        (34.0560, 135.9740): (2.5, 21.85), # 228 Kawakami Village, Nara (deep Yoshino mountains)
         (34.2970, 132.3190): (3.5, 21.00), # 229 Miyajima
         (34.1670, 132.1790): (3.5, 21.10), # 230 Kintaikyo Bridge
         (34.1810, 133.8050): (3.0, 21.40), # 231 Kotohira-gu
         (33.8730, 133.8340): (2.5, 21.60), # 232 Iya Kazurabashi
         (33.5600, 133.5310): (4.0, 20.80), # 233 Kochi Castle
         (33.4980, 133.5710): (3.5, 21.10), # 234 Katsurahama Beach
-        (33.5840, 130.3800): (4.5, 20.20), # 235 Fukuoka Castle
+        (32.6290, 131.3870): (2.0, 21.95), # 235 Hinokage Starfield, Miyazaki (Kyushu deep mountains)
         (33.5200, 130.5280): (4.0, 20.70), # 236 Dazaifu Tenmangu
         (33.4540, 129.9770): (3.5, 21.10), # 237 Karatsu Castle
         (33.2200, 130.3860): (3.5, 21.10), # 238 Yoshinogari
@@ -1794,6 +1794,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         var mapEl = map.getContainer();
         var prevMode = _lsGet(LS_TILE, null);
         _ensureWindyFrame(mapEl);
+        // ── Disable/enable zoom buttons based on tile mode ─────────────────────
+        var zoomIn  = mapEl.querySelector('.leaflet-control-zoom-in');
+        var zoomOut = mapEl.querySelector('.leaflet-control-zoom-out');
+        var isWindy = (mode === 'windy');
+        if (zoomIn)  { zoomIn.style.opacity  = isWindy ? '0.35' : '1'; zoomIn.style.pointerEvents  = isWindy ? 'none' : 'auto'; zoomIn.style.cursor  = isWindy ? 'not-allowed' : ''; }
+        if (zoomOut) { zoomOut.style.opacity = isWindy ? '0.35' : '1'; zoomOut.style.pointerEvents = isWindy ? 'none' : 'auto'; zoomOut.style.cursor = isWindy ? 'not-allowed' : ''; }
         if (mode === 'windy') {
           var c = map.getCenter();
           var z = map.getZoom();
@@ -2432,7 +2438,7 @@ if _lbl:
 @keyframes blink-smile  {{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:0.75;transform:scale(1.1)}}}}
 @keyframes blink-neutral{{0%,100%{{opacity:1}}50%{{opacity:0.55}}}}
 .astro-maplabel{{
-  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  position:absolute;top:15px;left:50%;transform:translateX(-50%);
   z-index:9999;pointer-events:none;
   display:flex;align-items:center;gap:7px;
   padding:6px 16px 6px 11px;border-radius:20px;
@@ -2536,7 +2542,7 @@ col_left, col_right = st.columns([2.5, 1.1])
 with col_right:
     # Bortle
     st.markdown(f"""
-    <div class="metric-card">
+    <div class="metric-card" style="margin-top:-10px;">
         <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
         <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
         <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
