@@ -74,13 +74,13 @@ LOCATION_DATABASE = {
     "62. Akiyoshidai Karst 秋吉台, Yamaguchi": [34.2576, 131.3070],
     "63. Shikoku Karst 四国カルスト, Ehime": [33.3804, 132.9536],
     "64. Ashizuri Cape 足摺岬, Kochi": [32.7196, 133.0182],
-    "65. Sata Cape 佐多岬, Kagoshima": [30.9950, 130.6583], 
+    "65. Sata Cape 佐多岬, Kagoshima": [30.9924, 130.6595], 
     "66. Aso Kusasenri 草千里ヶ浜, Kumamoto": [32.8845, 131.0808],
     "67. Daikanbo 大観峰, Kumamoto": [32.99963, 131.0671],
     "68. Ikitsuki Island 生月島, Nagasaki": [33.3720, 129.3988],
     "69. Yobuko Cape Hado 波戸岬, Saga": [33.5528, 129.8527],
     "70. Amaterasu Railway 高千穂, Miyazaki": [32.7147, 131.3083],
-    "71. Cape Toi 都井岬, Miyazaki": [31.3750, 131.3450],
+    "71. Cape Toi 都井岬, Miyazaki": [31.3674, 131.3458],
     "72. Kaimondake 開聞岳周辺, Kagoshima": [31.1805, 130.5284],
     "73. Yoron Island 百合ヶ浜, Kagoshima": [27.0452, 128.4246],
     "74. Ishigaki Hirakubozaki 平久保崎, Okinawa": [24.6053, 124.3427],
@@ -253,7 +253,7 @@ LOCATION_DATABASE = {
     "240. Kuju Highlands 久住高原, Oita": [32.9880, 131.2400],
     "241. Ichifusa Highland 一房高原, Kumamoto": [32.3410, 130.9830],
     "242. Usuki Stone Buddhas 臼杵石仏, Oita": [33.0900, 131.7850],
-    "243. Sakurajima East Coast 桜島有村溶岩展望所, Kagoshima": [31.5490, 130.6710],
+    "243. Sakurajima East Coast 桜島有村溶岩展望所, Kagoshima": [31.5784, 130.6595],
     "244. Yanbaru Forest 与那覇岳, Okinawa": [26.7210, 128.2270],
     "245. Sefa-utaki 斎場御嶽, Okinawa": [26.1730, 127.8280],
     "246. Cape Manzamo 万座毛, Okinawa": [26.5040, 127.8500],
@@ -286,7 +286,7 @@ LOCATION_DATABASE = {
     # Niigata
     "266. Okutadami Dam 奥只見ダム, Niigata": [37.0730, 139.1050],
     "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7380, 139.3710],
-    "268. Oshima Habu Port 波浮港, Tokyo": [34.6870, 139.3750],
+    "268. Oshima Habu Port 波浮港, Tokyo": [34.6873, 139.4363],
     "269. Oshima Akasaki 赤崎遊歩道, Tokyo": [34.7490, 139.3760],
 }
 
@@ -615,7 +615,7 @@ def calculate_accurate_bortle(lat, lon):
         (32.9506, 131.0904): (2.5, 21.95), # 67 Daikanbo
         # ── Miyazaki ──────────────────────────────────────────────────────────
         (32.7092, 131.3086): (3, 21.80),   # 70 Takachiho
-        (31.3750, 131.3450): (2.5, 21.95), # 71 Cape Toi
+        (31.3674, 131.3458): (2.5, 21.95), # 71 Cape Toi
         # ── Kagoshima ─────────────────────────────────────────────────────────
         (31.1805, 130.5284): (3, 21.80),   # 72 Kaimondake
         (27.0452, 128.4246): (2, 22.00),   # 73 Yoron
@@ -776,7 +776,7 @@ def calculate_accurate_bortle(lat, lon):
         (32.9880, 131.2400): (2.5, 21.90), # 240 Kuju Highlands, Oita
         (32.3410, 130.9830): (2.5, 21.85), # 241 Ichifusa Highland, Kumamoto (deep Kyushu mountains)
         (33.0900, 131.7850): (3.0, 21.30), # 242 Usuki Stone Buddhas
-        (31.5490, 130.6710): (3.5, 21.20), # 243 Sakurajima East Coast (有村溶岩, away from Kagoshima)
+        (31.5784, 130.6595): (3.5, 21.20), # 243 Sakurajima East Coast (有村溶岩, away from Kagoshima)
         (26.7210, 128.2270): (3.0, 21.70), # 244 Yanbaru Forest, Okinawa (UNESCO natural heritage, north Okinawa)
         (26.1730, 127.8280): (3.0, 21.30), # 245 Sefa-utaki
         (26.5040, 127.8500): (3.0, 21.30), # 246 Cape Manzamo
@@ -803,7 +803,7 @@ def calculate_accurate_bortle(lat, lon):
         (36.5800, 139.0400): (3.5, 21.60), # 265 Takane Observatory, Gunma
         (37.0730, 139.1050): (2.5, 21.90), # 266 Okutadami Dam, Niigata
         (34.7380, 139.3710): (2.0, 22.00), # 267 Oshima Mihara-yama summit (758m, Izu Oshima)
-        (34.6870, 139.3750): (2.0, 21.95), # 268 Oshima Habu Port (south, away from Motomachi)
+        (34.6873, 139.4363): (2.0, 21.95), # 268 Oshima Habu Port (south, away from Motomachi)
         (34.7490, 139.3760): (2.0, 21.95), # 269 Oshima Akasaki Promenade (north coast)
     }
 
