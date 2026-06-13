@@ -247,7 +247,7 @@ LOCATION_DATABASE = {
     "234. Katsurahama Beach 桂浜, Kochi": [33.4980, 133.5710],
     "235. Hinokage Starfield 日之影星空, Miyazaki": [32.6290, 131.3870],
     "236. Sefuri Summit 脊振山頂, Fukuoka": [33.4280, 130.3060],
-    "237. Karatsu Castle 唐津城, Saga": [33.4540, 129.9770],
+    "237. Sefuri Highlands 脊振山系, Saga": [33.3810, 130.1820],
     "238. Tara Highland 多良岳, Saga": [33.0610, 130.1700],
     "239. Unzen Nita Pass 雲仙仁田峠, Nagasaki": [32.7540, 130.2700],
     "240. Kuju Highlands 久住高原, Oita": [32.9880, 131.2400],
@@ -257,8 +257,8 @@ LOCATION_DATABASE = {
     "244. Yanbaru Forest 与那覇岳, Okinawa": [26.7210, 128.2270],
     "245. Sefa-utaki 斎場御嶽, Okinawa": [26.1730, 127.8280],
     "246. Cape Manzamo 万座毛, Okinawa": [26.5040, 127.8500],
-    "247. Nakagusuku Castle 中城城跡, Okinawa": [26.2860, 127.7950],
-    "248. Katsuren Castle 勝連城跡, Okinawa": [26.3130, 127.8760],
+    "247. Aguni Island 粟国島, Okinawa": [26.5930, 127.2350],
+    "248. Kume Island 久米島, Okinawa": [26.3390, 126.7860],
     "249. Zakimi Castle 座喜味城跡, Okinawa": [26.4110, 127.7420],
     "250. Cape Maeda 真栄田岬, Okinawa": [26.4460, 127.7800],
 
@@ -285,8 +285,8 @@ LOCATION_DATABASE = {
     "265. Takane Observatory 高根展望台, Gunma": [36.5800, 139.0400],
     # Niigata
     "266. Okutadami Dam 奥只見ダム, Niigata": [37.0730, 139.1050],
-    "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.5262, 139.3854],
-    "268. Oshima Habu Port 波浮港, Tokyo": [34.4720, 139.3890],
+    "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7380, 139.3710],
+    "268. Oshima Habu Port 波浮港, Tokyo": [34.6870, 139.3750],
     "269. Oshima Akasaki 赤崎遊歩道, Tokyo": [34.7490, 139.3760],
 }
 
@@ -770,7 +770,7 @@ def calculate_accurate_bortle(lat, lon):
         (33.4980, 133.5710): (3.5, 21.10), # 234 Katsurahama Beach
         (32.6290, 131.3870): (2.0, 21.95), # 235 Hinokage Starfield, Miyazaki (Kyushu deep mountains)
         (33.4280, 130.3060): (3.0, 21.60), # 236 Sefuri Summit, Fukuoka (1054m, JAXA station nearby)
-        (33.4540, 129.9770): (3.5, 21.10), # 237 Karatsu Castle
+        (33.3810, 130.1820): (2.5, 21.85), # 237 Sefuri Highlands, Saga (deep mountain range)
         (33.0610, 130.1700): (2.5, 21.80), # 238 Tara Highland, Saga (remote mountain)
         (32.7540, 130.2700): (2.5, 21.80), # 239 Unzen Nita Pass, Nagasaki (1080m, national park)
         (32.9880, 131.2400): (2.5, 21.90), # 240 Kuju Highlands, Oita
@@ -780,8 +780,8 @@ def calculate_accurate_bortle(lat, lon):
         (26.7210, 128.2270): (3.0, 21.70), # 244 Yanbaru Forest, Okinawa (UNESCO natural heritage, north Okinawa)
         (26.1730, 127.8280): (3.0, 21.30), # 245 Sefa-utaki
         (26.5040, 127.8500): (3.0, 21.30), # 246 Cape Manzamo
-        (26.2860, 127.7950): (3.5, 21.10), # 247 Nakagusuku Castle
-        (26.3130, 127.8760): (3.5, 21.10), # 248 Katsuren Castle
+        (26.5930, 127.2350): (2.0, 22.00), # 247 Aguni Island, Okinawa (tiny remote island, Bortle 2)
+        (26.3390, 126.7860): (2.0, 21.95), # 248 Kume Island, Okinawa (remote island, dark skies)
         (26.4110, 127.7420): (3.5, 21.10), # 249 Zakimi Castle
         (26.4460, 127.7800): (3.0, 21.30), # 250 Cape Maeda
 
@@ -802,8 +802,8 @@ def calculate_accurate_bortle(lat, lon):
         (36.3460, 138.8200): (3.5, 21.60), # 264 Kozumaki Ranch, Gunma
         (36.5800, 139.0400): (3.5, 21.60), # 265 Takane Observatory, Gunma
         (37.0730, 139.1050): (2.5, 21.90), # 266 Okutadami Dam, Niigata
-        (34.5262, 139.3854): (2.0, 22.00), # 267 Oshima Mihara-yama summit (758m, Izu Oshima)
-        (34.4720, 139.3890): (2.0, 21.95), # 268 Oshima Habu Port (south, away from Motomachi)
+        (34.7380, 139.3710): (2.0, 22.00), # 267 Oshima Mihara-yama summit (758m, Izu Oshima)
+        (34.6870, 139.3750): (2.0, 21.95), # 268 Oshima Habu Port (south, away from Motomachi)
         (34.7490, 139.3760): (2.0, 21.95), # 269 Oshima Akasaki Promenade (north coast)
     }
 
@@ -2546,9 +2546,13 @@ st.markdown("""
 col_left, col_right = st.columns([2.5, 1.1])
 
 with col_right:
+    # Pull first element up 10px
+    st.markdown("""<style>
+    [data-testid="column"]:nth-of-type(2) > div > div > div > div:first-child [data-testid="stMarkdownContainer"] > div { margin-top: -10px; }
+    </style>""", unsafe_allow_html=True)
     # Bortle
     st.markdown(f"""
-    <div class="metric-card" style="margin-top:-10px;">
+    <div class="metric-card">
         <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
         <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
         <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
