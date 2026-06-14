@@ -208,12 +208,12 @@ LOCATION_DATABASE = {
     "195. Tsurugi Highlands 剣山スーパー林道, Tokushima": [33.8020, 134.0150],
     "196. Higashi-Aka Island 渡嘉敷島東阿嘉, Okinawa": [26.1860, 127.3520],
     "197. Shimanto River 四万十川, Kochi": [33.0030, 132.9340],
-    "198. Aso Nakadake Crater 阿蘇中岳火口, Kumamoto": [32.8840, 131.1040],
+    "198. Cape Soya 宗谷岬, Hokkaido": [45.5215, 141.9367],
     "199. Kunimigaoka 国見ヶ丘, Miyazaki": [32.7510, 131.3300],
     "200. Kirishima Shrine 霧島神宮, Kagoshima": [31.8590, 130.8710],
     "201. Yakushima Shiratani 屋久島, Kagoshima": [30.3450, 130.5690],
     "202. Amami Oshima 奄美大島, Kagoshima": [28.3750, 129.4670],
-    "203. Kerama Islands 慶良間諸島, Okinawa": [26.2000, 127.3500],
+    "203. Yonaguni Island 与那国島, Okinawa": [24.4500, 122.9800],
     "204. Iriomote Jungle カヌーツアー, Okinawa": [24.3500, 123.8500],
     "205. Okunoshima Rabbit 大久野島, Hiroshima": [34.3050, 132.9930],
     "206. Mitani Valley 三谷峡, Okayama": [34.8560, 133.7250],
@@ -233,7 +233,7 @@ LOCATION_DATABASE = {
     "220. Mt. Ibuki Summit 伊吹山頂, Shiga": [35.4200, 136.4060],
     "221. Gozaisho Summit 御在所岳, Mie": [35.0120, 136.4380],
     "222. Iide Mountains 飯豊連峰, Yamagata": [37.8520, 139.7830],
-    "223. Takachiho Gorge 高千穂峡, Miyazaki": [32.7058, 131.3081],
+    "223. Achi Village 阿智村 (日本一の星空), Nagano": [35.5180, 137.7280],
     "224. Dorokyo Gorge 瀞峡, Wakayama": [33.9070, 135.8500],
     "225. Awaji Southern Cape 淡路島南端, Hyogo": [34.2650, 134.8930],
     "226. Tottori Daisen 大山, Tottori": [35.3780, 133.5350],
@@ -243,7 +243,7 @@ LOCATION_DATABASE = {
     "230. Kintaikyo Bridge 錦帯橋, Yamaguchi": [34.1670, 132.1790],
     "231. Kotohira-gu 金刀比羅宮, Kagawa": [34.1810, 133.8050],
     "232. Oboke Gorge 大歩危峡, Tokushima": [33.9120, 133.8420],
-    "233. Tsurugi Starfield 剣山山頂, Tokushima": [33.8560, 134.0810],
+    "233. Daisetsuzan Asahidake 大雪山旭岳, Hokkaido": [43.6700, 142.8540],
     "234. Katsurahama Beach 桂浜, Kochi": [33.4980, 133.5710],
     "235. Hinokage Starfield 日之影星空, Miyazaki": [32.6290, 131.3870],
     "236. Sefuri Summit 脊振山頂, Fukuoka": [33.4280, 130.3060],
@@ -287,7 +287,7 @@ LOCATION_DATABASE = {
     "266. Okutadami Dam 奥只見ダム, Niigata": [37.0730, 139.1050],
     "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7380, 139.3710],
     "268. Oshima Habu Port 波浮港, Tokyo": [34.6873, 139.4363],
-    "269. Oshima Akasaki 赤崎遊歩道, Tokyo": [34.7490, 139.3760],
+    "269. Minami-Daito Island 南大東島, Okinawa": [25.8470, 131.2330],
 }
 
 st.set_page_config(page_title="Astro Map Pro", page_icon="🌌", layout="wide", initial_sidebar_state="collapsed")
@@ -731,12 +731,12 @@ def calculate_accurate_bortle(lat, lon):
         (33.8020, 134.0150): (2.0, 21.85), # 195 Tsurugi Super Rindo, Tokushima (highland forest road)
         (26.1860, 127.3520): (3.0, 21.70), # 196 Higashi-Aka Island, Kerama (remote island)
         (33.0030, 132.9340): (2.0, 21.80), # 197 Shimanto River
-        (32.8840, 131.1040): (3.0, 21.70), # 198 Aso Nakadake Crater, Kumamoto
+        (45.5215, 141.9367): (2.0, 21.95), # 198 Cape Soya, Hokkaido (northernmost tip, remote)
         (32.7510, 131.3300): (2.5, 21.70), # 199 Kunimigaoka, Miyazaki
         (31.8590, 130.8710): (2.5, 21.65), # 200 Kirishima Shrine
         (30.3450, 130.5690): (2.0, 21.80), # 201 Yakushima
         (28.3750, 129.4670): (2.5, 21.60), # 202 Amami Oshima
-        (26.2000, 127.3500): (2.5, 21.60), # 203 Kerama Islands
+        (24.4500, 122.9800): (1.5, 22.00), # 203 Yonaguni Island, Okinawa (westernmost Japan, near-pristine)
         (24.3500, 123.8500): (2.0, 21.85), # 204 Iriomote Jungle
         (34.3050, 132.9930): (3.5, 21.10), # 205 Okunoshima
         (34.8560, 133.7250): (2.5, 21.60), # 206 Mitani Valley
@@ -756,7 +756,7 @@ def calculate_accurate_bortle(lat, lon):
         (35.4200, 136.4060): (3.0, 21.60), # 220 Mt. Ibuki Summit, Shiga (1377m)
         (35.0120, 136.4380): (3.0, 21.55), # 221 Gozaisho Summit, Mie (1212m, Suzuka range)
         (37.8520, 139.7830): (2.0, 21.95), # 222 Iide Mountains, Yamagata (deep Tohoku mountains)
-        (32.7058, 131.3081): (2.5, 21.80), # 223 Takachiho Gorge, Miyazaki (mountain valley)
+        (35.5180, 137.7280): (2.0, 21.95), # 223 Achi Village, Nagano (Japan's "starriest sky")
         (33.9070, 135.8500): (2.5, 21.85), # 224 Dorokyo Gorge, Wakayama
         (34.2650, 134.8930): (3.5, 21.40), # 225 Awaji Southern Cape, Hyogo (away from Kobe/Osaka)
         (35.3780, 133.5350): (2.5, 21.60), # 226 Tottori Daisen
@@ -766,7 +766,7 @@ def calculate_accurate_bortle(lat, lon):
         (34.1670, 132.1790): (3.5, 21.10), # 230 Kintaikyo Bridge
         (34.1810, 133.8050): (3.0, 21.40), # 231 Kotohira-gu
         (33.8730, 133.8340): (2.5, 21.60), # 232 Iya Kazurabashi
-        (33.8560, 134.0810): (2.0, 21.90), # 233 Tsurugi Starfield summit, Tokushima (1955m, Bortle 2)
+        (43.6700, 142.8540): (2.0, 21.90), # 233 Daisetsuzan Asahidake, Hokkaido (1600m+, remote highland)
         (33.4980, 133.5710): (3.5, 21.10), # 234 Katsurahama Beach
         (32.6290, 131.3870): (2.0, 21.95), # 235 Hinokage Starfield, Miyazaki (Kyushu deep mountains)
         (33.4280, 130.3060): (3.0, 21.60), # 236 Sefuri Summit, Fukuoka (1054m, JAXA station nearby)
@@ -804,7 +804,7 @@ def calculate_accurate_bortle(lat, lon):
         (37.0730, 139.1050): (2.5, 21.90), # 266 Okutadami Dam, Niigata
         (34.7380, 139.3710): (2.0, 22.00), # 267 Oshima Mihara-yama summit (758m, Izu Oshima)
         (34.6873, 139.4363): (2.0, 21.95), # 268 Oshima Habu Port (south, away from Motomachi)
-        (34.7490, 139.3760): (2.0, 21.95), # 269 Oshima Akasaki Promenade (north coast)
+        (25.8470, 131.2330): (1.5, 22.05), # 269 Minami-Daito Island, Okinawa (remote Pacific island, pristine sky)
     }
 
     def _km(la1, lo1, la2, lo2):
