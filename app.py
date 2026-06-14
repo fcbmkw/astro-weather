@@ -1823,43 +1823,6 @@ def _run_great_night_scan():
                 }
     return None
 
-# ── SCAN button — đặt trên cùng khu vực với LPM (cuối map, trước render) ────
-st.markdown("""
-<div style="background:rgba(15,23,42,0.88);border:1px solid #334155;
-            border-radius:10px;padding:10px 14px;margin-bottom:8px;
-            box-shadow:0 2px 8px rgba(0,0,0,0.4);">
-  <span style="color:#94a3b8;font-size:12px;font-weight:600;letter-spacing:0.03em;">
-    🌌 GREAT NIGHT SCAN — top 27 favorite spots, next 7 days
-  </span>
-</div>
-""", unsafe_allow_html=True)
-_scan_col1, _scan_col2 = st.columns([1, 5])
-with _scan_col1:
-    if st.button("🔍 SCAN", key="btn_great_night_scan", use_container_width=True,
-                  help="Quét 27 địa điểm yêu thích trong 7 ngày tới, tìm PERFECT NIGHT gần nhất (moon < 32%)"):
-        with st.spinner("Scanning 27 favorite spots over the next 7 nights..."):
-            st.session_state._scan_result = _run_great_night_scan()
-        if st.session_state._scan_result is None:
-            st.session_state._scan_result = "none"
-
-with _scan_col2:
-    _sr = st.session_state._scan_result
-    if _sr == "none":
-        st.info("🔍 No PERFECT NIGHT found in the next 7 days (moon < 32% required).")
-    elif _sr:
-        _sr_date = _sr["date"]
-        _sr_label = f"{_sr_date.month}/{_sr_date.day}"
-        _sr_loc_label = _strip_loc_num(_sr["loc_name"])
-        st.success(
-            f"🌌 **{_sr_label} — PERFECT NIGHT** at **{_sr_loc_label}** "
-            f"(moon {_sr['moon_illum']:.0f}%, {_sr['verdict']['sub']})"
-        )
-    else:
-        st.markdown(
-            "<div style='color:#64748b;font-size:13px;padding-top:8px;'>"
-            "Click SCAN to check upcoming dark, clear nights at your favorite spots."
-            "</div>", unsafe_allow_html=True)
-
 # ── MAP ───────────────────────────────────────────────────────────────────────
 # Add top margin so the in-map tile buttons are not obscured by Streamlit toolbar
 st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
@@ -2006,6 +1969,26 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
       a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
+
+      // ── SCAN button — fake map click at sentinel coords (99.9, 99.9) ──────
+      // Python's map click handler detects this sentinel and runs the
+      // GREAT NIGHT SCAN (27 favorite spots × 7 days), bypassing the need
+      // for direct JS→Python calls.
+      var scanBtn = L.DomUtil.create('a', '', infoRow);
+      scanBtn.href = 'javascript:void(0)';
+      scanBtn.title = 'Scan for great nights (27 spots, next 7 days)';
+      scanBtn.innerHTML = '&#128269;';
+      scanBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
+        + 'background:rgba(34,197,94,0.18);border:1.5px solid rgba(34,197,94,0.55);'
+        + 'border-radius:6px;padding:2px 7px;text-decoration:none;'
+        + 'font-size:12px;font-weight:700;'
+        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
+      scanBtn.onmouseover = function(){ scanBtn.style.background = 'rgba(34,197,94,0.38)'; };
+      scanBtn.onmouseout  = function(){ scanBtn.style.background = 'rgba(34,197,94,0.18)'; };
+      scanBtn.onclick = function(e){
+        e.preventDefault();
+        map.fire('click', { latlng: L.latLng(99.9, 99.9) });
+      };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -2637,6 +2620,7 @@ is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_s
                   for c in LOCATION_DATABASE.values())
 
 # ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh địa điểm tìm được ────
+# Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
 _scan_r = st.session_state._scan_result
 if _scan_r and _scan_r != "none":
     _scan_lat, _scan_lon = _scan_r["loc_coords"]
@@ -2645,19 +2629,15 @@ if _scan_r and _scan_r != "none":
         '0%{transform:scale(0.6);opacity:0.9;}'
         '70%{transform:scale(2.2);opacity:0;}'
         '100%{transform:scale(0.6);opacity:0;}}</style>'
-        '<div style="width:40px;height:40px;border-radius:50%;'
+        '<div style="width:64px;height:64px;border-radius:50%;'
         'border:3px solid #6ee7b7;'
-        'box-shadow:0 0 10px rgba(110,231,183,0.8);'
+        'box-shadow:0 0 14px rgba(110,231,183,0.8);'
         'animation:great-night-pulse 1.8s ease-out infinite;'
         'transform-origin:center;pointer-events:none;"></div>'
     )
     folium.Marker(
         [_scan_lat, _scan_lon],
-        icon=folium.DivIcon(html=_ring_html, icon_size=(40,40), icon_anchor=(20,20)),
-        tooltip=folium.Tooltip(
-            f"🌌 PERFECT NIGHT — {_scan_r['date'].month}/{_scan_r['date'].day} "
-            f"({_strip_loc_num(_scan_r['loc_name'])})",
-            sticky=False, parse_html=False),
+        icon=folium.DivIcon(html=_ring_html, icon_size=(64,64), icon_anchor=(32,32)),
     ).add_to(m)
 
 if not is_bookmark:
@@ -2748,6 +2728,43 @@ if _verdict:
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
 
+# ── BOTTOM-LEFT MAP OVERLAY — GREAT NIGHT SCAN RESULT ────────────────────────
+_scan_r2 = st.session_state._scan_result
+if _scan_r2 and _scan_r2 != "none":
+    _sr_date2     = _scan_r2["date"]
+    _sr_loc_label2 = _scan_r2["loc_name"]  # giữ nguyên tên đầy đủ (kèm số + tỉnh)
+    _scan_banner_html = f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;">
+<div style="
+  position:absolute;bottom:14px;left:14px;max-width:340px;
+  background:rgba(5,25,18,0.90);border:1.5px solid rgba(52,211,153,0.75);
+  border-radius:10px;padding:8px 14px;
+  font-family:sans-serif;color:#6ee7b7;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;line-height:1.4;
+">
+  <div style="font-size:13px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} — PERFECT NIGHT</div>
+  <div style="font-size:12px;font-weight:600;margin-top:2px;">at {_strip_loc_num(_sr_loc_label2)}</div>
+  <div style="font-size:10.5px;opacity:0.75;margin-top:2px;">moon {_scan_r2['moon_illum']:.0f}%, {_scan_r2['verdict']['sub']}</div>
+</div>
+</div>"""
+    st.markdown(_scan_banner_html, unsafe_allow_html=True)
+elif _scan_r2 == "none":
+    _scan_banner_html = """
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;">
+<div style="
+  position:absolute;bottom:14px;left:14px;max-width:320px;
+  background:rgba(10,14,22,0.88);border:1.5px solid rgba(148,163,184,0.55);
+  border-radius:10px;padding:8px 14px;
+  font-family:sans-serif;color:#94a3b8;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;line-height:1.4;font-size:12px;font-weight:600;
+">
+  🔍 No PERFECT NIGHT in the next 7 days
+</div>
+</div>"""
+    st.markdown(_scan_banner_html, unsafe_allow_html=True)
+
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
 _lpm_url = (f"https://lightpollutionmap.app/"
@@ -2757,6 +2774,14 @@ _lpm_url = (f"https://lightpollutionmap.app/"
 if map_data:
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
+
+    # ── Priority 0: SCAN button (sentinel click at lat=99.9, lon=99.9) ────────
+    if lc and lc != st.session_state._last_lc and abs(lc.get("lat", 0) - 99.9) < 0.01 and abs(lc.get("lng", 0) - 99.9) < 0.01:
+        st.session_state._last_lc = lc
+        with st.spinner("Scanning 27 favorite spots over the next 7 nights..."):
+            _scan_res = _run_great_night_scan()
+        st.session_state._scan_result = _scan_res if _scan_res is not None else "none"
+        st.rerun()
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
     # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
