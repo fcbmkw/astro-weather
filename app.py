@@ -373,7 +373,7 @@ def get_moon_phase_percent(date_obj):
     base = datetime(2024, 1, 11)
     phase = ((date_obj - base).total_seconds() / 86400.0 / 29.53059) % 1.0
     illum = round((1 - math.cos(phase * 2 * math.pi)) / 2 * 100, 1)
-    if phase < 0.03 or phase > 0.97: desc = "新月 (New Moon) 🌌"
+    if phase < 0.03 or phase > 0.97: desc = "新月"
     elif phase < 0.22: desc = "Waxing Crescent（月齢初期）"
     elif phase < 0.28: desc = "上弦の月"
     elif phase < 0.47: desc = "Waxing Gibbous（月齢中期）"
@@ -2371,12 +2371,28 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
                     f'color:#1e293b;max-width:230px;line-height:1.35;'
                     f'white-space:normal;word-break:break-word;overflow-wrap:break-word;">'
                     f'{img_html}{_loc_label}</div>')
+    if is_sel:
+        # Ngôi sao được chọn: nhấp nháy (pulse) để dễ nhận biết
+        _star_html = (
+            f'<style>@keyframes star-pulse-sel {{'
+            f'0%,100%{{transform:scale(1);opacity:1;}}'
+            f'50%{{transform:scale(1.35);opacity:0.55;}}}}</style>'
+            f'<div style="font-size:{star_size};color:{star_color};'
+            f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
+            f'cursor:pointer;line-height:1;font-family:serif;'
+            f'animation:star-pulse-sel 1.1s ease-in-out infinite;'
+            f'transform-origin:center;display:inline-block;">★</div>'
+        )
+    else:
+        _star_html = (
+            f'<div style="font-size:{star_size};color:{star_color};'
+            f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
+            f'cursor:pointer;line-height:1;font-family:serif;">★</div>'
+        )
     folium.Marker(
         loc_coords,
         icon=folium.DivIcon(
-            html=f'<div style="font-size:{star_size};color:{star_color};'
-                 f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
-                 f'cursor:pointer;line-height:1;font-family:serif;">★</div>',
+            html=_star_html,
             icon_size=(24,24), icon_anchor=(12,12)),
         tooltip=folium.Tooltip(tooltip_html, sticky=False, offset=(20, -10), parse_html=False),
     ).add_to(m)
@@ -2532,11 +2548,22 @@ if st.session_state.day_offset == 0:
 else:
     _verdict = _build_night_verdict(weather_table_data, sun_altitudes, moon_pct)
 if _verdict:
-    # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
+    # ── Tính nhiệt độ min/max của đêm (18:00~06:00) ──────────────────────────
     if st.session_state.day_offset == 0:
-        _date_label = "Tonight"
+        _temp_src_table = _full_table_data
     else:
-        _date_label = f"{target_date.month}月{target_date.day}日夜"
+        _temp_src_table = weather_table_data
+    _night_temps = [r.get("_temp") for r in _temp_src_table[:12] if r.get("_temp") is not None]
+    if _night_temps:
+        _temp_range_str = f"{round(min(_night_temps))}°~{round(max(_night_temps))}°"
+    else:
+        _temp_range_str = ""
+
+    # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night(min°~max°)" ─
+    if st.session_state.day_offset == 0:
+        _date_label = f"Tonight{f' ({_temp_range_str})' if _temp_range_str else ''}"
+    else:
+        _date_label = f"{target_date.month}月{target_date.day}日夜{f'({_temp_range_str})' if _temp_range_str else ''}"
 
     _warn_speed = "1.1s" if _verdict["anim"] == "blink-warn" else "1.9s"
     _html_label = f"""
@@ -2651,6 +2678,64 @@ if map_data:
                 st.session_state.sel_date        = date_options[0]
                 st.rerun()
 
+# ── SKY QUALITY (Transparency/Seeing) — tính trước khi vào layout ────────────
+def _build_sky_quality(table_data, sun_alts=None):
+    """Tính Transparency% và Seeing% trung bình cho khung tối thiên văn của đêm.
+    Transparency: dựa trên cloud cover + humidity (ẩm cao/khói mù làm mờ ảnh).
+    Seeing: ước lượng từ wind speed (gió mạnh ở mặt đất → nhiễu động khí quyển cao)."""
+    if not table_data:
+        return None
+    if len(table_data) > 12:
+        table_data = table_data[:-1]
+        if sun_alts is not None:
+            sun_alts = sun_alts[:-1]
+    if sun_alts is None:
+        sun_alts = [-90] * len(table_data)
+
+    transp_vals = []
+    seeing_vals = []
+    for r, sa in zip(table_data, sun_alts):
+        if sa is not None and sa > -12:
+            continue
+        cloud_str = r.get("☁️", "100%")
+        humid_str = r.get("💧", "0%")
+        wind_str  = r.get("💨", "0m/s")
+        cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
+        humid_pct = int(humid_str.replace("%","")) if humid_str.replace("%","").isdigit() else 0
+        try:
+            wind_ms = float(wind_str.replace("m/s",""))
+        except ValueError:
+            wind_ms = 0.0
+
+        # Transparency: trừ điểm theo cloud cover (hệ số cao) và humidity (hệ số nhẹ)
+        transp = 100 - cloud_pct * 0.9 - max(0, humid_pct - 60) * 0.5
+        transp_vals.append(max(0, min(100, transp)))
+
+        # Seeing: gió nhẹ → seeing tốt. Gió > 8m/s → nhiễu động mạnh, giảm điểm.
+        seeing = 100 - max(0, wind_ms - 2) * 9
+        seeing_vals.append(max(0, min(100, seeing)))
+
+    if not transp_vals:
+        return None
+    avg_transp = round(sum(transp_vals) / len(transp_vals))
+    avg_seeing = round(sum(seeing_vals) / len(seeing_vals))
+    return {"transparency": avg_transp, "seeing": avg_seeing}
+
+if st.session_state.day_offset == 0:
+    _sky_q = _build_sky_quality(_full_table_data, _full_sun_alt)
+else:
+    _sky_q = _build_sky_quality(weather_table_data, sun_altitudes)
+
+def _quality_color(val):
+    if val >= 75: return "#6ee7b7"   # xanh lá — tốt
+    elif val >= 45: return "#fde68a" # vàng — trung bình
+    else: return "#fca5a5"           # đỏ — kém
+
+def _quality_label(val):
+    if val >= 75: return "Excellent"
+    elif val >= 45: return "Average"
+    else: return "Poor"
+
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
 st.markdown("""
     <style>
@@ -2672,28 +2757,48 @@ with col_right:
             <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
             <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
             <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
-            <div style="font-size:11px;color:#64748b;margin-top:6px;border-top:1px solid #334155;padding-top:5px;">
-                Estimate · Falchi et al. 2026 (lightpollutionmap.app) ±1 class
-            </div>
         </div>""", unsafe_allow_html=True)
 
-    # Moon
+    # Moon Phase + Coordinate — 1 block, trái/phải
     st.markdown(f"""
     <div class="metric-card">
-        <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌙 MOON PHASE</span>
-        <div style="font-size:28px;font-weight:bold;color:#fbbf24;margin-top:5px;">{moon_pct}%</div>
-        <div style="font-size:12px;color:#cbd5e1;margin-top:4px;font-style:italic;">{moon_text}</div>
+        <div style="display:flex;gap:10px;">
+            <div style="flex:1;">
+                <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌙 MOON PHASE</span>
+                <div style="font-size:28px;font-weight:bold;color:#fbbf24;margin-top:5px;">{moon_pct}%</div>
+                <div style="font-size:12px;color:#cbd5e1;margin-top:4px;font-style:italic;">{moon_text}</div>
+            </div>
+            <div style="flex:1;border-left:1px solid #334155;padding-left:10px;">
+                <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 COORDINATE</span>
+                <div class="geo-highlight" style="font-size:15px;margin-top:5px;">
+                    <span style="color:#60a5fa;">LON:</span> {round(st.session_state.lon,4)}<br>
+                    <span style="color:#34d399;">LAT:</span> {round(st.session_state.lat,4)}
+                </div>
+            </div>
+        </div>
     </div>""", unsafe_allow_html=True)
 
-    # Location
-    st.markdown(f"""
-    <div class="metric-card">
-        <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 POSITION & COORDINATE</span>
-        <div style="font-size:15px;font-weight:bold;color:#f43f5e;margin-top:4px;margin-bottom:4px;">📍 {_strip_loc_num(st.session_state.location_name)}</div>
-        <div class="geo-highlight">
-            <span style="color:#60a5fa;">LON:</span> {round(st.session_state.lon,4)}<br>
-            <span style="color:#34d399;">LAT:</span> {round(st.session_state.lat,4)}
-    </div>""", unsafe_allow_html=True)
+    # Transparency + Seeing — 1 block, trái/phải (thay vị trí Position & Coordinate cũ)
+    if _sky_q:
+        _tc = _quality_color(_sky_q["transparency"])
+        _sc = _quality_color(_sky_q["seeing"])
+        _tl = _quality_label(_sky_q["transparency"])
+        _sl = _quality_label(_sky_q["seeing"])
+        st.markdown(f"""
+        <div class="metric-card">
+            <div style="display:flex;gap:10px;">
+                <div style="flex:1;text-align:center;">
+                    <div style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.05em;">TRANSPARENCY</div>
+                    <div style="font-size:24px;font-weight:800;color:{_tc};margin-top:4px;">{_sky_q["transparency"]}%</div>
+                    <div style="font-size:11px;color:{_tc};opacity:0.85;margin-top:1px;">{_tl}</div>
+                </div>
+                <div style="flex:1;text-align:center;border-left:1px solid #334155;">
+                    <div style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.05em;">SEEING</div>
+                    <div style="font-size:24px;font-weight:800;color:{_sc};margin-top:4px;">{_sky_q["seeing"]}%</div>
+                    <div style="font-size:11px;color:{_sc};opacity:0.85;margin-top:1px;">{_sl}</div>
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
 
     # Weather source selectbox + source label
     # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
@@ -3061,88 +3166,6 @@ with col_left:
         if st.button("🔄 再試行", key="btn_retry_weather"):
             st.cache_data.clear()
             st.rerun(scope="app")
-
-# ── TRANSPARENCY / SEEING BLOCK — đánh giá tổng cho cả đêm (day_offset hiện tại) ──
-if weather_table_data:
-    def _build_sky_quality(table_data, sun_alts=None):
-        """Tính Transparency% và Seeing% trung bình cho khung tối thiên văn của đêm.
-        Transparency: dựa trên cloud cover + humidity (ẩm cao/khói mù làm mờ ảnh).
-        Seeing: ước lượng từ wind speed (gió mạnh ở mặt đất → nhiễu động khí quyển cao)."""
-        if not table_data:
-            return None
-        if len(table_data) > 12:
-            table_data = table_data[:-1]
-            if sun_alts is not None:
-                sun_alts = sun_alts[:-1]
-        if sun_alts is None:
-            sun_alts = [-90] * len(table_data)
-
-        transp_vals = []
-        seeing_vals = []
-        for r, sa in zip(table_data, sun_alts):
-            if sa is not None and sa > -12:
-                continue
-            cloud_str = r.get("☁️", "100%")
-            humid_str = r.get("💧", "0%")
-            wind_str  = r.get("💨", "0m/s")
-            cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
-            humid_pct = int(humid_str.replace("%","")) if humid_str.replace("%","").isdigit() else 0
-            try:
-                wind_ms = float(wind_str.replace("m/s",""))
-            except ValueError:
-                wind_ms = 0.0
-
-            # Transparency: trừ điểm theo cloud cover (hệ số cao) và humidity (hệ số nhẹ)
-            transp = 100 - cloud_pct * 0.9 - max(0, humid_pct - 60) * 0.5
-            transp_vals.append(max(0, min(100, transp)))
-
-            # Seeing: gió nhẹ → seeing tốt. Gió > 8m/s → nhiễu động mạnh, giảm điểm.
-            seeing = 100 - max(0, wind_ms - 2) * 9
-            seeing_vals.append(max(0, min(100, seeing)))
-
-        if not transp_vals:
-            return None
-        avg_transp = round(sum(transp_vals) / len(transp_vals))
-        avg_seeing = round(sum(seeing_vals) / len(seeing_vals))
-        return {"transparency": avg_transp, "seeing": avg_seeing}
-
-    if st.session_state.day_offset == 0:
-        _sky_q = _build_sky_quality(_full_table_data, _full_sun_alt)
-    else:
-        _sky_q = _build_sky_quality(weather_table_data, sun_altitudes)
-
-    if _sky_q:
-        def _quality_color(val):
-            if val >= 75: return "#6ee7b7"   # xanh lá — tốt
-            elif val >= 45: return "#fde68a" # vàng — trung bình
-            else: return "#fca5a5"           # đỏ — kém
-
-        def _quality_label(val):
-            if val >= 75: return "Excellent"
-            elif val >= 45: return "Average"
-            else: return "Poor"
-
-        _tc = _quality_color(_sky_q["transparency"])
-        _sc = _quality_color(_sky_q["seeing"])
-        _tl = _quality_label(_sky_q["transparency"])
-        _sl = _quality_label(_sky_q["seeing"])
-
-        st.markdown(f"""
-<div style="display:flex;gap:8px;margin-top:8px;margin-bottom:8px;">
-  <div style="flex:1;background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;
-              padding:10px 14px;text-align:center;box-shadow:0 0 20px rgba(234,88,12,0.10);">
-    <div style="font-size:11px;color:#fb923c;font-weight:700;letter-spacing:0.05em;opacity:0.75;">TRANSPARENCY</div>
-    <div style="font-size:24px;font-weight:800;color:{_tc};margin-top:2px;">{_sky_q["transparency"]}%</div>
-    <div style="font-size:11px;color:{_tc};opacity:0.85;margin-top:1px;">{_tl}</div>
-  </div>
-  <div style="flex:1;background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;
-              padding:10px 14px;text-align:center;box-shadow:0 0 20px rgba(234,88,12,0.10);">
-    <div style="font-size:11px;color:#fb923c;font-weight:700;letter-spacing:0.05em;opacity:0.75;">SEEING</div>
-    <div style="font-size:24px;font-weight:800;color:{_sc};margin-top:2px;">{_sky_q["seeing"]}%</div>
-    <div style="font-size:11px;color:{_sc};opacity:0.85;margin-top:1px;">{_sl}</div>
-  </div>
-</div>""", unsafe_allow_html=True)
-
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
