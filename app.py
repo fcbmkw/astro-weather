@@ -2697,11 +2697,18 @@ is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_s
 # Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
 _scan_r = st.session_state._scan_result
 if _scan_r and _scan_r != "none":
+    # CSS: tắt pointer-events ở cả Leaflet wrapper (.great-night-ring) lẫn div bên trong
+    # → click xuyên qua vòng tròn để chạm đúng ngôi sao bên dưới
     _ring_css = (
-        '<style>@keyframes great-night-pulse {'
+        '<style>'
+        '@keyframes great-night-pulse {'
         '0%{transform:scale(0.6);opacity:0.9;}'
         '70%{transform:scale(2.2);opacity:0;}'
-        '100%{transform:scale(0.6);opacity:0;}}</style>'
+        '100%{transform:scale(0.6);opacity:0;}}'
+        '.great-night-ring{'
+        'pointer-events:none!important;'
+        'cursor:default!important;}'
+        '</style>'
     )
     _ring_body = (
         '<div style="width:64px;height:64px;border-radius:50%;'
@@ -2717,7 +2724,10 @@ if _scan_r and _scan_r != "none":
         _ring_html = (_ring_css if _i == 0 else "") + _ring_body
         folium.Marker(
             list(_alc),
-            icon=folium.DivIcon(html=_ring_html, icon_size=(64,64), icon_anchor=(32,32)),
+            icon=folium.DivIcon(
+                html=_ring_html,
+                icon_size=(64,64), icon_anchor=(32,32),
+                class_name="great-night-ring"),   # CSS hook để tắt pointer-events
         ).add_to(m)
 
 if not is_bookmark:
@@ -2808,76 +2818,43 @@ if _verdict:
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
 
-# ── BOTTOM-LEFT MAP OVERLAY — GREAT NIGHT SCAN RESULT / SCANNING / NONE ─────
-_scan_r2      = st.session_state._scan_result
-_scan_loading = st.session_state._scan_scanning   # True chỉ trong 1 rerun trước khi scan
+# ── SCAN RESULT BANNER — bên dưới map (st.markdown thông thường) ─────────────
+_scan_r2 = st.session_state._scan_result
 
-if _scan_loading:
-    # "Scanning..." overlay — hiển thị trong rerun đầu tiên (trước khi scan thực sự chạy)
-    # Thực ra _scan_scanning=False được set ngay trong khối scan trước map render, nên
-    # đây sẽ không bao giờ True trong luồng bình thường. Giữ lại để an toàn.
-    _scan_banner_html = """
-<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;">
-<div style="
-  position:absolute;bottom:14px;left:14px;max-width:300px;
-  background:rgba(5,15,10,0.92);border:1.5px solid rgba(52,211,153,0.60);
-  border-radius:10px;padding:8px 14px;
-  font-family:sans-serif;color:#6ee7b7;
-  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
-  pointer-events:none;line-height:1.4;font-size:12px;font-weight:600;
-">
-  🔭 Scanning…
-</div>
-</div>"""
-    st.markdown(_scan_banner_html, unsafe_allow_html=True)
-
-elif _scan_r2 and _scan_r2 != "none":
-    # ── Kết quả tìm thấy PERFECT NIGHT ──────────────────────────────────────
+if _scan_r2 and _scan_r2 != "none":
     _sr_date2   = _scan_r2["date"]
     _all_locs2  = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
     _n_spots    = len(_all_locs2)
-    # Tính avg cloud trung bình của tất cả spots (lấy từ verdict["sub"] của spot đầu)
-    _avg_cloud  = _scan_r2["verdict"].get("sub", "")   # vd "avg cloud 12%, 5h clear"
-    # Lấy số avg cloud từ sub string để hiển thị gọn
     import re as _re
+    _avg_cloud  = _scan_r2["verdict"].get("sub", "")
     _cloud_match = _re.search(r"avg cloud (\d+)%", _avg_cloud)
     _cloud_str   = f"avg cloud {_cloud_match.group(1)}%" if _cloud_match else ""
-    _scan_days_label = st.session_state._scan_days
-    _scan_banner_html = f"""
-<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;">
-<div style="
-  position:absolute;bottom:14px;left:14px;max-width:340px;
-  background:rgba(5,25,18,0.90);border:1.5px solid rgba(52,211,153,0.75);
-  border-radius:10px;padding:8px 14px;
+    st.markdown(f"""<div style="
+  margin-top:6px;padding:9px 16px;border-radius:10px;
+  background:rgba(5,25,18,0.95);border:1.5px solid rgba(52,211,153,0.75);
   font-family:sans-serif;color:#6ee7b7;
-  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
-  pointer-events:none;line-height:1.4;
+  box-shadow:0 2px 12px rgba(0,0,0,0.5);line-height:1.5;
 ">
-  <div style="font-size:13px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} — PERFECT NIGHT</div>
-  <div style="font-size:11.5px;font-weight:600;margin-top:3px;opacity:0.90;">{_n_spots} spot{"s" if _n_spots > 1 else ""} &nbsp;·&nbsp; {_cloud_str}</div>
-  <div style="font-size:10px;opacity:0.60;margin-top:2px;">moon {_scan_r2["moon_illum"]:.0f}% &nbsp;·&nbsp; rings on map</div>
-</div>
-</div>"""
-    st.markdown(_scan_banner_html, unsafe_allow_html=True)
+  <span style="font-size:14px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} &nbsp;:&nbsp; PERFECT NIGHT</span>
+  &nbsp;&nbsp;
+  <span style="font-size:12px;font-weight:600;opacity:0.9;">{_n_spots} spot{"s" if _n_spots > 1 else ""}</span>
+  &nbsp;/&nbsp;
+  <span style="font-size:12px;opacity:0.85;">{_cloud_str}</span>
+  &nbsp;/&nbsp;
+  <span style="font-size:12px;opacity:0.75;">moon {_scan_r2["moon_illum"]:.0f}%</span>
+</div>""", unsafe_allow_html=True)
 
 elif _scan_r2 == "none":
-    # ── Không tìm thấy ───────────────────────────────────────────────────────
     _scan_days_lbl = st.session_state._scan_days
     _range_lbl = f"day {_scan_days_lbl}–7" if _scan_days_lbl > 0 else "next 7 days"
-    _scan_banner_html = f"""
-<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;">
-<div style="
-  position:absolute;bottom:14px;left:14px;max-width:300px;
-  background:rgba(10,14,22,0.88);border:1.5px solid rgba(148,163,184,0.40);
-  border-radius:10px;padding:8px 14px;
-  font-family:sans-serif;color:#94a3b8;
-  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
-  pointer-events:none;line-height:1.4;font-size:12px;font-weight:600;
+    st.markdown(f"""<div style="
+  margin-top:6px;padding:9px 16px;border-radius:10px;
+  background:rgba(10,14,22,0.92);border:1.5px solid rgba(148,163,184,0.35);
+  font-family:sans-serif;color:#94a3b8;font-size:13px;font-weight:600;
+  box-shadow:0 2px 12px rgba(0,0,0,0.4);
 ">
   🔍 None — {_range_lbl}
-</div>
-</div>"""
-    st.markdown(_scan_banner_html, unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
