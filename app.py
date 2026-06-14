@@ -2545,11 +2545,17 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
         color = "#93c5fd"; border = "rgba(96,165,250,0.70)"
         bg    = "rgba(6,16,30,0.88)"; anim = "blink-smile"
         sub   = f"avg cloud {avg_cloud}%, bright moon"
-    elif best_streak >= 1 or avg_cloud <= 50:
+    elif best_streak >= 1 or avg_cloud <= 40:
         tier = "CLEAR SKIES"
         icon = "🌤️"; stars = "★★"
         color = "#fde68a"; border = "rgba(251,191,36,0.65)"
         bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
+        sub   = f"avg cloud {avg_cloud}%"
+    elif avg_cloud <= 70:
+        tier = "PARTLY CLOUDY"
+        icon = "🌥️"; stars = "★"
+        color = "#fdba74"; border = "rgba(251,146,60,0.55)"
+        bg    = "rgba(20,12,4,0.88)"; anim = "blink-neutral"
         sub   = f"avg cloud {avg_cloud}%"
     else:
         tier = "CLOUDY NIGHT"
@@ -2581,7 +2587,7 @@ if _verdict:
         _temp_src_table = weather_table_data
     _night_temps = [r.get("_temp") for r in _temp_src_table[:12] if r.get("_temp") is not None]
     if _night_temps:
-        _temp_range_str = f"{round(min(_night_temps))}°-{round(max(_night_temps))}°"
+        _temp_range_str = f"{round(max(_night_temps))}°-{round(min(_night_temps))}°"
     else:
         _temp_range_str = ""
 
