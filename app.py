@@ -345,7 +345,8 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
-             ("_need_fly", False), ("_skip_prefetch", False)]:
+             ("_need_fly", False), ("_skip_prefetch", False),
+             ("_scan_result", None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1654,6 +1655,197 @@ elif "JMA" in sources_used:
 else:
     active_source_label = st.session_state.weather_source
 
+# ── NIGHT VERDICT (full night 18:00~06:00) ───────────────────────────────────
+def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
+    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00, dựa chủ yếu trên Cloud %
+    (và precip/temp để phân biệt mưa/tuyết) — giống Clear Outside / Astrospheric
+    nhưng đơn giản, dễ hiểu: PERFECT NIGHT / GOOD STARRY NIGHT / FAIR SKIES /
+    PATCHY CLEAR / PARTLY CLOUDY / CLOUDY NIGHT / RAINY NIGHT / SNOWY NIGHT / TOO BRIGHT.
+
+    'Giờ tốt' = slot trời đã tối thiên văn (sun_alt ≤ -12°) và cloud ≤ 25%.
+
+    Trả về dict với tier, icon, stars, sub, màu sắc, v.v."""
+    if not table_data:
+        return None
+    # 13 slots = 18:00..23:00 + 00:00..06:00, nhưng "đêm" chỉ tính 12 giờ (18:00→06:00).
+    # Slot 06:00 cuối chỉ là điểm mốc kết thúc (đã là sáng), không tính vào giờ clear.
+    if len(table_data) > 12:
+        table_data = table_data[:-1]
+        if sun_alts is not None:
+            sun_alts = sun_alts[:-1]
+    if sun_alts is None:
+        sun_alts = [-90] * len(table_data)
+
+    total = 0
+    rain_hours = 0
+    snow_hours = 0
+    cloud_vals = []
+    # streak[i] = True nếu slot i là "giờ tốt" (trong khung tối thiên văn)
+    good_flags = []
+    for r, sa in zip(table_data, sun_alts):
+        # Chỉ tính các slot trời đã tối thiên văn thực sự (sun_alt ≤ -12°)
+        if sa is not None and sa > -12:
+            continue
+        total += 1
+        cloud_str = r.get("☁️", "100%")
+        precip    = r.get("_precip", 0.0) or 0.0
+        temp_val  = r.get("_temp")
+        cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
+        cloud_vals.append(cloud_pct)
+
+        if precip >= 0.3:
+            if temp_val is not None and temp_val < 2.0:
+                snow_hours += 1
+            else:
+                rain_hours += 1
+
+        is_good = (precip < 0.3) and (cloud_pct <= 25)
+        good_flags.append(is_good)
+
+    # ── Không có khung giờ tối thiên văn (đêm hè, trời sáng suốt) ──────────────
+    if total == 0:
+        return {"tier": "TOO BRIGHT", "icon": "🌃", "stars": "✕",
+                "sub": "no astro-dark",
+                "color": "#94a3b8", "border": "rgba(148,163,184,0.55)",
+                "bg": "rgba(10,14,22,0.88)", "anim": "blink-warn",
+                "good_hours": 0, "total": 0}
+
+    # ── Tìm cửa sổ liên tiếp dài nhất có điều kiện tốt (longest good streak) ──
+    best_streak = 0
+    cur_streak = 0
+    for g in good_flags:
+        if g:
+            cur_streak += 1
+            best_streak = max(best_streak, cur_streak)
+        else:
+            cur_streak = 0
+    good_hours = sum(good_flags)  # tổng giờ tốt (rời rạc), dùng cho sub-label
+    avg_cloud = round(sum(cloud_vals) / len(cloud_vals)) if cloud_vals else 100
+
+    # ── Trăng sáng? (ảnh hưởng đến chụp Milky Way / DSO mờ) ────────────────────
+    bright_moon = (moon_illum is not None) and (moon_illum >= 50)
+
+    # ── Smart Labeling: ưu tiên Cloud % trung bình của cả đêm, dễ hiểu ─────────
+    if snow_hours >= int(total * 0.3):
+        tier = "SNOWY NIGHT"
+        icon = "❄️"; stars = "✕"
+        color = "#bae6fd"; border = "rgba(186,230,253,0.70)"
+        bg    = "rgba(8,18,30,0.88)"; anim = "blink-warn"
+        sub   = f"{snow_hours}h snow"
+    elif rain_hours >= int(total * 0.3):
+        tier = "RAINY NIGHT"
+        icon = "🌧️"; stars = "✕"
+        color = "#fca5a5"; border = "rgba(239,68,68,0.70)"
+        bg    = "rgba(30,8,8,0.88)"; anim = "blink-warn"
+        sub   = f"{rain_hours}h rain"
+    elif best_streak >= 3 and not bright_moon:
+        tier = "PERFECT NIGHT"
+        icon = "🌌"; stars = "★★★★"
+        color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
+        bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
+        sub   = f"avg cloud {avg_cloud}%, {best_streak}h clear"
+    elif best_streak >= 3 and bright_moon:
+        tier = "GOOD STARRY NIGHT"
+        icon = "🔭"; stars = "★★★"
+        color = "#93c5fd"; border = "rgba(96,165,250,0.70)"
+        bg    = "rgba(6,16,30,0.88)"; anim = "blink-smile"
+        sub   = f"avg cloud {avg_cloud}%, bright moon"
+    elif best_streak >= 1:
+        tier = "FAIR SKIES"
+        icon = "🌤️"; stars = "★★"
+        color = "#fde68a"; border = "rgba(251,191,36,0.65)"
+        bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
+        sub   = f"avg cloud {avg_cloud}%, {best_streak}h window"
+    elif avg_cloud <= 40:
+        tier = "PATCHY CLEAR"
+        icon = "🌥️"; stars = "★"
+        color = "#fef08a"; border = "rgba(250,204,21,0.55)"
+        bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
+        sub   = f"avg cloud {avg_cloud}%, no long window"
+    elif avg_cloud <= 70:
+        tier = "PARTLY CLOUDY"
+        icon = "🌥️"; stars = "★"
+        color = "#fdba74"; border = "rgba(251,146,60,0.55)"
+        bg    = "rgba(20,12,4,0.88)"; anim = "blink-neutral"
+        sub   = f"avg cloud {avg_cloud}%"
+    else:
+        tier = "CLOUDY NIGHT"
+        icon = "☁️"; stars = "✕"
+        color = "#94a3b8"; border = "rgba(148,163,184,0.55)"
+        bg    = "rgba(10,14,22,0.88)"; anim = "blink-warn"
+        sub   = f"avg cloud {avg_cloud}%"
+
+    return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
+            "color": color, "border": border, "bg": bg, "anim": anim,
+            "good_hours": good_hours, "best_streak": best_streak, "total": total}
+
+# ── GREAT NIGHT SCAN — quét 27 địa điểm yêu thích × 7 ngày tới ───────────────
+# Điều kiện thông báo (AND):
+#   1) Moon illumination < 32%
+#   2) Có ít nhất 1/27 địa điểm đầu (sao xanh) đạt tier == "PERFECT NIGHT"
+#   3) Chỉ báo NGÀY SỚM NHẤT thoả mãn (1-7 ngày tới)
+_FAVORITE_LOCATIONS = [(n, c) for n, c in LOCATION_DATABASE.items()
+                       if (lambda nm: nm.split(".")[0].strip().isdigit() and int(nm.split(".")[0].strip()) <= 27)(n)]
+
+def _run_great_night_scan():
+    """Quét 7 ngày tới cho 27 địa điểm yêu thích, trả về dict kết quả ngày sớm nhất
+    có PERFECT NIGHT + moon < 32%, hoặc None nếu không có ngày nào thoả."""
+    for day_off in range(7):
+        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        moon_illum, _ = get_moon_phase_percent(d)
+        if moon_illum >= 32:
+            continue
+        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        for loc_name, loc_coords in _FAVORITE_LOCATIONS:
+            lat, lon = loc_coords
+            try:
+                hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+            except Exception:
+                continue
+            if not hourly:
+                continue
+            frozen = tuple(
+                (k, tuple(v) if isinstance(v, list) else v)
+                for k, v in hourly.items()
+            )
+            try:
+                table, _, _, sun_alts, *_r = _build_night_data(
+                    lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0
+                )
+            except Exception:
+                continue
+            verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if verdict and verdict["tier"] == "PERFECT NIGHT":
+                return {
+                    "date": d, "day_off": day_off,
+                    "loc_name": loc_name, "loc_coords": loc_coords,
+                    "moon_illum": moon_illum, "verdict": verdict,
+                }
+    return None
+
+# ── SCAN button — đặt trên cùng khu vực với LPM (cuối map, trước render) ────
+_scan_col1, _scan_col2 = st.columns([1, 5])
+with _scan_col1:
+    if st.button("🔍 SCAN", key="btn_great_night_scan",
+                  help="Quét 27 địa điểm yêu thích trong 7 ngày tới, tìm PERFECT NIGHT gần nhất (moon < 32%)"):
+        with st.spinner("Scanning 27 favorite spots over the next 7 nights..."):
+            st.session_state._scan_result = _run_great_night_scan()
+        if st.session_state._scan_result is None:
+            st.session_state._scan_result = "none"
+
+with _scan_col2:
+    _sr = st.session_state._scan_result
+    if _sr == "none":
+        st.info("🔍 No PERFECT NIGHT found in the next 7 days (moon < 32% required).")
+    elif _sr:
+        _sr_date = _sr["date"]
+        _sr_label = f"{_sr_date.month}/{_sr_date.day}"
+        _sr_loc_label = _strip_loc_num(_sr["loc_name"])
+        st.success(
+            f"🌌 **{_sr_label} — PERFECT NIGHT** at **{_sr_loc_label}** "
+            f"(moon {_sr['moon_illum']:.0f}%, {_sr['verdict']['sub']})"
+        )
+
 # ── MAP ───────────────────────────────────────────────────────────────────────
 # Add top margin so the in-map tile buttons are not obscured by Streamlit toolbar
 st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
@@ -2429,6 +2621,31 @@ if _selected_marker_args:
 
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
                   for c in LOCATION_DATABASE.values())
+
+# ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh địa điểm tìm được ────
+_scan_r = st.session_state._scan_result
+if _scan_r and _scan_r != "none":
+    _scan_lat, _scan_lon = _scan_r["loc_coords"]
+    _ring_html = (
+        '<style>@keyframes great-night-pulse {'
+        '0%{transform:scale(0.6);opacity:0.9;}'
+        '70%{transform:scale(2.2);opacity:0;}'
+        '100%{transform:scale(0.6);opacity:0;}}</style>'
+        '<div style="width:40px;height:40px;border-radius:50%;'
+        'border:3px solid #6ee7b7;'
+        'box-shadow:0 0 10px rgba(110,231,183,0.8);'
+        'animation:great-night-pulse 1.8s ease-out infinite;'
+        'transform-origin:center;pointer-events:none;"></div>'
+    )
+    folium.Marker(
+        [_scan_lat, _scan_lon],
+        icon=folium.DivIcon(html=_ring_html, icon_size=(40,40), icon_anchor=(20,20)),
+        tooltip=folium.Tooltip(
+            f"🌌 PERFECT NIGHT — {_scan_r['date'].month}/{_scan_r['date'].day} "
+            f"({_strip_loc_num(_scan_r['loc_name'])})",
+            sticky=False, parse_html=False),
+    ).add_to(m)
+
 if not is_bookmark:
     folium.Marker(
         [st.session_state.lat, st.session_state.lon],
@@ -2453,123 +2670,6 @@ if st.session_state._need_fly:
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
-def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
-    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00, dựa chủ yếu trên Cloud %
-    (và precip/temp để phân biệt mưa/tuyết) — giống Clear Outside / Astrospheric
-    nhưng đơn giản, dễ hiểu: PERFECT NIGHT / CLEAR SKIES / CLOUDY NIGHT /
-    RAINY NIGHT / SNOWY NIGHT / TOO BRIGHT.
-
-    'Giờ tốt' = slot trời đã tối thiên văn (sun_alt ≤ -12°) và cloud ≤ 25%.
-
-    Trả về dict với tier, icon, stars, sub, màu sắc, v.v."""
-    if not table_data:
-        return None
-    # 13 slots = 18:00..23:00 + 00:00..06:00, nhưng "đêm" chỉ tính 12 giờ (18:00→06:00).
-    # Slot 06:00 cuối chỉ là điểm mốc kết thúc (đã là sáng), không tính vào giờ clear.
-    if len(table_data) > 12:
-        table_data = table_data[:-1]
-        if sun_alts is not None:
-            sun_alts = sun_alts[:-1]
-    if sun_alts is None:
-        sun_alts = [-90] * len(table_data)
-
-    total = 0
-    rain_hours = 0
-    snow_hours = 0
-    cloud_vals = []
-    # streak[i] = True nếu slot i là "giờ tốt" (trong khung tối thiên văn)
-    good_flags = []
-    for r, sa in zip(table_data, sun_alts):
-        # Chỉ tính các slot trời đã tối thiên văn thực sự (sun_alt ≤ -12°)
-        if sa is not None and sa > -12:
-            continue
-        total += 1
-        cloud_str = r.get("☁️", "100%")
-        precip    = r.get("_precip", 0.0) or 0.0
-        temp_val  = r.get("_temp")
-        cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
-        cloud_vals.append(cloud_pct)
-
-        if precip >= 0.3:
-            if temp_val is not None and temp_val < 2.0:
-                snow_hours += 1
-            else:
-                rain_hours += 1
-
-        is_good = (precip < 0.3) and (cloud_pct <= 25)
-        good_flags.append(is_good)
-
-    # ── Không có khung giờ tối thiên văn (đêm hè, trời sáng suốt) ──────────────
-    if total == 0:
-        return {"tier": "TOO BRIGHT", "icon": "🌃", "stars": "✕",
-                "sub": "no astro-dark",
-                "color": "#94a3b8", "border": "rgba(148,163,184,0.55)",
-                "bg": "rgba(10,14,22,0.88)", "anim": "blink-warn",
-                "good_hours": 0, "total": 0}
-
-    # ── Tìm cửa sổ liên tiếp dài nhất có điều kiện tốt (longest good streak) ──
-    best_streak = 0
-    cur_streak = 0
-    for g in good_flags:
-        if g:
-            cur_streak += 1
-            best_streak = max(best_streak, cur_streak)
-        else:
-            cur_streak = 0
-    good_hours = sum(good_flags)  # tổng giờ tốt (rời rạc), dùng cho sub-label
-    avg_cloud = round(sum(cloud_vals) / len(cloud_vals)) if cloud_vals else 100
-
-    # ── Trăng sáng? (ảnh hưởng đến chụp Milky Way / DSO mờ) ────────────────────
-    bright_moon = (moon_illum is not None) and (moon_illum >= 50)
-
-    # ── Smart Labeling: ưu tiên Cloud % trung bình của cả đêm, dễ hiểu ─────────
-    if snow_hours >= int(total * 0.3):
-        tier = "SNOWY NIGHT"
-        icon = "❄️"; stars = "✕"
-        color = "#bae6fd"; border = "rgba(186,230,253,0.70)"
-        bg    = "rgba(8,18,30,0.88)"; anim = "blink-warn"
-        sub   = f"{snow_hours}h snow"
-    elif rain_hours >= int(total * 0.3):
-        tier = "RAINY NIGHT"
-        icon = "🌧️"; stars = "✕"
-        color = "#fca5a5"; border = "rgba(239,68,68,0.70)"
-        bg    = "rgba(30,8,8,0.88)"; anim = "blink-warn"
-        sub   = f"{rain_hours}h rain"
-    elif best_streak >= 3 and not bright_moon:
-        tier = "PERFECT NIGHT"
-        icon = "🌌"; stars = "★★★★"
-        color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
-        bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
-        sub   = f"avg cloud {avg_cloud}%, {best_streak}h clear"
-    elif best_streak >= 3 and bright_moon:
-        tier = "GOOD FOR DEEP SKY"
-        icon = "🔭"; stars = "★★★"
-        color = "#93c5fd"; border = "rgba(96,165,250,0.70)"
-        bg    = "rgba(6,16,30,0.88)"; anim = "blink-smile"
-        sub   = f"avg cloud {avg_cloud}%, bright moon"
-    elif best_streak >= 1 or avg_cloud <= 40:
-        tier = "CLEAR SKIES"
-        icon = "🌤️"; stars = "★★"
-        color = "#fde68a"; border = "rgba(251,191,36,0.65)"
-        bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
-        sub   = f"avg cloud {avg_cloud}%"
-    elif avg_cloud <= 70:
-        tier = "PARTLY CLOUDY"
-        icon = "🌥️"; stars = "★"
-        color = "#fdba74"; border = "rgba(251,146,60,0.55)"
-        bg    = "rgba(20,12,4,0.88)"; anim = "blink-neutral"
-        sub   = f"avg cloud {avg_cloud}%"
-    else:
-        tier = "CLOUDY NIGHT"
-        icon = "☁️"; stars = "✕"
-        color = "#94a3b8"; border = "rgba(148,163,184,0.55)"
-        bg    = "rgba(10,14,22,0.88)"; anim = "blink-warn"
-        sub   = f"avg cloud {avg_cloud}%"
-
-    return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
-            "color": color, "border": border, "bg": bg, "anim": anim,
-            "good_hours": good_hours, "best_streak": best_streak, "total": total}
-
 if st.session_state.day_offset == 0:
     (_full_table_data, _full_hours_labels, _full_moon_alt, _full_sun_alt, *_rest_full) = _build_night_data(
         st.session_state.lat, st.session_state.lon,
