@@ -1715,14 +1715,16 @@ _COMBINED_CTRL_TEMPLATE = Template("""
   function _lsSet(k, v) { try { localStorage.setItem(k, String(v)); } catch(e){} }
 
   function _buildWindySrc(lat, lon, zoom) {
+    var latStr = parseFloat(lat).toFixed(4);
+    var lonStr = parseFloat(lon).toFixed(4);
     return 'https://embed.windy.com/embed2.html'
-      + '?lat=' + parseFloat(lat).toFixed(4)
-      + '&lon=' + parseFloat(lon).toFixed(4)
-      + '&detailLat=' + parseFloat(lat).toFixed(4)
-      + '&detailLon=' + parseFloat(lon).toFixed(4)
+      + '?lat=' + latStr
+      + '&lon=' + lonStr
+      + '&detailLat=' + latStr
+      + '&detailLon=' + lonStr
       + '&width=650&height=450&zoom=' + Math.round(zoom)
       + '&level=surface&overlay=rain&product=ecmwf'
-      + '&menu=&message=true&marker=&calendar=now'
+      + '&menu=&message=true&marker=' + latStr + ',' + lonStr + '&calendar=now'
       + '&pressure=&type=map&location=coordinates'
       + '&detail=&metricWind=default&metricTemp=default&radarRange=-1';
   }
