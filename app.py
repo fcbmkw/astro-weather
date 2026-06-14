@@ -2343,6 +2343,8 @@ def _get_loc_image_b64(loc_name: str):
                 return base64.b64encode(f.read()).decode(), mime
     return None, None
 
+_selected_marker_args = None  # lưu lại marker được chọn, vẽ sau cùng để nổi lên trên
+
 for loc_name, loc_coords in LOCATION_DATABASE.items():
     is_sel = abs(loc_coords[0]-st.session_state.lat)<0.001 and abs(loc_coords[1]-st.session_state.lon)<0.001
     try:
@@ -2372,7 +2374,8 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
                     f'white-space:normal;word-break:break-word;overflow-wrap:break-word;">'
                     f'{img_html}{_loc_label}</div>')
     if is_sel:
-        # Ngôi sao được chọn: nhấp nháy (pulse) để dễ nhận biết
+        # Ngôi sao được chọn: nhấp nháy (pulse) để dễ nhận biết + z-index cao để
+        # không bị các ngôi sao khác che mất khi zoom nhỏ.
         _star_html = (
             f'<style>@keyframes star-pulse-sel {{'
             f'0%,100%{{transform:scale(1);opacity:1;}}'
@@ -2381,8 +2384,12 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
             f'text-shadow:0 0 4px rgba(0,0,0,0.9);filter:{star_glow};'
             f'cursor:pointer;line-height:1;font-family:serif;'
             f'animation:star-pulse-sel 1.1s ease-in-out infinite;'
-            f'transform-origin:center;display:inline-block;">★</div>'
+            f'transform-origin:center;display:inline-block;'
+            f'position:relative;z-index:10000;">★</div>'
         )
+        # Lưu lại, vẽ sau cùng (sau loop) để marker này nằm trên cùng DOM stack
+        _selected_marker_args = (loc_coords, _star_html, tooltip_html)
+        continue
     else:
         _star_html = (
             f'<div style="font-size:{star_size};color:{star_color};'
@@ -2395,6 +2402,17 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
             html=_star_html,
             icon_size=(24,24), icon_anchor=(12,12)),
         tooltip=folium.Tooltip(tooltip_html, sticky=False, offset=(20, -10), parse_html=False),
+    ).add_to(m)
+
+# ── Vẽ marker được chọn SAU CÙNG → nằm trên cùng trong DOM stack của Leaflet ──
+if _selected_marker_args:
+    _sel_coords, _sel_html, _sel_tooltip = _selected_marker_args
+    folium.Marker(
+        _sel_coords,
+        icon=folium.DivIcon(
+            html=_sel_html,
+            icon_size=(24,24), icon_anchor=(12,12)),
+        tooltip=folium.Tooltip(_sel_tooltip, sticky=False, offset=(20, -10), parse_html=False),
     ).add_to(m)
 
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
@@ -2555,7 +2573,7 @@ if _verdict:
         _temp_src_table = weather_table_data
     _night_temps = [r.get("_temp") for r in _temp_src_table[:12] if r.get("_temp") is not None]
     if _night_temps:
-        _temp_range_str = f"{round(min(_night_temps))}°~{round(max(_night_temps))}°"
+        _temp_range_str = f"{round(min(_night_temps))}°-{round(max(_night_temps))}°"
     else:
         _temp_range_str = ""
 
@@ -2678,11 +2696,20 @@ if map_data:
                 st.session_state.sel_date        = date_options[0]
                 st.rerun()
 
-# ── SKY QUALITY (Transparency/Seeing) — tính trước khi vào layout ────────────
+# ── SKY QUALITY (Transparency/Seeing/Dew Risk) — tính trước khi vào layout ───
 def _build_sky_quality(table_data, sun_alts=None):
-    """Tính Transparency% và Seeing% trung bình cho khung tối thiên văn của đêm.
-    Transparency: dựa trên cloud cover + humidity (ẩm cao/khói mù làm mờ ảnh).
-    Seeing: ước lượng từ wind speed (gió mạnh ở mặt đất → nhiễu động khí quyển cao)."""
+    """Tính Transparency%, Seeing% và Dew Risk% trung bình cho khung tối thiên văn của đêm.
+
+    - Transparency: dựa trên cloud cover (hệ số cao) + humidity (hệ số nhẹ, ẩm cao/khói
+      mù làm mờ ảnh). 100% = trời trong hoàn toàn, khô.
+    - Seeing: ước lượng từ wind speed (gió mạnh ở mặt đất → nhiễu động khí quyển cao),
+      NHƯNG chỉ có ý nghĩa khi trời quang — nếu mây dày, seeing cũng bị giảm theo
+      (không thể "thấy rõ" qua lớp mây). 100% = khí quyển ổn định VÀ trời trong.
+    - Dew Risk: humidity càng cao → nguy cơ đọng sương trên ống kính càng cao.
+      100% = nguy cơ rất cao (cần dây sưởi kính), 0% = không lo sương.
+
+    Lưu ý: Humidity (độ ẩm tương đối, %) khác Dew Point (điểm sương, °C).
+    Ở đây dùng Humidity làm proxy cho Dew Risk vì không có dữ liệu dew point riêng."""
     if not table_data:
         return None
     if len(table_data) > 12:
@@ -2694,6 +2721,7 @@ def _build_sky_quality(table_data, sun_alts=None):
 
     transp_vals = []
     seeing_vals = []
+    dew_vals = []
     for r, sa in zip(table_data, sun_alts):
         if sa is not None and sa > -12:
             continue
@@ -2711,15 +2739,24 @@ def _build_sky_quality(table_data, sun_alts=None):
         transp = 100 - cloud_pct * 0.9 - max(0, humid_pct - 60) * 0.5
         transp_vals.append(max(0, min(100, transp)))
 
-        # Seeing: gió nhẹ → seeing tốt. Gió > 8m/s → nhiễu động mạnh, giảm điểm.
-        seeing = 100 - max(0, wind_ms - 2) * 9
+        # Seeing: gió nhẹ → ổn định khí quyển tốt. Gió > 2m/s → nhiễu động tăng.
+        # Nhân thêm hệ số theo cloud cover — mây dày thì seeing không còn ý nghĩa.
+        seeing_atmos = 100 - max(0, wind_ms - 2) * 9
+        seeing_atmos = max(0, min(100, seeing_atmos))
+        cloud_factor = max(0, 100 - cloud_pct) / 100  # 1.0 nếu trời quang, 0 nếu mây kín
+        seeing = seeing_atmos * cloud_factor
         seeing_vals.append(max(0, min(100, seeing)))
+
+        # Dew Risk: humidity ≥ 70% bắt đầu có nguy cơ, ≥ 95% → nguy cơ rất cao
+        dew_risk = max(0, (humid_pct - 70)) * (100 / 30)  # 70%→0, 100%→100
+        dew_vals.append(max(0, min(100, dew_risk)))
 
     if not transp_vals:
         return None
     avg_transp = round(sum(transp_vals) / len(transp_vals))
     avg_seeing = round(sum(seeing_vals) / len(seeing_vals))
-    return {"transparency": avg_transp, "seeing": avg_seeing}
+    avg_dew    = round(sum(dew_vals) / len(dew_vals))
+    return {"transparency": avg_transp, "seeing": avg_seeing, "dew_risk": avg_dew}
 
 if st.session_state.day_offset == 0:
     _sky_q = _build_sky_quality(_full_table_data, _full_sun_alt)
@@ -2735,6 +2772,17 @@ def _quality_label(val):
     if val >= 75: return "Excellent"
     elif val >= 45: return "Average"
     else: return "Poor"
+
+def _risk_color(val):
+    """Cho các chỉ số mà cao = xấu (ví dụ Dew Risk)."""
+    if val >= 60: return "#fca5a5"   # đỏ — nguy cơ cao
+    elif val >= 25: return "#fde68a" # vàng — trung bình
+    else: return "#6ee7b7"           # xanh lá — an toàn
+
+def _risk_label(val):
+    if val >= 60: return "High"
+    elif val >= 25: return "Moderate"
+    else: return "Low"
 
 # ── LAYOUT: LEFT PANEL + RIGHT PANEL ─────────────────────────────────────────
 st.markdown("""
@@ -2778,24 +2826,31 @@ with col_right:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # Transparency + Seeing — 1 block, trái/phải (thay vị trí Position & Coordinate cũ)
+    # Transparency + Seeing + Dew Risk — 1 block, 3 cột (thay vị trí Position & Coordinate cũ)
     if _sky_q:
         _tc = _quality_color(_sky_q["transparency"])
         _sc = _quality_color(_sky_q["seeing"])
+        _dc = _risk_color(_sky_q["dew_risk"])
         _tl = _quality_label(_sky_q["transparency"])
         _sl = _quality_label(_sky_q["seeing"])
+        _dl = _risk_label(_sky_q["dew_risk"])
         st.markdown(f"""
         <div class="metric-card">
-            <div style="display:flex;gap:10px;">
+            <div style="display:flex;gap:8px;">
                 <div style="flex:1;text-align:center;">
-                    <div style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.05em;">TRANSPARENCY</div>
-                    <div style="font-size:24px;font-weight:800;color:{_tc};margin-top:4px;">{_sky_q["transparency"]}%</div>
+                    <div style="font-size:10.5px;color:#94a3b8;font-weight:700;letter-spacing:0.04em;">TRANSPARENCY</div>
+                    <div style="font-size:22px;font-weight:800;color:{_tc};margin-top:4px;">{_sky_q["transparency"]}%</div>
                     <div style="font-size:11px;color:{_tc};opacity:0.85;margin-top:1px;">{_tl}</div>
                 </div>
                 <div style="flex:1;text-align:center;border-left:1px solid #334155;">
-                    <div style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.05em;">SEEING</div>
-                    <div style="font-size:24px;font-weight:800;color:{_sc};margin-top:4px;">{_sky_q["seeing"]}%</div>
+                    <div style="font-size:10.5px;color:#94a3b8;font-weight:700;letter-spacing:0.04em;">SEEING</div>
+                    <div style="font-size:22px;font-weight:800;color:{_sc};margin-top:4px;">{_sky_q["seeing"]}%</div>
                     <div style="font-size:11px;color:{_sc};opacity:0.85;margin-top:1px;">{_sl}</div>
+                </div>
+                <div style="flex:1;text-align:center;border-left:1px solid #334155;">
+                    <div style="font-size:10.5px;color:#94a3b8;font-weight:700;letter-spacing:0.04em;">DEW RISK</div>
+                    <div style="font-size:22px;font-weight:800;color:{_dc};margin-top:4px;">{_sky_q["dew_risk"]}%</div>
+                    <div style="font-size:11px;color:{_dc};opacity:0.85;margin-top:1px;">{_dl}</div>
                 </div>
             </div>
         </div>""", unsafe_allow_html=True)
