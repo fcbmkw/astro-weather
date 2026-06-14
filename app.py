@@ -2407,10 +2407,14 @@ if st.session_state._need_fly:
 map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
-def _build_night_verdict(table_data, sun_alts=None):
-    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00.
+def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
+    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00 theo logic 'cửa sổ tốt nhất'
+    (longest good streak) — giống Clear Outside / Astrospheric.
+
     'Giờ tốt' = slot trời đã tối thiên văn (sun_alt ≤ -12°), cloud ≤ 25% VÀ precip < 0.3mm.
-    Trả về dict với verdict, good_hours, total_hours, icon, màu sắc."""
+    'Giờ sương' = humidity ≥ 90% (nguy cơ đọng sương trên ống kính).
+
+    Trả về dict với tier, icon, stars, sub, màu sắc, v.v."""
     if not table_data:
         return None
     # 13 slots = 18:00..23:00 + 00:00..06:00, nhưng "đêm" chỉ tính 12 giờ (18:00→06:00).
@@ -2421,21 +2425,30 @@ def _build_night_verdict(table_data, sun_alts=None):
             sun_alts = sun_alts[:-1]
     if sun_alts is None:
         sun_alts = [-90] * len(table_data)
+
     total = 0
-    good_hours = 0
     rain_hours = 0
+    dew_hours = 0
+    # streak[i] = True nếu slot i là "giờ tốt" (trong khung tối thiên văn)
+    good_flags = []
     for r, sa in zip(table_data, sun_alts):
         # Chỉ tính các slot trời đã tối thiên văn thực sự (sun_alt ≤ -12°)
         if sa is not None and sa > -12:
             continue
         total += 1
         cloud_str = r.get("☁️", "100%")
+        humid_str = r.get("💧", "0%")
         precip    = r.get("_precip", 0.0) or 0.0
         cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
+        humid_pct = int(humid_str.replace("%","")) if humid_str.replace("%","").isdigit() else 0
+
         if precip >= 0.3:
             rain_hours += 1
-        elif cloud_pct <= 25:
-            good_hours += 1
+        if humid_pct >= 90:
+            dew_hours += 1
+
+        is_good = (precip < 0.3) and (cloud_pct <= 25)
+        good_flags.append(is_good)
 
     # ── Không có khung giờ tối thiên văn (đêm hè, trời sáng suốt) ──────────────
     if total == 0:
@@ -2445,25 +2458,51 @@ def _build_night_verdict(table_data, sun_alts=None):
                 "bg": "rgba(10,14,22,0.88)", "anim": "blink-warn",
                 "good_hours": 0, "total": 0}
 
-    # ── Tier logic ────────────────────────────────────────────────────────────
-    if good_hours >= 5:
-        tier = "GREAT NIGHT"
+    # ── Tìm cửa sổ liên tiếp dài nhất có điều kiện tốt (longest good streak) ──
+    best_streak = 0
+    cur_streak = 0
+    for g in good_flags:
+        if g:
+            cur_streak += 1
+            best_streak = max(best_streak, cur_streak)
+        else:
+            cur_streak = 0
+    good_hours = sum(good_flags)  # tổng giờ tốt (rời rạc), dùng cho sub-label
+
+    # ── Trăng sáng? (ảnh hưởng đến chụp Milky Way / DSO mờ) ────────────────────
+    bright_moon = (moon_illum is not None) and (moon_illum >= 50)
+
+    # ── Smart Labeling: ưu tiên cửa sổ liên tiếp dài, ít thông tin nhưng dễ hiểu ──
+    if best_streak >= 3 and not bright_moon and dew_hours < total * 0.5:
+        tier = "PERFECT NIGHT"
         icon = "🌌"; stars = "★★★★"
         color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
         bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
-        sub   = f"{good_hours}h clear"
-    elif good_hours >= 3:
-        tier = "WORTH IT"
-        icon = "📷"; stars = "★★★"
-        color = "#86efac"; border = "rgba(134,239,172,0.70)"
-        bg    = "rgba(5,20,12,0.88)"; anim = "blink-smile"
-        sub   = f"{good_hours}h clear"
-    elif good_hours >= 1:
-        tier = "MARGINAL"
+        sub   = f"{best_streak}h clear window"
+    elif best_streak >= 3 and bright_moon:
+        tier = "GOOD FOR DEEP SKY"
+        icon = "🔭"; stars = "★★★"
+        color = "#93c5fd"; border = "rgba(96,165,250,0.70)"
+        bg    = "rgba(6,16,30,0.88)"; anim = "blink-smile"
+        sub   = f"{best_streak}h clear, bright moon"
+    elif dew_hours >= total * 0.6 and best_streak >= 2:
+        tier = "HIGH DEW RISK"
+        icon = "💧"; stars = "★★"
+        color = "#7dd3fc"; border = "rgba(56,189,248,0.65)"
+        bg    = "rgba(6,22,28,0.88)"; anim = "blink-neutral"
+        sub   = f"{best_streak}h clear, bring dew heater"
+    elif best_streak >= 2:
+        tier = "SHORT WINDOW"
         icon = "🌤️"; stars = "★★"
         color = "#fde68a"; border = "rgba(251,191,36,0.65)"
         bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
-        sub   = f"only {good_hours}h clear"
+        sub   = f"only {best_streak}h clear"
+    elif best_streak >= 1:
+        tier = "MARGINAL"
+        icon = "🌥️"; stars = "★"
+        color = "#fdba74"; border = "rgba(251,146,60,0.55)"
+        bg    = "rgba(20,12,4,0.88)"; anim = "blink-neutral"
+        sub   = f"only {best_streak}h clear"
     elif rain_hours >= int(total * 0.5):
         tier = "RAINY NIGHT"
         icon = "🌧️"; stars = "✕"
@@ -2479,7 +2518,7 @@ def _build_night_verdict(table_data, sun_alts=None):
 
     return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
             "color": color, "border": border, "bg": bg, "anim": anim,
-            "good_hours": good_hours, "total": total}
+            "good_hours": good_hours, "best_streak": best_streak, "total": total}
 
 if st.session_state.day_offset == 0:
     (_full_table_data, _full_hours_labels, _full_moon_alt, _full_sun_alt, *_rest_full) = _build_night_data(
@@ -2489,9 +2528,9 @@ if st.session_state.day_offset == 0:
         st.session_state.weather_source,
         loc_utc_offset_h,
     )
-    _verdict = _build_night_verdict(_full_table_data, _full_sun_alt)
+    _verdict = _build_night_verdict(_full_table_data, _full_sun_alt, moon_pct)
 else:
-    _verdict = _build_night_verdict(weather_table_data, sun_altitudes)
+    _verdict = _build_night_verdict(weather_table_data, sun_altitudes, moon_pct)
 if _verdict:
     # ── Date label: "Tonight" nếu day_offset=0, còn lại "MM/DD night" ────────
     if st.session_state.day_offset == 0:
@@ -3021,7 +3060,89 @@ with col_left:
 </div>""", unsafe_allow_html=True)
         if st.button("🔄 再試行", key="btn_retry_weather"):
             st.cache_data.clear()
-            st.rerun()
+            st.rerun(scope="app")
+
+# ── TRANSPARENCY / SEEING BLOCK — đánh giá tổng cho cả đêm (day_offset hiện tại) ──
+if weather_table_data:
+    def _build_sky_quality(table_data, sun_alts=None):
+        """Tính Transparency% và Seeing% trung bình cho khung tối thiên văn của đêm.
+        Transparency: dựa trên cloud cover + humidity (ẩm cao/khói mù làm mờ ảnh).
+        Seeing: ước lượng từ wind speed (gió mạnh ở mặt đất → nhiễu động khí quyển cao)."""
+        if not table_data:
+            return None
+        if len(table_data) > 12:
+            table_data = table_data[:-1]
+            if sun_alts is not None:
+                sun_alts = sun_alts[:-1]
+        if sun_alts is None:
+            sun_alts = [-90] * len(table_data)
+
+        transp_vals = []
+        seeing_vals = []
+        for r, sa in zip(table_data, sun_alts):
+            if sa is not None and sa > -12:
+                continue
+            cloud_str = r.get("☁️", "100%")
+            humid_str = r.get("💧", "0%")
+            wind_str  = r.get("💨", "0m/s")
+            cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
+            humid_pct = int(humid_str.replace("%","")) if humid_str.replace("%","").isdigit() else 0
+            try:
+                wind_ms = float(wind_str.replace("m/s",""))
+            except ValueError:
+                wind_ms = 0.0
+
+            # Transparency: trừ điểm theo cloud cover (hệ số cao) và humidity (hệ số nhẹ)
+            transp = 100 - cloud_pct * 0.9 - max(0, humid_pct - 60) * 0.5
+            transp_vals.append(max(0, min(100, transp)))
+
+            # Seeing: gió nhẹ → seeing tốt. Gió > 8m/s → nhiễu động mạnh, giảm điểm.
+            seeing = 100 - max(0, wind_ms - 2) * 9
+            seeing_vals.append(max(0, min(100, seeing)))
+
+        if not transp_vals:
+            return None
+        avg_transp = round(sum(transp_vals) / len(transp_vals))
+        avg_seeing = round(sum(seeing_vals) / len(seeing_vals))
+        return {"transparency": avg_transp, "seeing": avg_seeing}
+
+    if st.session_state.day_offset == 0:
+        _sky_q = _build_sky_quality(_full_table_data, _full_sun_alt)
+    else:
+        _sky_q = _build_sky_quality(weather_table_data, sun_altitudes)
+
+    if _sky_q:
+        def _quality_color(val):
+            if val >= 75: return "#6ee7b7"   # xanh lá — tốt
+            elif val >= 45: return "#fde68a" # vàng — trung bình
+            else: return "#fca5a5"           # đỏ — kém
+
+        def _quality_label(val):
+            if val >= 75: return "Excellent"
+            elif val >= 45: return "Average"
+            else: return "Poor"
+
+        _tc = _quality_color(_sky_q["transparency"])
+        _sc = _quality_color(_sky_q["seeing"])
+        _tl = _quality_label(_sky_q["transparency"])
+        _sl = _quality_label(_sky_q["seeing"])
+
+        st.markdown(f"""
+<div style="display:flex;gap:8px;margin-top:8px;margin-bottom:8px;">
+  <div style="flex:1;background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;
+              padding:10px 14px;text-align:center;box-shadow:0 0 20px rgba(234,88,12,0.10);">
+    <div style="font-size:11px;color:#fb923c;font-weight:700;letter-spacing:0.05em;opacity:0.75;">TRANSPARENCY</div>
+    <div style="font-size:24px;font-weight:800;color:{_tc};margin-top:2px;">{_sky_q["transparency"]}%</div>
+    <div style="font-size:11px;color:{_tc};opacity:0.85;margin-top:1px;">{_tl}</div>
+  </div>
+  <div style="flex:1;background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;
+              padding:10px 14px;text-align:center;box-shadow:0 0 20px rgba(234,88,12,0.10);">
+    <div style="font-size:11px;color:#fb923c;font-weight:700;letter-spacing:0.05em;opacity:0.75;">SEEING</div>
+    <div style="font-size:24px;font-weight:800;color:{_sc};margin-top:2px;">{_sky_q["seeing"]}%</div>
+    <div style="font-size:11px;color:{_sc};opacity:0.85;margin-top:1px;">{_sl}</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
