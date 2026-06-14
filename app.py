@@ -1787,15 +1787,27 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
 _FAVORITE_LOCATIONS = [(n, c) for n, c in LOCATION_DATABASE.items()
                        if (lambda nm: nm.split(".")[0].strip().isdigit() and int(nm.split(".")[0].strip()) <= 27)(n)]
 
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Khoảng cách Haversine giữa 2 điểm (km)."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 def _run_great_night_scan():
     """Quét 7 ngày tới cho 27 địa điểm yêu thích, trả về dict kết quả ngày sớm nhất
-    có PERFECT NIGHT + moon < 32%, hoặc None nếu không có ngày nào thoả."""
+    có PERFECT NIGHT + moon < 32%.
+    - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày đó (sau khi lọc <20km)
+    - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
+    Trả về None nếu không có ngày nào thoả."""
     for day_off in range(7):
         d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
         if moon_illum >= 32:
             continue
         slots = _make_slots_for_offset(_night_base_jst, day_off)
+        perfect_locs = []  # (loc_name, loc_coords, verdict) tất cả địa điểm pass
         for loc_name, loc_coords in _FAVORITE_LOCATIONS:
             lat, lon = loc_coords
             try:
@@ -1816,11 +1828,31 @@ def _run_great_night_scan():
                 continue
             verdict = _build_night_verdict(table, sun_alts, moon_illum)
             if verdict and verdict["tier"] == "PERFECT NIGHT":
-                return {
-                    "date": d, "day_off": day_off,
-                    "loc_name": loc_name, "loc_coords": loc_coords,
-                    "moon_illum": moon_illum, "verdict": verdict,
-                }
+                perfect_locs.append((loc_name, loc_coords, verdict))
+
+        if not perfect_locs:
+            continue
+
+        # ── Lọc bỏ các địa điểm gần nhau < 20km (giữ lại địa điểm đầu tiên) ──
+        deduped = []
+        for entry in perfect_locs:
+            _, coords, _ = entry
+            too_close = False
+            for kept in deduped:
+                _, kept_coords, _ = kept
+                if _haversine_km(coords[0], coords[1], kept_coords[0], kept_coords[1]) < 20:
+                    too_close = True
+                    break
+            if not too_close:
+                deduped.append(entry)
+
+        first_name, first_coords, first_verdict = deduped[0]
+        return {
+            "date": d, "day_off": day_off,
+            "loc_name": first_name, "loc_coords": first_coords,
+            "moon_illum": moon_illum, "verdict": first_verdict,
+            "all_locs": deduped,  # [(loc_name, loc_coords, verdict), ...]
+        }
     return None
 
 # ── MAP ───────────────────────────────────────────────────────────────────────
@@ -1970,23 +2002,9 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
 
-      // ── SCAN button — fake map click at sentinel coords (99.9, 99.9) ──────
-      // Python's map click handler detects this sentinel and runs the
-      // GREAT NIGHT SCAN (27 favorite spots × 7 days), bypassing the need
-      // for direct JS→Python calls.
-      var scanBtn = L.DomUtil.create('a', '', infoRow);
-      scanBtn.href = 'javascript:void(0)';
-      scanBtn.title = 'Scan for great nights (27 spots, next 7 days)';
-      scanBtn.innerHTML = '&#128269;';
-      scanBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
-        + 'background:rgba(34,197,94,0.18);border:1.5px solid rgba(34,197,94,0.55);'
-        + 'border-radius:6px;padding:2px 7px;text-decoration:none;'
-        + 'font-size:12px;font-weight:700;'
-        + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
-      scanBtn.onmouseover = function(){ scanBtn.style.background = 'rgba(34,197,94,0.38)'; };
-      scanBtn.onmouseout  = function(){ scanBtn.style.background = 'rgba(34,197,94,0.18)'; };
-      scanBtn.onclick = function(e){
-        e.preventDefault();
+      // ── SCAN button — hidden; triggered by typing "scan" in search box ─────
+      // (kept as a JS function so search control can call it)
+      window._triggerScan = function() {
         map.fire('click', { latlng: L.latLng(99.9, 99.9) });
       };
 
@@ -2435,6 +2453,15 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase();
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
+        // Hidden keyword — show subtle hint in dropdown, do not search DB
+        if (q === 'scan') {
+          dropdown.innerHTML = '';
+          var hint = L.DomUtil.create('div', '', dropdown);
+          hint.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;';
+          hint.textContent = 'Press Enter to scan for great nights…';
+          dropdown.style.display = 'block';
+          return;
+        }
 
         // Translate any kanji substrings in the query to their romaji alias
         var translations = [];
@@ -2456,6 +2483,25 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       });
 
       L.DomEvent.on(inp, 'keydown', function(e){
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // ── Hidden SCAN trigger: gõ "scan" + Enter ──────────────────────────
+          if (inp.value.trim().toLowerCase() === 'scan') {
+            inp.value = '';
+            clr.style.display = 'none';
+            dropdown.style.display = 'none';
+            if (typeof window._triggerScan === 'function') window._triggerScan();
+            return;
+          }
+          if (dropdown.style.display === 'none') return;
+          if (_activeIdx >= 0 && _activeIdx < _items.length) {
+            _items[_activeIdx].click();
+          } else {
+            dropdown.style.display = 'none';
+            _geocodeAndFly(inp.value.trim());
+          }
+          return;
+        }
         if (dropdown.style.display === 'none') return;
         if (e.key === 'ArrowDown') {
           e.preventDefault();
@@ -2465,16 +2511,6 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           e.preventDefault();
           _highlight(Math.max(_activeIdx - 1, 0));
           if (_items[_activeIdx]) _items[_activeIdx].scrollIntoView({block:'nearest'});
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (_activeIdx >= 0 && _activeIdx < _items.length) {
-            // Trigger click on highlighted item
-            _items[_activeIdx].click();
-          } else {
-            // No selection → geocode
-            dropdown.style.display = 'none';
-            _geocodeAndFly(inp.value.trim());
-          }
         } else if (e.key === 'Escape') {
           dropdown.style.display = 'none';
         }
@@ -2619,26 +2655,32 @@ if _selected_marker_args:
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
                   for c in LOCATION_DATABASE.values())
 
-# ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh địa điểm tìm được ────
+# ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh tất cả địa điểm ──────
 # Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
 _scan_r = st.session_state._scan_result
 if _scan_r and _scan_r != "none":
-    _scan_lat, _scan_lon = _scan_r["loc_coords"]
-    _ring_html = (
+    _ring_css = (
         '<style>@keyframes great-night-pulse {'
         '0%{transform:scale(0.6);opacity:0.9;}'
         '70%{transform:scale(2.2);opacity:0;}'
         '100%{transform:scale(0.6);opacity:0;}}</style>'
+    )
+    _ring_body = (
         '<div style="width:64px;height:64px;border-radius:50%;'
         'border:3px solid #6ee7b7;'
         'box-shadow:0 0 14px rgba(110,231,183,0.8);'
         'animation:great-night-pulse 1.8s ease-out infinite;'
         'transform-origin:center;pointer-events:none;"></div>'
     )
-    folium.Marker(
-        [_scan_lat, _scan_lon],
-        icon=folium.DivIcon(html=_ring_html, icon_size=(64,64), icon_anchor=(32,32)),
-    ).add_to(m)
+    # Vẽ vòng tròn cho tất cả địa điểm trong all_locs (đã lọc <20km)
+    _all_locs = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+    for _i, (_aln, _alc, _alv) in enumerate(_all_locs):
+        # Chỉ inject CSS 1 lần (marker đầu tiên)
+        _ring_html = (_ring_css if _i == 0 else "") + _ring_body
+        folium.Marker(
+            list(_alc),
+            icon=folium.DivIcon(html=_ring_html, icon_size=(64,64), icon_anchor=(32,32)),
+        ).add_to(m)
 
 if not is_bookmark:
     folium.Marker(
@@ -2731,8 +2773,14 @@ if _verdict:
 # ── BOTTOM-LEFT MAP OVERLAY — GREAT NIGHT SCAN RESULT ────────────────────────
 _scan_r2 = st.session_state._scan_result
 if _scan_r2 and _scan_r2 != "none":
-    _sr_date2     = _scan_r2["date"]
-    _sr_loc_label2 = _scan_r2["loc_name"]  # giữ nguyên tên đầy đủ (kèm số + tỉnh)
+    _sr_date2      = _scan_r2["date"]
+    _sr_loc_label2 = _scan_r2["loc_name"]
+    _all_locs2     = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
+    _n_spots       = len(_all_locs2)
+    if _n_spots > 1:
+        _spots_line = f'<div style="font-size:10.5px;opacity:0.70;margin-top:1px;">+ {_n_spots - 1} more spot{"s" if _n_spots > 2 else ""} — see rings on map</div>'
+    else:
+        _spots_line = ""
     _scan_banner_html = f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;">
 <div style="
@@ -2746,6 +2794,7 @@ if _scan_r2 and _scan_r2 != "none":
   <div style="font-size:13px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} — PERFECT NIGHT</div>
   <div style="font-size:12px;font-weight:600;margin-top:2px;">at {_strip_loc_num(_sr_loc_label2)}</div>
   <div style="font-size:10.5px;opacity:0.75;margin-top:2px;">moon {_scan_r2['moon_illum']:.0f}%, {_scan_r2['verdict']['sub']}</div>
+  {_spots_line}
 </div>
 </div>"""
     st.markdown(_scan_banner_html, unsafe_allow_html=True)
