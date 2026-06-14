@@ -1824,9 +1824,18 @@ def _run_great_night_scan():
     return None
 
 # ── SCAN button — đặt trên cùng khu vực với LPM (cuối map, trước render) ────
+st.markdown("""
+<div style="background:rgba(15,23,42,0.88);border:1px solid #334155;
+            border-radius:10px;padding:10px 14px;margin-bottom:8px;
+            box-shadow:0 2px 8px rgba(0,0,0,0.4);">
+  <span style="color:#94a3b8;font-size:12px;font-weight:600;letter-spacing:0.03em;">
+    🌌 GREAT NIGHT SCAN — top 27 favorite spots, next 7 days
+  </span>
+</div>
+""", unsafe_allow_html=True)
 _scan_col1, _scan_col2 = st.columns([1, 5])
 with _scan_col1:
-    if st.button("🔍 SCAN", key="btn_great_night_scan",
+    if st.button("🔍 SCAN", key="btn_great_night_scan", use_container_width=True,
                   help="Quét 27 địa điểm yêu thích trong 7 ngày tới, tìm PERFECT NIGHT gần nhất (moon < 32%)"):
         with st.spinner("Scanning 27 favorite spots over the next 7 nights..."):
             st.session_state._scan_result = _run_great_night_scan()
@@ -1845,6 +1854,11 @@ with _scan_col2:
             f"🌌 **{_sr_label} — PERFECT NIGHT** at **{_sr_loc_label}** "
             f"(moon {_sr['moon_illum']:.0f}%, {_sr['verdict']['sub']})"
         )
+    else:
+        st.markdown(
+            "<div style='color:#64748b;font-size:13px;padding-top:8px;'>"
+            "Click SCAN to check upcoming dark, clear nights at your favorite spots."
+            "</div>", unsafe_allow_html=True)
 
 # ── MAP ───────────────────────────────────────────────────────────────────────
 # Add top margin so the in-map tile buttons are not obscured by Streamlit toolbar
