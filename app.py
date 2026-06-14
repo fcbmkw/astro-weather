@@ -2012,12 +2012,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
 
-      // ── SCAN trigger — hidden; called by search box with "scan / scan 3 / scan 5 / scan 7" ─
-      // lat=89.9 (valid sentinel, below Mercator max 85.05), lng encodes scan_days:
-      //   99.9=scan(0 days offset), 93.3=scan3, 95.5=scan5, 97.7=scan7
+      // ── SCAN trigger — hidden; called by search box with "scan / scan N" ───
+      // lat=89.9 (valid sentinel, below Mercator max 85.05), lng encodes start_day:
+      //   day 0→lng 99.9, day 1→91.1, day 2→92.2, ..., day 6→96.6
       window._triggerScan = function(days) {
-        var lngMap = {0: 99.9, 3: 93.3, 5: 95.5, 7: 97.7};
-        var lng = lngMap[days] !== undefined ? lngMap[days] : 99.9;
+        var d = (days >= 0 && days <= 6) ? days : 0;
+        var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);  // 0→99.9, 1→91.1, 2→92.2, ..., 6→96.6
         map.fire('click', { latlng: L.latLng(89.9, lng) });
       };
 
@@ -2466,14 +2466,17 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase();
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
-        // Hidden keyword — "scan" / "scan 3" / "scan 5" / "scan 7"
+        // Hidden keyword — "scan" / "scan 1" ... "scan 6"
         if (/^scan(\s+\d*)?$/.test(q)) {
           dropdown.innerHTML = '';
           var hints = [
-            {label: 'scan', desc: 'Next great night (7 days)', days: 0},
-            {label: 'scan 3', desc: 'Start from day 3', days: 3},
-            {label: 'scan 5', desc: 'Start from day 5', days: 5},
-            {label: 'scan 7', desc: 'Start from day 7', days: 7},
+            {label: 'scan',   desc: 'Earliest great night', days: 0},
+            {label: 'scan 1', desc: 'Start from day +1',    days: 1},
+            {label: 'scan 2', desc: 'Start from day +2',    days: 2},
+            {label: 'scan 3', desc: 'Start from day +3',    days: 3},
+            {label: 'scan 4', desc: 'Start from day +4',    days: 4},
+            {label: 'scan 5', desc: 'Start from day +5',    days: 5},
+            {label: 'scan 6', desc: 'Start from day +6',    days: 6},
           ];
           hints.forEach(function(h) {
             var row = L.DomUtil.create('div', '', dropdown);
@@ -2524,7 +2527,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           var _scanMatch = _sv.match(/^scan\s*(\d*)$/);
           if (_scanMatch) {
             var _days = parseInt(_scanMatch[1]) || 0;
-            if (_days !== 3 && _days !== 5 && _days !== 7) _days = 0;
+            if (_days < 0 || _days > 6) _days = 0;
             inp.value = '';
             clr.style.display = 'none';
             dropdown.style.display = 'none';
@@ -2818,7 +2821,10 @@ if _verdict:
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
 
-# ── SCAN RESULT BANNER — bên dưới map (st.markdown thông thường) ─────────────
+# ── SCAN RESULT BANNER — overlay bottom-left của map ────────────────────────
+# Dùng cùng cơ chế margin-top âm như top-center label (đã được xác nhận hoạt động).
+# Map height=575. top-center dùng margin-top=-644, position:absolute;top:40px.
+# Bottom-left: margin-top=-644 + position:absolute;top:505px (575-56px banner-14px padding)
 _scan_r2 = st.session_state._scan_result
 
 if _scan_r2 and _scan_r2 != "none":
@@ -2829,31 +2835,39 @@ if _scan_r2 and _scan_r2 != "none":
     _avg_cloud  = _scan_r2["verdict"].get("sub", "")
     _cloud_match = _re.search(r"avg cloud (\d+)%", _avg_cloud)
     _cloud_str   = f"avg cloud {_cloud_match.group(1)}%" if _cloud_match else ""
-    st.markdown(f"""<div style="
-  margin-top:6px;padding:9px 16px;border-radius:10px;
-  background:rgba(5,25,18,0.95);border:1.5px solid rgba(52,211,153,0.75);
+    st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:505px;left:14px;
+  max-width:420px;white-space:nowrap;
+  background:rgba(5,25,18,0.92);border:1.5px solid rgba(52,211,153,0.75);
+  border-radius:10px;padding:7px 14px;
   font-family:sans-serif;color:#6ee7b7;
-  box-shadow:0 2px 12px rgba(0,0,0,0.5);line-height:1.5;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  line-height:1.4;pointer-events:none;
 ">
-  <span style="font-size:14px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} &nbsp;:&nbsp; PERFECT NIGHT</span>
-  &nbsp;&nbsp;
-  <span style="font-size:12px;font-weight:600;opacity:0.9;">{_n_spots} spot{"s" if _n_spots > 1 else ""}</span>
-  &nbsp;/&nbsp;
-  <span style="font-size:12px;opacity:0.85;">{_cloud_str}</span>
-  &nbsp;/&nbsp;
-  <span style="font-size:12px;opacity:0.75;">moon {_scan_r2["moon_illum"]:.0f}%</span>
+<span style="font-size:13px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} &nbsp;:&nbsp; PERFECT NIGHT</span>
+&nbsp;&nbsp;<span style="font-size:11.5px;font-weight:600;">{_n_spots} spot{"s" if _n_spots > 1 else ""}</span>
+&nbsp;/&nbsp;<span style="font-size:11.5px;opacity:0.85;">{_cloud_str}</span>
+&nbsp;/&nbsp;<span style="font-size:11.5px;opacity:0.70;">moon {_scan_r2["moon_illum"]:.0f}%</span>
+</div>
 </div>""", unsafe_allow_html=True)
 
 elif _scan_r2 == "none":
     _scan_days_lbl = st.session_state._scan_days
-    _range_lbl = f"day {_scan_days_lbl}–7" if _scan_days_lbl > 0 else "next 7 days"
-    st.markdown(f"""<div style="
-  margin-top:6px;padding:9px 16px;border-radius:10px;
-  background:rgba(10,14,22,0.92);border:1.5px solid rgba(148,163,184,0.35);
-  font-family:sans-serif;color:#94a3b8;font-size:13px;font-weight:600;
-  box-shadow:0 2px 12px rgba(0,0,0,0.4);
+    _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
+    st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:505px;left:14px;
+  background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
+  border-radius:10px;padding:7px 14px;
+  font-family:sans-serif;color:#94a3b8;font-size:12px;font-weight:600;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
 ">
-  🔍 None — {_range_lbl}
+🔍 None — {_range_lbl}
+</div>
 </div>""", unsafe_allow_html=True)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
@@ -2868,7 +2882,8 @@ if map_data:
 
     # ── Priority 0: SCAN sentinel (lat≈89.9, lng encodes scan_days) ────────────
     # lng: 99.9=scan(0), 93.3=scan3, 95.5=scan5, 97.7=scan7
-    _SCAN_SENTINELS = {99.9: 0, 93.3: 3, 95.5: 5, 97.7: 7}
+    # lng sentinel: day 0→99.9, day 1→91.1, day 2→92.2, ..., day 6→96.6
+    _SCAN_SENTINELS = {99.9: 0, 91.1: 1, 92.2: 2, 93.3: 3, 94.4: 4, 95.5: 5, 96.6: 6}
     _lc_lat = lc.get("lat", 0) if lc else 0
     _lc_lng = lc.get("lng", 0) if lc else 0
     _matched_days = next((d for lng_sentinel, d in _SCAN_SENTINELS.items()
