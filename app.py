@@ -373,13 +373,13 @@ def get_moon_phase_percent(date_obj):
     base = datetime(2024, 1, 11)
     phase = ((date_obj - base).total_seconds() / 86400.0 / 29.53059) % 1.0
     illum = round((1 - math.cos(phase * 2 * math.pi)) / 2 * 100, 1)
-    if phase < 0.03 or phase > 0.97: desc = "新月"
+    if phase < 0.03 or phase > 0.97: desc = "New Moon（新月）🌑"
     elif phase < 0.22: desc = "Waxing Crescent（月齢初期）"
-    elif phase < 0.28: desc = "上弦の月"
+    elif phase < 0.28: desc = "First Quarter（上弦の月）"
     elif phase < 0.47: desc = "Waxing Gibbous（月齢中期）"
-    elif phase < 0.53: desc = "満月 (Full Moon) 🌕"
+    elif phase < 0.53: desc = "Full Moon（満月）🌕"
     elif phase < 0.72: desc = "Waning Gibbous（月齢後期）"
-    elif phase < 0.78: desc = "下弦の月"
+    elif phase < 0.78: desc = "Last Quarter（下弦の月）"
     else: desc = "Waning Crescent（月齢末期）"
     return illum, desc
 
@@ -2405,13 +2405,23 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
     ).add_to(m)
 
 # ── Vẽ marker được chọn SAU CÙNG → nằm trên cùng trong DOM stack của Leaflet ──
+# Leaflet gắn className của DivIcon trực tiếp lên thẻ .leaflet-marker-icon (chính
+# thẻ có inline z-index do Leaflet tự set theo vị trí lat). Dùng class riêng +
+# CSS !important để ép z-index của marker được chọn luôn cao nhất, không bị
+# các sao khác (kể cả ở lat thấp hơn → z-index Leaflet cao hơn) che mất.
 if _selected_marker_args:
     _sel_coords, _sel_html, _sel_tooltip = _selected_marker_args
+    m.get_root().html.add_child(folium.Element("""
+        <style>
+            .selected-star-marker { z-index: 999999 !important; }
+        </style>
+    """))
     folium.Marker(
         _sel_coords,
         icon=folium.DivIcon(
             html=_sel_html,
-            icon_size=(24,24), icon_anchor=(12,12)),
+            icon_size=(24,24), icon_anchor=(12,12),
+            class_name="selected-star-marker"),
         tooltip=folium.Tooltip(_sel_tooltip, sticky=False, offset=(20, -10), parse_html=False),
     ).add_to(m)
 
@@ -2442,11 +2452,12 @@ map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT (full night 18:00~06:00) ────────────
 def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
-    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00 theo logic 'cửa sổ tốt nhất'
-    (longest good streak) — giống Clear Outside / Astrospheric.
+    """Tính đánh giá tổng hợp cho cả đêm 18:00~06:00, dựa chủ yếu trên Cloud %
+    (và precip/temp để phân biệt mưa/tuyết) — giống Clear Outside / Astrospheric
+    nhưng đơn giản, dễ hiểu: PERFECT NIGHT / CLEAR SKIES / CLOUDY NIGHT /
+    RAINY NIGHT / SNOWY NIGHT / TOO BRIGHT.
 
-    'Giờ tốt' = slot trời đã tối thiên văn (sun_alt ≤ -12°), cloud ≤ 25% VÀ precip < 0.3mm.
-    'Giờ sương' = humidity ≥ 90% (nguy cơ đọng sương trên ống kính).
+    'Giờ tốt' = slot trời đã tối thiên văn (sun_alt ≤ -12°) và cloud ≤ 25%.
 
     Trả về dict với tier, icon, stars, sub, màu sắc, v.v."""
     if not table_data:
@@ -2462,7 +2473,8 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
 
     total = 0
     rain_hours = 0
-    dew_hours = 0
+    snow_hours = 0
+    cloud_vals = []
     # streak[i] = True nếu slot i là "giờ tốt" (trong khung tối thiên văn)
     good_flags = []
     for r, sa in zip(table_data, sun_alts):
@@ -2471,15 +2483,16 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
             continue
         total += 1
         cloud_str = r.get("☁️", "100%")
-        humid_str = r.get("💧", "0%")
         precip    = r.get("_precip", 0.0) or 0.0
+        temp_val  = r.get("_temp")
         cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
-        humid_pct = int(humid_str.replace("%","")) if humid_str.replace("%","").isdigit() else 0
+        cloud_vals.append(cloud_pct)
 
         if precip >= 0.3:
-            rain_hours += 1
-        if humid_pct >= 90:
-            dew_hours += 1
+            if temp_val is not None and temp_val < 2.0:
+                snow_hours += 1
+            else:
+                rain_hours += 1
 
         is_good = (precip < 0.3) and (cloud_pct <= 25)
         good_flags.append(is_good)
@@ -2502,53 +2515,48 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
         else:
             cur_streak = 0
     good_hours = sum(good_flags)  # tổng giờ tốt (rời rạc), dùng cho sub-label
+    avg_cloud = round(sum(cloud_vals) / len(cloud_vals)) if cloud_vals else 100
 
     # ── Trăng sáng? (ảnh hưởng đến chụp Milky Way / DSO mờ) ────────────────────
     bright_moon = (moon_illum is not None) and (moon_illum >= 50)
 
-    # ── Smart Labeling: ưu tiên cửa sổ liên tiếp dài, ít thông tin nhưng dễ hiểu ──
-    if best_streak >= 3 and not bright_moon and dew_hours < total * 0.5:
-        tier = "PERFECT NIGHT"
-        icon = "🌌"; stars = "★★★★"
-        color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
-        bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
-        sub   = f"{best_streak}h clear window"
-    elif best_streak >= 3 and bright_moon:
-        tier = "GOOD FOR DEEP SKY"
-        icon = "🔭"; stars = "★★★"
-        color = "#93c5fd"; border = "rgba(96,165,250,0.70)"
-        bg    = "rgba(6,16,30,0.88)"; anim = "blink-smile"
-        sub   = f"{best_streak}h clear, bright moon"
-    elif dew_hours >= total * 0.6 and best_streak >= 2:
-        tier = "HIGH DEW RISK"
-        icon = "💧"; stars = "★★"
-        color = "#7dd3fc"; border = "rgba(56,189,248,0.65)"
-        bg    = "rgba(6,22,28,0.88)"; anim = "blink-neutral"
-        sub   = f"{best_streak}h clear, bring dew heater"
-    elif best_streak >= 2:
-        tier = "SHORT WINDOW"
-        icon = "🌤️"; stars = "★★"
-        color = "#fde68a"; border = "rgba(251,191,36,0.65)"
-        bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
-        sub   = f"only {best_streak}h clear"
-    elif best_streak >= 1:
-        tier = "MARGINAL"
-        icon = "🌥️"; stars = "★"
-        color = "#fdba74"; border = "rgba(251,146,60,0.55)"
-        bg    = "rgba(20,12,4,0.88)"; anim = "blink-neutral"
-        sub   = f"only {best_streak}h clear"
-    elif rain_hours >= int(total * 0.5):
+    # ── Smart Labeling: ưu tiên Cloud % trung bình của cả đêm, dễ hiểu ─────────
+    if snow_hours >= int(total * 0.3):
+        tier = "SNOWY NIGHT"
+        icon = "❄️"; stars = "✕"
+        color = "#bae6fd"; border = "rgba(186,230,253,0.70)"
+        bg    = "rgba(8,18,30,0.88)"; anim = "blink-warn"
+        sub   = f"{snow_hours}h snow"
+    elif rain_hours >= int(total * 0.3):
         tier = "RAINY NIGHT"
         icon = "🌧️"; stars = "✕"
         color = "#fca5a5"; border = "rgba(239,68,68,0.70)"
         bg    = "rgba(30,8,8,0.88)"; anim = "blink-warn"
         sub   = f"{rain_hours}h rain"
+    elif best_streak >= 3 and not bright_moon:
+        tier = "PERFECT NIGHT"
+        icon = "🌌"; stars = "★★★★"
+        color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
+        bg    = "rgba(5,25,18,0.88)"; anim = "blink-smile"
+        sub   = f"avg cloud {avg_cloud}%, {best_streak}h clear"
+    elif best_streak >= 3 and bright_moon:
+        tier = "GOOD FOR DEEP SKY"
+        icon = "🔭"; stars = "★★★"
+        color = "#93c5fd"; border = "rgba(96,165,250,0.70)"
+        bg    = "rgba(6,16,30,0.88)"; anim = "blink-smile"
+        sub   = f"avg cloud {avg_cloud}%, bright moon"
+    elif best_streak >= 1 or avg_cloud <= 50:
+        tier = "CLEAR SKIES"
+        icon = "🌤️"; stars = "★★"
+        color = "#fde68a"; border = "rgba(251,191,36,0.65)"
+        bg    = "rgba(20,16,4,0.88)"; anim = "blink-neutral"
+        sub   = f"avg cloud {avg_cloud}%"
     else:
         tier = "CLOUDY NIGHT"
         icon = "☁️"; stars = "✕"
         color = "#94a3b8"; border = "rgba(148,163,184,0.55)"
         bg    = "rgba(10,14,22,0.88)"; anim = "blink-warn"
-        sub   = "0h clear"
+        sub   = f"avg cloud {avg_cloud}%"
 
     return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
             "color": color, "border": border, "bg": bg, "anim": anim,
@@ -2818,9 +2826,9 @@ with col_right:
             </div>
             <div style="flex:1;border-left:1px solid #334155;padding-left:10px;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 COORDINATE</span>
-                <div class="geo-highlight" style="font-size:15px;margin-top:5px;">
-                    <span style="color:#60a5fa;">LON:</span> {round(st.session_state.lon,4)}<br>
-                    <span style="color:#34d399;">LAT:</span> {round(st.session_state.lat,4)}
+                <div class="geo-highlight" style="font-size:15px;margin-top:5px;color:#38bdf8;">
+                    LON: {round(st.session_state.lon,4)}<br>
+                    LAT: {round(st.session_state.lat,4)}
                 </div>
             </div>
         </div>
