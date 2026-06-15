@@ -1920,8 +1920,8 @@ def _run_best_scan(scan_all=False):
     if not candidates:
         return None
 
-    # Sort: tier_rank DESC, is_weekend DESC, streak DESC, good_hours DESC
-    candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+    # Sort: tier_rank DESC, streak DESC, good_hours DESC (bất kỳ ngày nào)
+    candidates.sort(key=lambda x: (x[0], x[2], x[3]), reverse=True)
 
     # Pick top 3, dedupe by location <30km
     top3 = []
@@ -3080,13 +3080,10 @@ if _scan_r2 and _scan_r2 != "none":
                 f'</div>'
             )
         _rows_joined = "".join(_rows_html_parts)
-        _has_weekday_only = all(not _tiw for (_, _, _, _, _, _, _tiw) in _top3)
-        _moon_note = f"moon {_scan_r2['moon_illum']:.0f}%"
-        _color_note = "yellow=weekend · white=weekday" if not _has_weekday_only else "weekday only (no weekend results)"
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:435px;left:2px;
+  position:absolute;top:461px;left:2px;
   width:320px;
   background:rgba(40,15,5,0.95);border:1.5px solid rgba(251,146,36,0.85);
   border-radius:10px;padding:8px 12px;
@@ -3098,7 +3095,6 @@ if _scan_r2 and _scan_r2 != "none":
 🏆 {_date_header}
 </div>
 {_rows_joined}
-<div style="color:#64748b;font-size:9px;margin-top:4px;">{_moon_note} · {_color_note}</div>
 </div>
 </div>""", unsafe_allow_html=True)
     else:
