@@ -3568,8 +3568,6 @@ fig.update_layout(
         tickvals=_x_positions,
         ticktext=hours_labels,
         gridcolor='rgba(71,85,105,0.3)',
-        title='Time 18:00 ~ 06:00',
-        title_font_color='#94a3b8',
     ),
     yaxis=dict(
         gridcolor='rgba(71,85,105,0.3)',
