@@ -2881,27 +2881,64 @@ if _scan_r and _scan_r != "none":
         '</style>'
     )
     _is_best_ring = st.session_state.get("_scan_best", False)
-    _ring_color  = "#fbbf24" if _is_best_ring else "#6ee7b7"
-    _ring_shadow = "rgba(251,191,36,0.85)" if _is_best_ring else "rgba(110,231,183,0.8)"
-    _ring_body = (
-        '<div style="width:64px;height:64px;border-radius:50%;'
-        f'border:3px solid {_ring_color};'
-        f'box-shadow:0 0 14px {_ring_shadow};'
-        'animation:great-night-pulse 1.8s ease-out infinite;'
-        'transform-origin:center;pointer-events:none;"></div>'
-    )
-    # Vẽ vòng tròn cho tất cả địa điểm trong all_locs (đã lọc <20km)
-    _all_locs = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
-    for _i, (_aln, _alc, _alv) in enumerate(_all_locs):
-        # Chỉ inject CSS 1 lần (marker đầu tiên)
-        _ring_html = (_ring_css if _i == 0 else "") + _ring_body
-        folium.Marker(
-            list(_alc),
-            icon=folium.DivIcon(
-                html=_ring_html,
-                icon_size=(64,64), icon_anchor=(32,32),
-                class_name="great-night-ring"),   # CSS hook để tắt pointer-events
-        ).add_to(m)
+
+    if _is_best_ring:
+        # Best command: vẽ 3 vòng tròn vàng cho top3 locations
+        _top3_ring = _scan_r.get("top3", None)
+        _ring_color  = "#fbbf24"
+        _ring_shadow = "rgba(251,191,36,0.85)"
+        _ring_body_best = (
+            '<div style="width:64px;height:64px;border-radius:50%;'
+            f'border:3px solid {_ring_color};'
+            f'box-shadow:0 0 14px {_ring_shadow};'
+            'animation:great-night-pulse 1.8s ease-out infinite;'
+            'transform-origin:center;pointer-events:none;"></div>'
+        )
+        _css_injected = False
+        if _top3_ring:
+            for _i3, (_td3, _tdoff3, _tln3, _tlc3, _tv3, _tmi3, _tiw3) in enumerate(_top3_ring):
+                _ring_html = (_ring_css if not _css_injected else "") + _ring_body_best
+                _css_injected = True
+                folium.Marker(
+                    list(_tlc3),
+                    icon=folium.DivIcon(
+                        html=_ring_html,
+                        icon_size=(64,64), icon_anchor=(32,32),
+                        class_name="great-night-ring"),
+                ).add_to(m)
+        else:
+            # Fallback: vẽ 1 vòng từ all_locs
+            _all_locs_b = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+            for _i, (_aln, _alc, _alv) in enumerate(_all_locs_b):
+                _ring_html = (_ring_css if _i == 0 else "") + _ring_body_best
+                folium.Marker(
+                    list(_alc),
+                    icon=folium.DivIcon(
+                        html=_ring_html,
+                        icon_size=(64,64), icon_anchor=(32,32),
+                        class_name="great-night-ring"),
+                ).add_to(m)
+    else:
+        # Scan command: vẽ vòng tròn xanh cho tất cả địa điểm PERFECT NIGHT
+        _ring_color  = "#6ee7b7"
+        _ring_shadow = "rgba(110,231,183,0.8)"
+        _ring_body_scan = (
+            '<div style="width:64px;height:64px;border-radius:50%;'
+            f'border:3px solid {_ring_color};'
+            f'box-shadow:0 0 14px {_ring_shadow};'
+            'animation:great-night-pulse 1.8s ease-out infinite;'
+            'transform-origin:center;pointer-events:none;"></div>'
+        )
+        _all_locs = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+        for _i, (_aln, _alc, _alv) in enumerate(_all_locs):
+            _ring_html = (_ring_css if _i == 0 else "") + _ring_body_scan
+            folium.Marker(
+                list(_alc),
+                icon=folium.DivIcon(
+                    html=_ring_html,
+                    icon_size=(64,64), icon_anchor=(32,32),
+                    class_name="great-night-ring"),
+            ).add_to(m)
 
 if not is_bookmark:
     folium.Marker(
@@ -3049,7 +3086,7 @@ if _scan_r2 and _scan_r2 != "none":
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:410px;left:2px;
+  position:absolute;top:435px;left:2px;
   width:320px;
   background:rgba(40,15,5,0.95);border:1.5px solid rgba(251,146,36,0.85);
   border-radius:10px;padding:8px 12px;
