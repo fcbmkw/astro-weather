@@ -3490,7 +3490,7 @@ with col_left:
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
-st.markdown("### 📊 MOON, SUN & MILKYWAY ALTITUDE(°)")
+st.markdown("### 📊 Moon, Sun & Milkyway Altitude (°)")
 
 import plotly.graph_objects as go
 
