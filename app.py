@@ -1784,7 +1784,8 @@ _FAV_ALL = list(LOCATION_DATABASE.items())
 # best/scan command: tất cả địa điểm thuộc các tỉnh Kanto và lân cận
 _BEST_PREFECTURES = {
     "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma",
-    "Fukushima", "Nagano", "Toyama", "Yamanashi", "Shizuoka", "Kanagawa"
+    "Fukushima", "Nagano", "Toyama", "Yamanashi", "Shizuoka", "Kanagawa",
+    "Ishikawa", "Gifu"
 }
 _FAV_BEST_RAW = [(n,c) for n,c in LOCATION_DATABASE.items()
                  if any(p in n for p in _BEST_PREFECTURES)]
