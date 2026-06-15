@@ -1981,7 +1981,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var col = L.DomUtil.create('div', '');
       col.style.cssText = (
         'display:flex;flex-direction:column;align-items:flex-end;'
-        + 'gap:6px;margin-bottom:43px;'
+        + 'gap:6px;margin-bottom:40px;'
       );
       L.DomEvent.disableClickPropagation(col);
 
@@ -2325,7 +2325,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       inp.placeholder = 'Search location…';
       inp.style.cssText = (
         'background:transparent;border:none;outline:none;'
-        + 'color:#e2e8f0;font-size:12px;width:180px;'
+        + 'color:#e2e8f0;font-size:12px;width:150px;'
         + 'font-family:sans-serif;padding:0;'
       );
 
