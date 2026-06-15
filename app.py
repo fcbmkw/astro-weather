@@ -1784,8 +1784,7 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
 #   1) Moon illumination < 32%
 #   2) Có ít nhất 1/27 địa điểm đầu (sao xanh) đạt tier == "PERFECT NIGHT"
 #   3) Chỉ báo NGÀY SỚM NHẤT thoả mãn (1-7 ngày tới)
-_FAVORITE_LOCATIONS = [(n, c) for n, c in LOCATION_DATABASE.items()
-                       if (lambda nm: nm.split(".")[0].strip().isdigit() and int(nm.split(".")[0].strip()) <= 27)(n)]
+_FAVORITE_LOCATIONS = list(LOCATION_DATABASE.items())  # scan tất cả địa điểm
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Khoảng cách Haversine giữa 2 điểm (km)."""
@@ -2831,11 +2830,12 @@ if _scan_r2 and _scan_r2 != "none":
     _sr_date2   = _scan_r2["date"]
     _all_locs2  = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
     _n_spots    = len(_all_locs2)
+    # margin-top=-644 đưa về top map; top:539 = 575px map - 34px banner - 2px gap
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;bottom:2px;left:2px;
-  display:inline-flex;align-items:center;gap:5px;
+  position:absolute;top:539px;left:2px;
+  display:inline-flex;align-items:center;
   white-space:nowrap;width:fit-content;
   background:rgba(5,25,18,0.92);border:1.5px solid rgba(52,211,153,0.75);
   border-radius:10px;padding:6px 13px;
@@ -2843,7 +2843,7 @@ if _scan_r2 and _scan_r2 != "none":
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
-🌌 {_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT &nbsp; {_n_spots} spot{"s" if _n_spots > 1 else ""} / moon {_scan_r2["moon_illum"]:.0f}%
+{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT &nbsp; {_n_spots} spot{"s" if _n_spots > 1 else ""} / moon {_scan_r2["moon_illum"]:.0f}%
 </div>
 </div>""", unsafe_allow_html=True)
 
@@ -2853,7 +2853,7 @@ elif _scan_r2 == "none":
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;bottom:2px;left:2px;
+  position:absolute;top:539px;left:2px;
   display:inline-flex;white-space:nowrap;width:fit-content;
   background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
   border-radius:10px;padding:6px 13px;
