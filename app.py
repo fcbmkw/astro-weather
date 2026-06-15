@@ -1981,7 +1981,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var col = L.DomUtil.create('div', '');
       col.style.cssText = (
         'display:flex;flex-direction:column;align-items:flex-end;'
-        + 'gap:6px;margin-bottom:38px;'
+        + 'gap:6px;margin-bottom:40px;'
       );
       L.DomEvent.disableClickPropagation(col);
 
@@ -2861,7 +2861,7 @@ if _scan_r2 and _scan_r2 != "none":
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:549px;left:2px;
+  position:absolute;top:554px;left:2px;
   display:inline-flex;align-items:center;
   white-space:nowrap;width:fit-content;
   background:rgba(5,25,18,0.92);border:1.5px solid rgba(52,211,153,0.75);
@@ -2880,7 +2880,7 @@ elif _scan_r2 == "none":
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:549px;left:2px;
+  position:absolute;top:554px;left:2px;
   display:inline-flex;white-space:nowrap;width:fit-content;
   background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
   border-radius:10px;padding:6px 13px;
