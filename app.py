@@ -1780,6 +1780,13 @@ _FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
             if (lambda nm: nm.split(".")[0].strip().isdigit()
                 and int(nm.split(".")[0].strip()) <= 30)(n)]
 _FAV_ALL = list(LOCATION_DATABASE.items())
+# best command: tất cả địa điểm thuộc các tỉnh target (không Tokyo)
+_BEST_PREFECTURES = {
+    "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma",
+    "Fukushima", "Nagano", "Toyama", "Yamanashi", "Shizuoka", "Kanagawa"
+}
+_FAV_BEST = [(n,c) for n,c in LOCATION_DATABASE.items()
+             if any(p in n for p in _BEST_PREFECTURES)]
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Khoảng cách Haversine giữa 2 điểm (km)."""
@@ -1855,7 +1862,7 @@ def _run_best_scan(scan_all=False):
     """Quét 7 ngày tới cho N địa điểm, trả về 1 kết quả tốt nhất (streak dài nhất).
     Ưu tiên: PERFECT NIGHT > GOOD STARRY NIGHT. Trả về None nếu không có."""
     _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
-    _locs = _FAV_ALL if scan_all else _FAV_30
+    _locs = _FAV_ALL if scan_all else _FAV_BEST
     best = None  # (tier_rank, streak, date, day_off, loc_name, loc_coords, verdict, moon_illum)
     for day_off in range(0, 7):
         d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
@@ -2526,7 +2533,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           if (isBest) {
             dropdown.innerHTML = '';
             var bestHints = [
-              {label: 'best',     desc: 'Best night 7d · 30 spots (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBest(); }},
+              {label: 'best',     desc: 'Best night 7d · Chiba/Kanagawa/Nagano/… (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBest(); }},
               {label: 'best all', desc: 'Best night 7d · 266 spots (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBestAll(); }},
             ];
             bestHints.forEach(function(h) {
@@ -2817,10 +2824,13 @@ if _scan_r and _scan_r != "none":
         'cursor:default!important;}'
         '</style>'
     )
+    _is_best_ring = st.session_state.get("_scan_best", False)
+    _ring_color  = "#fbbf24" if _is_best_ring else "#6ee7b7"
+    _ring_shadow = "rgba(251,191,36,0.85)" if _is_best_ring else "rgba(110,231,183,0.8)"
     _ring_body = (
         '<div style="width:64px;height:64px;border-radius:50%;'
-        'border:3px solid #6ee7b7;'
-        'box-shadow:0 0 14px rgba(110,231,183,0.8);'
+        f'border:3px solid {_ring_color};'
+        f'box-shadow:0 0 14px {_ring_shadow};'
         'animation:great-night-pulse 1.8s ease-out infinite;'
         'transform-origin:center;pointer-events:none;"></div>'
     )
@@ -2935,20 +2945,33 @@ if _scan_r2 and _scan_r2 != "none":
     _sr_date2   = _scan_r2["date"]
     _all_locs2  = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
     _n_spots    = len(_all_locs2)
-    # margin-top=-644 đưa về top map; top:539 = 575px map - 34px banner - 2px gap
+    _is_best_banner = st.session_state.get("_scan_best", False)
+    _sr_tier    = _scan_r2["verdict"].get("tier", "PERFECT NIGHT")
+    if _is_best_banner:
+        _ban_bg  = "rgba(40,15,5,0.93)"
+        _ban_bdr = "rgba(251,146,36,0.85)"
+        _ban_clr = "#fcd34d"
+        _ban_loc = _scan_r2["loc_name"].split(",")[0].strip()
+        _ban_loc = _ban_loc.split(".",1)[-1].strip() if "." in _ban_loc else _ban_loc
+        _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} / moon {_scan_r2['moon_illum']:.0f}%"
+    else:
+        _ban_bg  = "rgba(5,25,18,0.92)"
+        _ban_bdr = "rgba(52,211,153,0.75)"
+        _ban_clr = "#6ee7b7"
+        _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
   position:absolute;top:557px;left:2px;
   display:inline-flex;align-items:center;
   white-space:nowrap;width:fit-content;
-  background:rgba(5,25,18,0.92);border:1.5px solid rgba(52,211,153,0.75);
+  background:{_ban_bg};border:1.5px solid {_ban_bdr};
   border-radius:10px;padding:6px 13px;
-  font-family:sans-serif;color:#6ee7b7;font-size:13px;font-weight:700;
+  font-family:sans-serif;color:{_ban_clr};font-size:13px;font-weight:700;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
-{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT &nbsp; {_n_spots} spot{"s" if _n_spots > 1 else ""} / moon {_scan_r2["moon_illum"]:.0f}%
+{_ban_txt}
 </div>
 </div>""", unsafe_allow_html=True)
 
