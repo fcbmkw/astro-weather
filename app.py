@@ -1464,17 +1464,9 @@ desired_slots = [
     (next_date.year, next_date.month, next_date.day, 6,  "06:00",    next_date.strftime("%Y-%m-%d")),
 ]
 
-# Filter out slots that are already in the past (only for tonight, day_offset=0)
-_now_naive = _now_jst.replace(tzinfo=None)
-def _slot_is_future(yr, mo, dy, hr):
-    # Include the current hour slot (e.g. 20:01 → still show 20:00 row)
-    slot_dt = datetime(yr, mo, dy, hr, 0) + timedelta(hours=1)
-    return slot_dt > _now_naive
-
+# Always show full night 18:00-06:00 regardless of current time
 _full_night_slots = list(desired_slots)
-if st.session_state.day_offset == 0:
-    desired_slots = [(yr,mo,dy,hr,lbl,dpfx) for yr,mo,dy,hr,lbl,dpfx in desired_slots
-                     if _slot_is_future(yr,mo,dy,hr)]
+# (past slots kept — table and graph always display 18:00→06:00)
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_utc_offset_h):
@@ -2325,7 +2317,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       inp.placeholder = 'Search location…';
       inp.style.cssText = (
         'background:transparent;border:none;outline:none;'
-        + 'color:#e2e8f0;font-size:12px;width:120px;'
+        + 'color:#e2e8f0;font-size:12px;width:105px;'
         + 'font-family:sans-serif;padding:0;'
       );
 
