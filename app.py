@@ -3554,7 +3554,7 @@ fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
 
 # ── -13° rule ─────────────────────────────────────────────────────────────────
 fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
-              annotation_text="−13° full dark", annotation_font_color="rgba(251,146,60,0.7)",
+              annotation_text="−13°", annotation_font_color="rgba(251,146,60,0.7)",
               annotation_position="bottom right")
 
 # ── Layout ────────────────────────────────────────────────────────────────────
