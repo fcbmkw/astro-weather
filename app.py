@@ -3490,7 +3490,7 @@ with col_left:
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
-st.markdown("### 📊 MOON, SUN & MILKY WAY ALTITUDE(°)")
+st.markdown("### 📊 MOON, SUN & MILKYWAY ALTITUDE(°)")
 
 import plotly.graph_objects as go
 
@@ -3543,9 +3543,9 @@ fig.add_trace(go.Scatter(
 fig.add_trace(go.Scatter(
     x=_x_positions, y=milkyway_altitudes,
     mode='lines',
-    name='🌌 MW GC',
+    name='🌌 Milkyway',
     line=dict(color='#a78bfa', width=2.0, dash='dot'),
-    hovertemplate='%{customdata}<br>MW GC: %{y:.1f}°<extra></extra>',
+    hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
     customdata=hours_labels,
 ))
 
