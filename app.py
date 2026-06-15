@@ -1797,20 +1797,19 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# Bỏ địa điểm gần nhau <30km để tăng tốc best/scan
-def _dedupe_locs_30km(locs):
+# Bỏ địa điểm gần nhau <km để tăng tốc best/tonight/scan
+def _dedupe_locs_km(locs, km=30):
     kept = []
     for name, coords in locs:
         too_close = any(
-            _haversine_km(coords[0], coords[1], kc[0], kc[1]) < 30
+            _haversine_km(coords[0], coords[1], kc[0], kc[1]) < km
             for _, kc in kept
         )
         if not too_close:
             kept.append((name, coords))
     return kept
-_FAV_BEST = _dedupe_locs_30km(_FAV_BEST_RAW)
-# scan command cũng dùng vùng Kanto, dedupe <30km (giống best)
-_FAV_SCAN_KANTO = _FAV_BEST
+_FAV_BEST = _dedupe_locs_km(_FAV_BEST_RAW, km=60)   # best/tonight: dedupe <60km
+_FAV_SCAN_KANTO = _dedupe_locs_km(_FAV_BEST_RAW, km=30)  # scan: giữ dedupe <30km
 
 def _run_great_night_scan(start_day=0, scan_all=False):
     """Quét từ start_day (0-6) trong 7 ngày tới.
@@ -1921,17 +1920,20 @@ def _run_best_scan(scan_all=False):
     if not candidates:
         return None
 
-    # Sort: tier_rank DESC, streak DESC, good_hours DESC (bất kỳ ngày nào)
-    candidates.sort(key=lambda x: (x[0], x[2], x[3]), reverse=True)
+    # Sort: tier_rank DESC, is_weekend DESC, streak DESC, good_hours DESC
+    candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
 
-    # Pick top 3, dedupe by location <30km
+    # Pick top 3, dedupe by location <60km
+    # Guarantee: at least 1 weekend (Fri/Sat/Sun) slot in top3 if any exists.
+    # Strategy: first fill normally from sorted list, then if no weekend found,
+    # swap the worst non-weekend slot for the best available weekend candidate.
     top3 = []
     seen_coords = []
     for cand in candidates:
         _, _, _, _, d, day_off, loc_name, loc_coords, verdict, moon_illum = cand
-        # Dedupe location: skip nếu trong vòng 30km với địa điểm đã chọn
+        # Dedupe location: skip nếu trong vòng 60km với địa điểm đã chọn
         too_close = any(
-            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 30
+            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 60
             for sc in seen_coords
         )
         if too_close:
@@ -1940,6 +1942,26 @@ def _run_best_scan(scan_all=False):
         top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum))
         if len(top3) == 3:
             break
+
+    # Guarantee at least 1 weekend in top3
+    if top3:
+        _has_weekend_in_top3 = any(d.weekday() in _WEEKEND_DAYS for d, *_ in top3)
+        if not _has_weekend_in_top3:
+            # Find best weekend candidate NOT already in top3 (dedupe <60km vs existing)
+            _seen_top3_coords = [lc for _, _, _, lc, _, _ in top3]
+            for cand in candidates:
+                _, _is_we, _, _, d_we, do_we, ln_we, lc_we, vd_we, mi_we = cand
+                if not _is_we:
+                    continue
+                too_close = any(
+                    _haversine_km(lc_we[0], lc_we[1], sc[0], sc[1]) < 60
+                    for sc in _seen_top3_coords
+                )
+                if too_close:
+                    continue
+                # Swap out the last (worst) slot in top3 for this weekend entry
+                top3[-1] = (d_we, do_we, ln_we, lc_we, vd_we, mi_we)
+                break
 
     if not top3:
         return None
@@ -2003,13 +2025,13 @@ def _run_tonight_scan(scan_all=False):
 
     candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
 
-    # Pick top 3, dedupe by location <30km
+    # Pick top 3, dedupe by location <60km
     top3 = []
     seen_coords = []
     for cand in candidates:
         rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum = cand
         too_close = any(
-            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 30
+            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 60
             for sc in seen_coords
         )
         if too_close:
@@ -2978,114 +3000,71 @@ is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_s
 # Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
 _scan_r = st.session_state._scan_result
 if _scan_r and _scan_r != "none":
-    # CSS: tắt pointer-events ở cả Leaflet wrapper (.great-night-ring) lẫn div bên trong
-    # → click xuyên qua vòng tròn để chạm đúng ngôi sao bên dưới
+    # ── Ring helper — CSS injected once, ring div absolutely centered on the coordinate ──
+    # icon_size=(0,0) / icon_anchor=(0,0): Leaflet places the DivIcon origin exactly at
+    # the lat/lon pixel. The ring div uses position:absolute + transform:translate(-50%,-50%)
+    # to center itself around that origin — no offset from <style> tags possible.
     _ring_css = (
         '<style>'
         '@keyframes great-night-pulse {'
-        '0%{transform:scale(0.6);opacity:0.9;}'
-        '70%{transform:scale(2.2);opacity:0;}'
-        '100%{transform:scale(0.6);opacity:0;}}'
+        '0%{transform:translate(-50%,-50%) scale(0.6);opacity:0.9;}'
+        '70%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}'
+        '100%{transform:translate(-50%,-50%) scale(0.6);opacity:0;}}'
         '.great-night-ring{'
         'pointer-events:none!important;'
-        'cursor:default!important;}'
+        'overflow:visible!important;}'
         '</style>'
     )
-    _is_best_ring = st.session_state.get("_scan_best", False)
+
+    def _make_ring_div(color, shadow):
+        return (
+            '<div style="position:absolute;top:0;left:0;'
+            'width:64px;height:64px;border-radius:50%;'
+            f'border:3px solid {color};'
+            f'box-shadow:0 0 14px {shadow};'
+            'animation:great-night-pulse 1.8s ease-out infinite;'
+            'pointer-events:none;"></div>'
+        )
+
+    def _add_rings(locations, color, shadow, css_already_injected=False):
+        """Render ring markers for a list of (lat,lon) or (name,coords,verdict) entries."""
+        ring_div = _make_ring_div(color, shadow)
+        for _i, entry in enumerate(locations):
+            coords = entry[1] if isinstance(entry[0], str) else list(entry)
+            _html = (_ring_css if (_i == 0 and not css_already_injected) else "") + ring_div
+            folium.Marker(
+                list(coords),
+                icon=folium.DivIcon(
+                    html=_html,
+                    icon_size=(0, 0), icon_anchor=(0, 0),
+                    class_name="great-night-ring"),
+            ).add_to(m)
+        return True  # css injected
+
+    _is_best_ring    = st.session_state.get("_scan_best", False)
     _is_tonight_ring = st.session_state.get("_scan_tonight", False)
 
     if _is_tonight_ring:
-        # Tonight command: vẽ 3 vòng tròn pink cho top3 locations đêm nay
         _top3_ring_tn = _scan_r.get("top3", None)
-        _ring_color_tn  = "#fbcfe8"
-        _ring_shadow_tn = "rgba(251,207,232,0.85)"
-        _ring_body_tonight = (
-            '<div style="width:64px;height:64px;border-radius:50%;'
-            f'border:3px solid {_ring_color_tn};'
-            f'box-shadow:0 0 14px {_ring_shadow_tn};'
-            'animation:great-night-pulse 1.8s ease-out infinite;'
-            'transform-origin:center;pointer-events:none;"></div>'
-        )
-        _css_injected_tn = False
         if _top3_ring_tn:
-            for _i3, (_td3, _tdoff3, _tln3, _tlc3, _tv3, _tmi3, _tiw3) in enumerate(_top3_ring_tn):
-                _ring_html = (_ring_css if not _css_injected_tn else "") + _ring_body_tonight
-                _css_injected_tn = True
-                folium.Marker(
-                    list(_tlc3),
-                    icon=folium.DivIcon(
-                        html=_ring_html,
-                        icon_size=(64,64), icon_anchor=(32,32),
-                        class_name="great-night-ring"),
-                ).add_to(m)
+            # top3 entries: (date, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend)
+            _locs_tn = [(_tln3, _tlc3, None) for _, _, _tln3, _tlc3, *_ in _top3_ring_tn]
         else:
-            _all_locs_tn = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
-            for _i, (_aln, _alc, _alv) in enumerate(_all_locs_tn):
-                _ring_html = (_ring_css if _i == 0 else "") + _ring_body_tonight
-                folium.Marker(
-                    list(_alc),
-                    icon=folium.DivIcon(
-                        html=_ring_html,
-                        icon_size=(64,64), icon_anchor=(32,32),
-                        class_name="great-night-ring"),
-                ).add_to(m)
+            _locs_tn = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+        _add_rings(_locs_tn, "#fbcfe8", "rgba(251,207,232,0.85)")
+
     elif _is_best_ring:
-        # Best command: vẽ 3 vòng tròn vàng cho top3 locations
         _top3_ring = _scan_r.get("top3", None)
-        _ring_color  = "#fbbf24"
-        _ring_shadow = "rgba(251,191,36,0.85)"
-        _ring_body_best = (
-            '<div style="width:64px;height:64px;border-radius:50%;'
-            f'border:3px solid {_ring_color};'
-            f'box-shadow:0 0 14px {_ring_shadow};'
-            'animation:great-night-pulse 1.8s ease-out infinite;'
-            'transform-origin:center;pointer-events:none;"></div>'
-        )
-        _css_injected = False
         if _top3_ring:
-            for _i3, (_td3, _tdoff3, _tln3, _tlc3, _tv3, _tmi3, _tiw3) in enumerate(_top3_ring):
-                _ring_html = (_ring_css if not _css_injected else "") + _ring_body_best
-                _css_injected = True
-                folium.Marker(
-                    list(_tlc3),
-                    icon=folium.DivIcon(
-                        html=_ring_html,
-                        icon_size=(64,64), icon_anchor=(32,32),
-                        class_name="great-night-ring"),
-                ).add_to(m)
+            _locs_best = [(_tln3, _tlc3, None) for _, _, _tln3, _tlc3, *_ in _top3_ring]
         else:
-            # Fallback: vẽ 1 vòng từ all_locs
-            _all_locs_b = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
-            for _i, (_aln, _alc, _alv) in enumerate(_all_locs_b):
-                _ring_html = (_ring_css if _i == 0 else "") + _ring_body_best
-                folium.Marker(
-                    list(_alc),
-                    icon=folium.DivIcon(
-                        html=_ring_html,
-                        icon_size=(64,64), icon_anchor=(32,32),
-                        class_name="great-night-ring"),
-                ).add_to(m)
+            _locs_best = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+        _add_rings(_locs_best, "#fbbf24", "rgba(251,191,36,0.85)")
+
     else:
         # Scan command: vẽ vòng tròn xanh cho tất cả địa điểm PERFECT NIGHT
-        _ring_color  = "#6ee7b7"
-        _ring_shadow = "rgba(110,231,183,0.8)"
-        _ring_body_scan = (
-            '<div style="width:64px;height:64px;border-radius:50%;'
-            f'border:3px solid {_ring_color};'
-            f'box-shadow:0 0 14px {_ring_shadow};'
-            'animation:great-night-pulse 1.8s ease-out infinite;'
-            'transform-origin:center;pointer-events:none;"></div>'
-        )
         _all_locs = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
-        for _i, (_aln, _alc, _alv) in enumerate(_all_locs):
-            _ring_html = (_ring_css if _i == 0 else "") + _ring_body_scan
-            folium.Marker(
-                list(_alc),
-                icon=folium.DivIcon(
-                    html=_ring_html,
-                    icon_size=(64,64), icon_anchor=(32,32),
-                    class_name="great-night-ring"),
-            ).add_to(m)
+        _add_rings(_all_locs, "#6ee7b7", "rgba(110,231,183,0.8)")
 
 if not is_bookmark:
     folium.Marker(
@@ -3220,7 +3199,7 @@ if _scan_r2 and _scan_r2 != "none":
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:461px;left:2px;
+  position:absolute;top:457px;left:2px;
   width:320px;
   background:rgba(40,5,20,0.95);border:1.5px solid rgba(251,207,232,0.80);
   border-radius:10px;padding:8px 12px;
@@ -3277,7 +3256,7 @@ if _scan_r2 and _scan_r2 != "none":
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:461px;left:2px;
+  position:absolute;top:457px;left:2px;
   width:320px;
   background:rgba(40,15,5,0.95);border:1.5px solid rgba(251,146,36,0.85);
   border-radius:10px;padding:8px 12px;
