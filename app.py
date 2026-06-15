@@ -1890,7 +1890,7 @@ def _run_best_scan(scan_all=False):
     for day_off in range(0, 7):
         d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
-        if moon_illum >= 35:
+        if moon_illum >= 41.5:
             continue
         is_weekend = d.weekday() in _WEEKEND_DAYS
         slots = _make_slots_for_offset(_night_base_jst, day_off)
