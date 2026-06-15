@@ -346,7 +346,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
              ("_need_fly", False), ("_skip_prefetch", False),
-             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False)]:
+             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_all", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1784,7 +1784,10 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
 #   1) Moon illumination < 32%
 #   2) Có ít nhất 1/27 địa điểm đầu (sao xanh) đạt tier == "PERFECT NIGHT"
 #   3) Chỉ báo NGÀY SỚM NHẤT thoả mãn (1-7 ngày tới)
-_FAVORITE_LOCATIONS = list(LOCATION_DATABASE.items())  # scan tất cả địa điểm
+_FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
+            if (lambda nm: nm.split(".")[0].strip().isdigit()
+                and int(nm.split(".")[0].strip()) <= 30)(n)]
+_FAV_ALL = list(LOCATION_DATABASE.items())
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Khoảng cách Haversine giữa 2 điểm (km)."""
@@ -1794,8 +1797,8 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-def _run_great_night_scan(start_day=0):
-    """Quét từ start_day (0-6) trong 7 ngày tới cho 27 địa điểm yêu thích.
+def _run_great_night_scan(start_day=0, scan_all=False):
+    """Quét từ start_day (0-6) trong 7 ngày tới. scan_all=True → 266 địa điểm, False → 30 điểm.
     - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày sớm nhất thoả (sau khi lọc <20km)
     - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
     Trả về None nếu không có ngày nào thoả."""
@@ -1805,8 +1808,9 @@ def _run_great_night_scan(start_day=0):
         if moon_illum >= 32:
             continue
         slots = _make_slots_for_offset(_night_base_jst, day_off)
+        _locs_to_scan = _FAV_ALL if scan_all else _FAV_30
         perfect_locs = []  # (loc_name, loc_coords, verdict) tất cả địa điểm pass
-        for loc_name, loc_coords in _FAVORITE_LOCATIONS:
+        for loc_name, loc_coords in _locs_to_scan:
             lat, lon = loc_coords
             try:
                 hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
@@ -1860,7 +1864,7 @@ def _run_great_night_scan(start_day=0):
 if st.session_state._scan_scanning:
     st.session_state._scan_scanning = False   # reset ngay để lần rerun sau không loop
     _start = st.session_state._scan_days      # 0 / 3 / 5 / 7
-    _scan_res = _run_great_night_scan(start_day=_start)
+    _scan_res = _run_great_night_scan(start_day=_start, scan_all=st.session_state._scan_all)
     st.session_state._scan_result = _scan_res if _scan_res is not None else "none"
     st.rerun()
 
@@ -2016,8 +2020,13 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       //   day 0→lng 99.9, day 1→91.1, day 2→92.2, ..., day 6→96.6
       window._triggerScan = function(days) {
         var d = (days >= 0 && days <= 6) ? days : 0;
-        var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);  // 0→99.9, 1→91.1, 2→92.2, ..., 6→96.6
+        var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
         map.fire('click', { latlng: L.latLng(89.9, lng) });
+      };
+      window._triggerScanAll = function(days) {
+        var d = (days >= 0 && days <= 6) ? days : 0;
+        var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
+        map.fire('click', { latlng: L.latLng(89.8, lng) });
       };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
@@ -2466,17 +2475,28 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
         // Hidden keyword — "scan" / "scan 1" ... "scan 6"
-        if (/^scan(\s+\d*)?$/.test(q)) {
+        if (/^scan(\s+(all|\d+|all\s+\d+))?$/.test(q)) {
           dropdown.innerHTML = '';
-          var hints = [
-            {label: 'scan',   desc: 'Earliest night PERFECT NIGHT', days: 0},
-            {label: 'scan 1', desc: 'Tonight PERFECT NIGHT',             days: 1},
-            {label: 'scan 2', desc: 'Tomorrow night PERFECT NIGHT',      days: 2},
-            {label: 'scan 3', desc: 'Day after tomorrow PERFECT NIGHT',  days: 3},
-            {label: 'scan 4', desc: '4th night PERFECT NIGHT',           days: 4},
-            {label: 'scan 5', desc: '5th night PERFECT NIGHT',           days: 5},
-            {label: 'scan 6', desc: '6th night PERFECT NIGHT',           days: 6},
+          var isAll = q.indexOf('all') !== -1;
+          var hints30 = [
+            {label: 'scan',   desc: 'Earliest night PERFECT NIGHT (30 spots)', days: 0, all: false},
+            {label: 'scan 1', desc: 'Tonight (30 spots)',             days: 1, all: false},
+            {label: 'scan 2', desc: 'Tomorrow night (30 spots)',      days: 2, all: false},
+            {label: 'scan 3', desc: 'Day after tomorrow (30 spots)',  days: 3, all: false},
+            {label: 'scan 4', desc: '4th night (30 spots)',           days: 4, all: false},
+            {label: 'scan 5', desc: '5th night (30 spots)',           days: 5, all: false},
+            {label: 'scan 6', desc: '6th night (30 spots)',           days: 6, all: false},
           ];
+          var hintsAll = [
+            {label: 'scan all',   desc: 'Earliest night PERFECT NIGHT (266 spots)', days: 0, all: true},
+            {label: 'scan all 1', desc: 'Tonight (266 spots)',             days: 1, all: true},
+            {label: 'scan all 2', desc: 'Tomorrow night (266 spots)',      days: 2, all: true},
+            {label: 'scan all 3', desc: 'Day after tomorrow (266 spots)',  days: 3, all: true},
+            {label: 'scan all 4', desc: '4th night (266 spots)',           days: 4, all: true},
+            {label: 'scan all 5', desc: '5th night (266 spots)',           days: 5, all: true},
+            {label: 'scan all 6', desc: '6th night (266 spots)',           days: 6, all: true},
+          ];
+          var hints = isAll ? hintsAll : hints30;
           hints.forEach(function(h) {
             var row = L.DomUtil.create('div', '', dropdown);
             row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
@@ -2488,12 +2508,13 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             var desc = L.DomUtil.create('span', '', row);
             desc.textContent = h.desc;
             desc.style.cssText = 'font-size:10px;opacity:0.65;';
-            L.DomEvent.on(row, 'click', (function(days){ return function(){
+            L.DomEvent.on(row, 'click', (function(days, all){ return function(){
               inp.value = '';
               clr.style.display = 'none';
               dropdown.style.display = 'none';
-              if (typeof window._triggerScan === 'function') window._triggerScan(days);
-            }; })(h.days));
+              var fn = all ? window._triggerScanAll : window._triggerScan;
+              if (typeof fn === 'function') fn(days);
+            }; })(h.days, h.all));
           });
           dropdown.style.display = 'block';
           return;
@@ -2523,13 +2544,19 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           e.preventDefault();
           // ── Hidden SCAN trigger: "scan" / "scan 3" / "scan 5" / "scan 7" + Enter ──
           var _sv = inp.value.trim().toLowerCase();
-          var _scanMatch = _sv.match(/^scan\s*(\d*)$/);
+          var _scanAllMatch = _sv.match(/^scan\s+all\s*(\d*)$/);
+          var _scanMatch    = _sv.match(/^scan\s*(\d*)$/);
+          if (_scanAllMatch) {
+            var _days = parseInt(_scanAllMatch[1]) || 0;
+            if (_days < 0 || _days > 6) _days = 0;
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerScanAll === 'function') window._triggerScanAll(_days);
+            return;
+          }
           if (_scanMatch) {
             var _days = parseInt(_scanMatch[1]) || 0;
             if (_days < 0 || _days > 6) _days = 0;
-            inp.value = '';
-            clr.style.display = 'none';
-            dropdown.style.display = 'none';
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerScan === 'function') window._triggerScan(_days);
             return;
           }
@@ -2834,7 +2861,7 @@ if _scan_r2 and _scan_r2 != "none":
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:539px;left:2px;
+  position:absolute;top:549px;left:2px;
   display:inline-flex;align-items:center;
   white-space:nowrap;width:fit-content;
   background:rgba(5,25,18,0.92);border:1.5px solid rgba(52,211,153,0.75);
@@ -2853,7 +2880,7 @@ elif _scan_r2 == "none":
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:539px;left:2px;
+  position:absolute;top:549px;left:2px;
   display:inline-flex;white-space:nowrap;width:fit-content;
   background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
   border-radius:10px;padding:6px 13px;
@@ -2881,12 +2908,16 @@ if map_data:
     _SCAN_SENTINELS = {99.9: 0, 91.1: 1, 92.2: 2, 93.3: 3, 94.4: 4, 95.5: 5, 96.6: 6}
     _lc_lat = lc.get("lat", 0) if lc else 0
     _lc_lng = lc.get("lng", 0) if lc else 0
+    # lat=89.9 → scan 30, lat=89.8 → scan all 266
+    _is_scan30  = abs(_lc_lat - 89.9) < 0.05
+    _is_scan_all = abs(_lc_lat - 89.8) < 0.05
     _matched_days = next((d for lng_sentinel, d in _SCAN_SENTINELS.items()
-                          if abs(_lc_lat - 89.9) < 0.05 and abs(_lc_lng - lng_sentinel) < 0.05), None)
+                          if (_is_scan30 or _is_scan_all) and abs(_lc_lng - lng_sentinel) < 0.05), None)
     if lc and lc != st.session_state._last_lc and _matched_days is not None:
         st.session_state._last_lc       = lc
         st.session_state._scan_days     = _matched_days
-        st.session_state._scan_scanning = True   # hiển thị overlay "Scanning..." ngay lập tức
+        st.session_state._scan_all      = _is_scan_all
+        st.session_state._scan_scanning = True
         st.rerun()
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
