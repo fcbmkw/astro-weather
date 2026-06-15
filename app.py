@@ -1785,8 +1785,8 @@ _BEST_PREFECTURES = {
     "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma",
     "Fukushima", "Nagano", "Toyama", "Yamanashi", "Shizuoka", "Kanagawa"
 }
-_FAV_BEST = [(n,c) for n,c in LOCATION_DATABASE.items()
-             if any(p in n for p in _BEST_PREFECTURES)]
+_FAV_BEST_RAW = [(n,c) for n,c in LOCATION_DATABASE.items()
+                 if any(p in n for p in _BEST_PREFECTURES)]
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Khoảng cách Haversine giữa 2 điểm (km)."""
@@ -1795,6 +1795,19 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+# Bỏ địa điểm gần nhau <30km để tăng tốc best scan
+def _dedupe_locs_30km(locs):
+    kept = []
+    for name, coords in locs:
+        too_close = any(
+            _haversine_km(coords[0], coords[1], kc[0], kc[1]) < 30
+            for _, kc in kept
+        )
+        if not too_close:
+            kept.append((name, coords))
+    return kept
+_FAV_BEST = _dedupe_locs_30km(_FAV_BEST_RAW)
 
 def _run_great_night_scan(start_day=0, scan_all=False):
     """Quét từ start_day (0-6) trong 7 ngày tới. scan_all=True → 266 địa điểm, False → 30 điểm.
@@ -2533,8 +2546,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           if (isBest) {
             dropdown.innerHTML = '';
             var bestHints = [
-              {label: 'best',     desc: 'Best night 7d · Chiba/Kanagawa/Nagano/… (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBest(); }},
-              {label: 'best all', desc: 'Best night 7d · 266 spots (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBestAll(); }},
+              {label: 'best',     desc: 'best night 7d Kanto area', fn: function(){ window._triggerBest(); }},
+              {label: 'best all', desc: 'best night 7d All prefecture', fn: function(){ window._triggerBestAll(); }},
             ];
             bestHints.forEach(function(h) {
               var row = L.DomUtil.create('div', '', dropdown);
