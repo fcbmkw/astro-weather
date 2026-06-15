@@ -1780,7 +1780,7 @@ _FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
             if (lambda nm: nm.split(".")[0].strip().isdigit()
                 and int(nm.split(".")[0].strip()) <= 30)(n)]
 _FAV_ALL = list(LOCATION_DATABASE.items())
-# best command: tất cả địa điểm thuộc các tỉnh target (không Tokyo)
+# best/scan command: tất cả địa điểm thuộc các tỉnh Kanto và lân cận
 _BEST_PREFECTURES = {
     "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma",
     "Fukushima", "Nagano", "Toyama", "Yamanashi", "Shizuoka", "Kanagawa"
@@ -1796,7 +1796,7 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# Bỏ địa điểm gần nhau <30km để tăng tốc best scan
+# Bỏ địa điểm gần nhau <30km để tăng tốc best/scan
 def _dedupe_locs_30km(locs):
     kept = []
     for name, coords in locs:
@@ -1808,9 +1808,12 @@ def _dedupe_locs_30km(locs):
             kept.append((name, coords))
     return kept
 _FAV_BEST = _dedupe_locs_30km(_FAV_BEST_RAW)
+# scan command cũng dùng vùng Kanto, dedupe <30km (giống best)
+_FAV_SCAN_KANTO = _FAV_BEST
 
 def _run_great_night_scan(start_day=0, scan_all=False):
-    """Quét từ start_day (0-6) trong 7 ngày tới. scan_all=True → 266 địa điểm, False → 30 điểm.
+    """Quét từ start_day (0-6) trong 7 ngày tới.
+    scan_all=True → toàn bộ địa điểm, False → vùng Kanto (dedupe <30km, giống best).
     - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày sớm nhất thoả (sau khi lọc <20km)
     - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
     Trả về None nếu không có ngày nào thoả."""
@@ -1820,7 +1823,7 @@ def _run_great_night_scan(start_day=0, scan_all=False):
         if moon_illum >= 32:
             continue
         slots = _make_slots_for_offset(_night_base_jst, day_off)
-        _locs_to_scan = _FAV_ALL if scan_all else _FAV_30
+        _locs_to_scan = _FAV_ALL if scan_all else _FAV_SCAN_KANTO
         perfect_locs = []  # (loc_name, loc_coords, verdict) tất cả địa điểm pass
         for loc_name, loc_coords in _locs_to_scan:
             lat, lon = loc_coords
@@ -1869,19 +1872,26 @@ def _run_great_night_scan(start_day=0, scan_all=False):
         }
     return None
 
-# ── BEST NIGHT SCAN — quét toàn bộ 7 ngày × N địa điểm, chọn 1 tốt nhất ────────
-# Tiêu chí: moon<35%, tier=PERFECT NIGHT > GOOD STARRY NIGHT, streak dài nhất.
+# ── BEST NIGHT SCAN — quét toàn bộ 7 ngày × N địa điểm, chọn top 3 tốt nhất ────────
+# Tiêu chí: moon<35%, tier=PERFECT NIGHT(4★) > GOOD STARRY NIGHT(3★), streak dài nhất.
+# Ưu tiên cuối tuần (Fri=4, Sat=5, Sun=6). Weekday (Mon-Thu) hiển thị màu trắng.
+_WEEKEND_DAYS = {4, 5, 6}  # weekday(): Mon=0..Sun=6; Fri=4, Sat=5, Sun=6
+
 def _run_best_scan(scan_all=False):
-    """Quét 7 ngày tới cho N địa điểm, trả về 1 kết quả tốt nhất (streak dài nhất).
-    Ưu tiên: PERFECT NIGHT > GOOD STARRY NIGHT. Trả về None nếu không có."""
+    """Quét 7 ngày tới cho N địa điểm, trả về top 3 địa điểm tốt nhất (dedupe <30km).
+    - Ưu tiên cuối tuần (Fri/Sat/Sun) trước Mon-Thu.
+    - Trong cùng tier + streak: ưu tiên cuối tuần, rồi streak dài hơn.
+    - Trả về None nếu không có kết quả nào."""
     _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
     _locs = _FAV_ALL if scan_all else _FAV_BEST
-    best = None  # (tier_rank, streak, date, day_off, loc_name, loc_coords, verdict, moon_illum)
+    # candidates: list of (tier_rank, is_weekend, streak, good_hours, date, day_off, loc_name, loc_coords, verdict, moon_illum)
+    candidates = []
     for day_off in range(0, 7):
         d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
         if moon_illum >= 35:
             continue
+        is_weekend = d.weekday() in _WEEKEND_DAYS
         slots = _make_slots_for_offset(_night_base_jst, day_off)
         for loc_name, loc_coords in _locs:
             lat, lon = loc_coords
@@ -1904,16 +1914,49 @@ def _run_best_scan(scan_all=False):
             if rank == 0:
                 continue
             streak = verdict.get("best_streak", 0)
-            if best is None or (rank, streak) > (best[0], best[1]):
-                best = (rank, streak, d, day_off, loc_name, loc_coords, verdict, moon_illum)
-    if best is None:
+            good_hours = verdict.get("good_hours", 0)
+            candidates.append((rank, int(is_weekend), streak, good_hours, d, day_off, loc_name, loc_coords, verdict, moon_illum))
+
+    if not candidates:
         return None
-    _, _, d, day_off, loc_name, loc_coords, verdict, moon_illum = best
+
+    # Sort: tier_rank DESC, is_weekend DESC, streak DESC, good_hours DESC
+    candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+
+    # Pick top 3, dedupe by location <30km
+    top3 = []
+    seen_coords = []
+    for cand in candidates:
+        _, _, _, _, d, day_off, loc_name, loc_coords, verdict, moon_illum = cand
+        # Dedupe location: skip nếu trong vòng 30km với địa điểm đã chọn
+        too_close = any(
+            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 30
+            for sc in seen_coords
+        )
+        if too_close:
+            continue
+        seen_coords.append(loc_coords)
+        top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum))
+        if len(top3) == 3:
+            break
+
+    if not top3:
+        return None
+
+    # Xác định is_weekend cho từng kết quả
+    top3_with_weekend = []
+    for (d, day_off, loc_name, loc_coords, verdict, moon_illum) in top3:
+        is_weekend = d.weekday() in _WEEKEND_DAYS
+        top3_with_weekend.append((d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend))
+
+    # Primary result = top3[0]
+    d0, day_off0, loc_name0, loc_coords0, verdict0, moon_illum0, _ = top3_with_weekend[0]
     return {
-        "date": d, "day_off": day_off,
-        "loc_name": loc_name, "loc_coords": loc_coords,
-        "moon_illum": moon_illum, "verdict": verdict,
-        "all_locs": [(loc_name, loc_coords, verdict)],
+        "date": d0, "day_off": day_off0,
+        "loc_name": loc_name0, "loc_coords": loc_coords0,
+        "moon_illum": moon_illum0, "verdict": verdict0,
+        "all_locs": [(loc_name0, loc_coords0, verdict0)],  # vòng tròn map chỉ cho loc chính
+        "top3": top3_with_weekend,  # [(date, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend)]
     }
 
 # ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
@@ -2960,19 +3003,82 @@ if _scan_r2 and _scan_r2 != "none":
     _n_spots    = len(_all_locs2)
     _is_best_banner = st.session_state.get("_scan_best", False)
     _sr_tier    = _scan_r2["verdict"].get("tier", "PERFECT NIGHT")
-    if _is_best_banner:
-        _ban_bg  = "rgba(40,15,5,0.93)"
-        _ban_bdr = "rgba(251,146,36,0.85)"
-        _ban_clr = "#fcd34d"
-        _ban_loc = _scan_r2["loc_name"].split(",")[0].strip()
-        _ban_loc = _ban_loc.split(".",1)[-1].strip() if "." in _ban_loc else _ban_loc
-        _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} / moon {_scan_r2['moon_illum']:.0f}%"
+    _top3       = _scan_r2.get("top3", None)
+
+    if _is_best_banner and _top3:
+        # ── Best banner: hiện 3 địa điểm xếp hạng cao nhất ─────────────────────
+        _EN_WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        _top3_dates_seen = set()
+        _top3_dates_list = []
+        for (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in _top3:
+            _dk = _td.strftime("%Y-%m-%d")
+            if _dk not in _top3_dates_seen:
+                _top3_dates_seen.add(_dk)
+                _top3_dates_list.append(_td)
+        if len(_top3_dates_list) == 1:
+            _dh0 = _top3_dates_list[0]
+            _date_header = f"Best locations this week ({_dh0.month}/{_dh0.day} {_EN_WD[_dh0.weekday()]})"
+        else:
+            _dparts = [f"{_dx.month}/{_dx.day} {_EN_WD[_dx.weekday()]}" for _dx in _top3_dates_list]
+            _date_header = f"Best locations this week ({', '.join(_dparts)})"
+        _rank_icons = ["🥇", "🥈", "🥉"]
+        _rows_html_parts = []
+        for _i, (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in enumerate(_top3):
+            _rank_icon = _rank_icons[_i] if _i < 3 else "▪"
+            _short_name = _tln.split(",")[0].strip()
+            _short_name = _short_name.split(".", 1)[-1].strip() if "." in _short_name else _short_name
+            _streak = _tv.get("best_streak", 0)
+            _stars = _tv.get("stars", "")
+            _loc_color = "#fcd34d" if _tiw else "#e2e8f0"
+            _day_str = f"{_td.month}/{_td.day} {_EN_WD[_td.weekday()]}"
+            _rows_html_parts.append(
+                f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;'
+                f'border-bottom:1px solid rgba(251,146,36,0.18);">'
+                f'<span style="font-size:15px;flex-shrink:0;">{_rank_icon}</span>'
+                f'<span style="color:{_loc_color};font-weight:700;font-size:13px;flex:1;'
+                f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_short_name}</span>'
+                f'<span style="color:#94a3b8;font-size:11px;flex-shrink:0;">{_day_str}</span>'
+                f'<span style="color:#fbbf24;font-size:12px;flex-shrink:0;">{_stars}</span>'
+                f'<span style="color:#6ee7b7;font-size:10px;flex-shrink:0;">{_streak}h</span>'
+                f'</div>'
+            )
+        _rows_joined = "".join(_rows_html_parts)
+        _has_weekday_only = all(not _tiw for (_, _, _, _, _, _, _tiw) in _top3)
+        _moon_note = f"moon {_scan_r2['moon_illum']:.0f}%"
+        _color_note = "yellow=weekend · white=weekday" if not _has_weekday_only else "weekday only (no weekend results)"
+        st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:410px;left:2px;
+  width:320px;
+  background:rgba(40,15,5,0.95);border:1.5px solid rgba(251,146,36,0.85);
+  border-radius:10px;padding:8px 12px;
+  font-family:sans-serif;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+<div style="color:#fb923c;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
+🏆 {_date_header}
+</div>
+{_rows_joined}
+<div style="color:#64748b;font-size:9px;margin-top:4px;">{_moon_note} · {_color_note}</div>
+</div>
+</div>""", unsafe_allow_html=True)
     else:
-        _ban_bg  = "rgba(5,25,18,0.92)"
-        _ban_bdr = "rgba(52,211,153,0.75)"
-        _ban_clr = "#6ee7b7"
-        _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
-    st.markdown(f"""
+        # ── scan banner (không phải best) hoặc best không có top3 ──────────────
+        if _is_best_banner:
+            _ban_bg  = "rgba(40,15,5,0.93)"
+            _ban_bdr = "rgba(251,146,36,0.85)"
+            _ban_clr = "#fcd34d"
+            _ban_loc = _scan_r2["loc_name"].split(",")[0].strip()
+            _ban_loc = _ban_loc.split(".",1)[-1].strip() if "." in _ban_loc else _ban_loc
+            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} / moon {_scan_r2['moon_illum']:.0f}%"
+        else:
+            _ban_bg  = "rgba(5,25,18,0.92)"
+            _ban_bdr = "rgba(52,211,153,0.75)"
+            _ban_clr = "#6ee7b7"
+            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
+        st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
   position:absolute;top:557px;left:2px;
