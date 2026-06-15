@@ -1738,7 +1738,7 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
         color = "#fca5a5"; border = "rgba(239,68,68,0.70)"
         bg    = "rgba(30,8,8,0.88)"; anim = "blink-warn"
         sub   = f"{rain_hours}h rain"
-    elif best_streak >= 3 and not bright_moon:
+    elif best_streak >= 5 and not bright_moon:
         tier = "PERFECT NIGHT"
         icon = "🌌"; stars = "★★★★"
         color = "#6ee7b7"; border = "rgba(52,211,153,0.75)"
@@ -2470,13 +2470,13 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         if (/^scan(\s+\d*)?$/.test(q)) {
           dropdown.innerHTML = '';
           var hints = [
-            {label: 'scan',   desc: 'Earliest great night', days: 0},
-            {label: 'scan 1', desc: 'Start from day +1',    days: 1},
-            {label: 'scan 2', desc: 'Start from day +2',    days: 2},
-            {label: 'scan 3', desc: 'Start from day +3',    days: 3},
-            {label: 'scan 4', desc: 'Start from day +4',    days: 4},
-            {label: 'scan 5', desc: 'Start from day +5',    days: 5},
-            {label: 'scan 6', desc: 'Start from day +6',    days: 6},
+            {label: 'scan',   desc: 'Earliest night PERFECT NIGHT', days: 0},
+            {label: 'scan 1', desc: 'Tonight PERFECT NIGHT',             days: 1},
+            {label: 'scan 2', desc: 'Tomorrow night PERFECT NIGHT',      days: 2},
+            {label: 'scan 3', desc: 'Day after tomorrow PERFECT NIGHT',  days: 3},
+            {label: 'scan 4', desc: '4th night PERFECT NIGHT',           days: 4},
+            {label: 'scan 5', desc: '5th night PERFECT NIGHT',           days: 5},
+            {label: 'scan 6', desc: '6th night PERFECT NIGHT',           days: 6},
           ];
           hints.forEach(function(h) {
             var row = L.DomUtil.create('div', '', dropdown);
@@ -2831,25 +2831,19 @@ if _scan_r2 and _scan_r2 != "none":
     _sr_date2   = _scan_r2["date"]
     _all_locs2  = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
     _n_spots    = len(_all_locs2)
-    import re as _re
-    _avg_cloud  = _scan_r2["verdict"].get("sub", "")
-    _cloud_match = _re.search(r"avg cloud (\d+)%", _avg_cloud)
-    _cloud_str   = f"avg cloud {_cloud_match.group(1)}%" if _cloud_match else ""
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:505px;left:14px;
-  max-width:420px;white-space:nowrap;
+  position:absolute;bottom:2px;left:2px;
+  display:inline-flex;align-items:center;gap:5px;
+  white-space:nowrap;width:fit-content;
   background:rgba(5,25,18,0.92);border:1.5px solid rgba(52,211,153,0.75);
-  border-radius:10px;padding:7px 14px;
-  font-family:sans-serif;color:#6ee7b7;
+  border-radius:10px;padding:6px 13px;
+  font-family:sans-serif;color:#6ee7b7;font-size:13px;font-weight:700;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
-  line-height:1.4;pointer-events:none;
+  pointer-events:none;
 ">
-<span style="font-size:13px;font-weight:700;">🌌 {_sr_date2.month}/{_sr_date2.day} &nbsp;:&nbsp; PERFECT NIGHT</span>
-&nbsp;&nbsp;<span style="font-size:11.5px;font-weight:600;">{_n_spots} spot{"s" if _n_spots > 1 else ""}</span>
-&nbsp;/&nbsp;<span style="font-size:11.5px;opacity:0.85;">{_cloud_str}</span>
-&nbsp;/&nbsp;<span style="font-size:11.5px;opacity:0.70;">moon {_scan_r2["moon_illum"]:.0f}%</span>
+🌌 {_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT &nbsp; {_n_spots} spot{"s" if _n_spots > 1 else ""} / moon {_scan_r2["moon_illum"]:.0f}%
 </div>
 </div>""", unsafe_allow_html=True)
 
@@ -2859,9 +2853,10 @@ elif _scan_r2 == "none":
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
-  position:absolute;top:505px;left:14px;
+  position:absolute;bottom:2px;left:2px;
+  display:inline-flex;white-space:nowrap;width:fit-content;
   background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
-  border-radius:10px;padding:7px 14px;
+  border-radius:10px;padding:6px 13px;
   font-family:sans-serif;color:#94a3b8;font-size:12px;font-weight:600;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
