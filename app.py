@@ -346,7 +346,8 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
              ("_need_fly", False), ("_skip_prefetch", False),
-             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_all", False), ("_scan_best", False)]:
+             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_all", False), ("_scan_best", False),
+             ("_scan_tonight", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1959,13 +1960,87 @@ def _run_best_scan(scan_all=False):
         "top3": top3_with_weekend,  # [(date, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend)]
     }
 
+# ── TONIGHT SCAN — quét đêm nay (day_off=0) cho Kanto hoặc toàn quốc ────────
+def _run_tonight_scan(scan_all=False):
+    """Quét đêm nay (day_off=0) và trả về top3 địa điểm tốt nhất màu pink.
+    scan_all=True → 269 địa điểm toàn quốc, False → vùng Kanto (dedupe <30km).
+    - Không yêu cầu moon < 35% (tonight hiển thị kết quả dù trăng sáng).
+    - Tiêu chí: tier PERFECT NIGHT > GOOD STARRY NIGHT, streak dài nhất.
+    Trả về None nếu không có kết quả nào."""
+    _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
+    _locs = _FAV_ALL if scan_all else _FAV_BEST
+    day_off = 0
+    d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+    moon_illum, _ = get_moon_phase_percent(d)
+    slots = _make_slots_for_offset(_night_base_jst, day_off)
+    candidates = []
+    for loc_name, loc_coords in _locs:
+        lat, lon = loc_coords
+        try:
+            hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+        except Exception:
+            continue
+        if not hourly:
+            continue
+        frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+        try:
+            table, _, _, sun_alts, *_ = _build_night_data(
+                lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+        except Exception:
+            continue
+        verdict = _build_night_verdict(table, sun_alts, moon_illum)
+        if not verdict:
+            continue
+        rank = _TIER_RANK.get(verdict["tier"], 0)
+        if rank == 0:
+            continue
+        streak = verdict.get("best_streak", 0)
+        good_hours = verdict.get("good_hours", 0)
+        candidates.append((rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+
+    # Pick top 3, dedupe by location <30km
+    top3 = []
+    seen_coords = []
+    for cand in candidates:
+        rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum = cand
+        too_close = any(
+            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 30
+            for sc in seen_coords
+        )
+        if too_close:
+            continue
+        seen_coords.append(loc_coords)
+        top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum, False))
+        if len(top3) == 3:
+            break
+
+    if not top3:
+        return None
+
+    d0, day_off0, loc_name0, loc_coords0, verdict0, moon_illum0, _ = top3[0]
+    return {
+        "date": d0, "day_off": day_off0,
+        "loc_name": loc_name0, "loc_coords": loc_coords0,
+        "moon_illum": moon_illum0, "verdict": verdict0,
+        "all_locs": [(loc_name0, loc_coords0, verdict0)],
+        "top3": top3,
+        "_is_tonight": True,
+    }
+
 # ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
 # Thực hiện scan TRƯỚC khi map render → sau khi scan xong, rerun lần 2 mới vẽ banner.
 # Spinner cũ (st.spinner ngoài map) đã bị xóa — "Scanning..." hiện bên trong map
 # qua overlay bottom-left (xem phần banner bên dưới).
 if st.session_state._scan_scanning:
     st.session_state._scan_scanning = False
-    if st.session_state._scan_best:
+    if st.session_state._scan_tonight:
+        _scan_res = _run_tonight_scan(scan_all=st.session_state._scan_all)
+    elif st.session_state._scan_best:
         _scan_res = _run_best_scan(scan_all=st.session_state._scan_all)
     else:
         _start = st.session_state._scan_days
@@ -2135,6 +2210,8 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       };
       window._triggerBest    = function() { map.fire('click', { latlng: L.latLng(89.7, 99.9) }); };
       window._triggerBestAll = function() { map.fire('click', { latlng: L.latLng(89.6, 99.9) }); };
+      window._triggerTonight    = function() { map.fire('click', { latlng: L.latLng(89.5, 99.9) }); };
+      window._triggerTonightAll = function() { map.fire('click', { latlng: L.latLng(89.4, 99.9) }); };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -2582,10 +2659,34 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
         // Hidden keyword — "scan" / "scan 1" ... "scan 6"
-        if (/^(scan|best)(\s+(all|\d+|all\s+\d+))?$/.test(q)) {
+        if (/^(scan|best|tonight)(\s+(all|\d+|all\s+\d+))?$/.test(q)) {
           dropdown.innerHTML = '';
           var isBest = q.startsWith('best');
+          var isTonight = q.startsWith('tonight');
           var isAll = q.indexOf('all') !== -1;
+          if (isTonight) {
+            dropdown.innerHTML = '';
+            var tonightHints = [
+              {label: 'tonight',     desc: 'Best spots tonight (Kanto area)', fn: function(){ window._triggerTonight(); }},
+              {label: 'tonight all', desc: 'Best spots tonight (All 269 spots)', fn: function(){ window._triggerTonightAll(); }},
+            ];
+            tonightHints.forEach(function(h) {
+              var row = L.DomUtil.create('div', '', dropdown);
+              row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+                + 'color:#fbcfe8;border-bottom:1px solid rgba(251,207,232,0.2);'
+                + 'display:flex;justify-content:space-between;align-items:center;';
+              var lbl = L.DomUtil.create('span', '', row);
+              lbl.textContent = h.label; lbl.style.fontWeight = '700';
+              var desc = L.DomUtil.create('span', '', row);
+              desc.textContent = h.desc; desc.style.cssText = 'font-size:10px;opacity:0.65;';
+              L.DomEvent.on(row, 'click', (function(fn){ return function(){
+                inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+                fn();
+              }; })(h.fn));
+            });
+            dropdown.style.display = 'block';
+            return;
+          }
           if (isBest) {
             dropdown.innerHTML = '';
             var bestHints = [
@@ -2683,6 +2784,16 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           if (_sv === 'best') {
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerBest === 'function') window._triggerBest();
+            return;
+          }
+          if (_sv === 'tonight all') {
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerTonightAll === 'function') window._triggerTonightAll();
+            return;
+          }
+          if (_sv === 'tonight') {
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerTonight === 'function') window._triggerTonight();
             return;
           }
           var _scanAllMatch = _sv.match(/^scan\s+all\s*(\d*)$/);
@@ -2881,8 +2992,44 @@ if _scan_r and _scan_r != "none":
         '</style>'
     )
     _is_best_ring = st.session_state.get("_scan_best", False)
+    _is_tonight_ring = st.session_state.get("_scan_tonight", False)
 
-    if _is_best_ring:
+    if _is_tonight_ring:
+        # Tonight command: vẽ 3 vòng tròn pink cho top3 locations đêm nay
+        _top3_ring_tn = _scan_r.get("top3", None)
+        _ring_color_tn  = "#fbcfe8"
+        _ring_shadow_tn = "rgba(251,207,232,0.85)"
+        _ring_body_tonight = (
+            '<div style="width:64px;height:64px;border-radius:50%;'
+            f'border:3px solid {_ring_color_tn};'
+            f'box-shadow:0 0 14px {_ring_shadow_tn};'
+            'animation:great-night-pulse 1.8s ease-out infinite;'
+            'transform-origin:center;pointer-events:none;"></div>'
+        )
+        _css_injected_tn = False
+        if _top3_ring_tn:
+            for _i3, (_td3, _tdoff3, _tln3, _tlc3, _tv3, _tmi3, _tiw3) in enumerate(_top3_ring_tn):
+                _ring_html = (_ring_css if not _css_injected_tn else "") + _ring_body_tonight
+                _css_injected_tn = True
+                folium.Marker(
+                    list(_tlc3),
+                    icon=folium.DivIcon(
+                        html=_ring_html,
+                        icon_size=(64,64), icon_anchor=(32,32),
+                        class_name="great-night-ring"),
+                ).add_to(m)
+        else:
+            _all_locs_tn = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+            for _i, (_aln, _alc, _alv) in enumerate(_all_locs_tn):
+                _ring_html = (_ring_css if _i == 0 else "") + _ring_body_tonight
+                folium.Marker(
+                    list(_alc),
+                    icon=folium.DivIcon(
+                        html=_ring_html,
+                        icon_size=(64,64), icon_anchor=(32,32),
+                        class_name="great-night-ring"),
+                ).add_to(m)
+    elif _is_best_ring:
         # Best command: vẽ 3 vòng tròn vàng cho top3 locations
         _top3_ring = _scan_r.get("top3", None)
         _ring_color  = "#fbbf24"
@@ -3039,10 +3186,55 @@ if _scan_r2 and _scan_r2 != "none":
     _all_locs2  = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
     _n_spots    = len(_all_locs2)
     _is_best_banner = st.session_state.get("_scan_best", False)
+    _is_tonight_banner = st.session_state.get("_scan_tonight", False)
     _sr_tier    = _scan_r2["verdict"].get("tier", "PERFECT NIGHT")
     _top3       = _scan_r2.get("top3", None)
 
-    if _is_best_banner and _top3:
+    if _is_tonight_banner and _top3:
+        # ── Tonight banner: pink theme, top3 đêm nay ────────────────────────────
+        _EN_WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        _rank_icons = ["🥇", "🥈", "🥉"]
+        _rows_html_parts_tn = []
+        _top3_len_tn = len(_top3)
+        for _i, (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in enumerate(_top3):
+            _rank_icon = _rank_icons[_i] if _i < 3 else "▪"
+            _short_name = _tln.split(",")[0].strip()
+            _short_name = _short_name.split(".", 1)[-1].strip() if "." in _short_name else _short_name
+            _streak = _tv.get("best_streak", 0)
+            _stars = _tv.get("stars", "")
+            _day_str = f"{_td.month}/{_td.day} {_EN_WD[_td.weekday()]}"
+            _is_last_row_tn = (_i == _top3_len_tn - 1)
+            _row_border_tn = "" if _is_last_row_tn else "border-bottom:1px solid rgba(251,207,232,0.22);"
+            _rows_html_parts_tn.append(
+                f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;{_row_border_tn}">'
+                f'<span style="font-size:15px;flex-shrink:0;">{_rank_icon}</span>'
+                f'<span style="color:#fbcfe8;font-weight:700;font-size:13px;flex:1;'
+                f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_short_name}</span>'
+                f'<span style="color:#f9a8d4;font-size:11px;flex-shrink:0;">{_day_str}</span>'
+                f'<span style="color:#f472b6;font-size:12px;flex-shrink:0;">{_stars}</span>'
+                f'<span style="color:#fbcfe8;font-size:10px;flex-shrink:0;">{_streak}h</span>'
+                f'</div>'
+            )
+        _moon_tn = _scan_r2["moon_illum"]
+        _rows_joined_tn = "".join(_rows_html_parts_tn)
+        st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:461px;left:2px;
+  width:320px;
+  background:rgba(40,5,20,0.95);border:1.5px solid rgba(251,207,232,0.80);
+  border-radius:10px;padding:8px 12px;
+  font-family:sans-serif;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+<div style="color:#fbcfe8;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
+🌸 Tonight — best spots / moon {_moon_tn:.0f}%
+</div>
+{_rows_joined_tn}
+</div>
+</div>""", unsafe_allow_html=True)
+    elif _is_best_banner and _top3:
         # ── Best banner: hiện 3 địa điểm xếp hạng cao nhất ─────────────────────
         _EN_WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         _top3_dates_seen = set()
@@ -3060,6 +3252,7 @@ if _scan_r2 and _scan_r2 != "none":
             _date_header = f"Best locations this week ({', '.join(_dparts)})"
         _rank_icons = ["🥇", "🥈", "🥉"]
         _rows_html_parts = []
+        _top3_len = len(_top3)
         for _i, (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in enumerate(_top3):
             _rank_icon = _rank_icons[_i] if _i < 3 else "▪"
             _short_name = _tln.split(",")[0].strip()
@@ -3068,9 +3261,10 @@ if _scan_r2 and _scan_r2 != "none":
             _stars = _tv.get("stars", "")
             _loc_color = "#fcd34d" if _tiw else "#e2e8f0"
             _day_str = f"{_td.month}/{_td.day} {_EN_WD[_td.weekday()]}"
+            _is_last_row = (_i == _top3_len - 1)
+            _row_border = "" if _is_last_row else "border-bottom:1px solid rgba(251,146,36,0.18);"
             _rows_html_parts.append(
-                f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;'
-                f'border-bottom:1px solid rgba(251,146,36,0.18);">'
+                f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;{_row_border}">'
                 f'<span style="font-size:15px;flex-shrink:0;">{_rank_icon}</span>'
                 f'<span style="color:{_loc_color};font-weight:700;font-size:13px;flex:1;'
                 f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_short_name}</span>'
@@ -3166,16 +3360,20 @@ if map_data:
     _is_scan_all = abs(_lc_lat - 89.8) < 0.05
     _is_best30   = abs(_lc_lat - 89.7) < 0.05
     _is_best_all = abs(_lc_lat - 89.6) < 0.05
-    _is_any_scan = _is_scan30 or _is_scan_all or _is_best30 or _is_best_all
+    _is_tonight30  = abs(_lc_lat - 89.5) < 0.05
+    _is_tonight_all = abs(_lc_lat - 89.4) < 0.05
+    _is_any_scan = _is_scan30 or _is_scan_all or _is_best30 or _is_best_all or _is_tonight30 or _is_tonight_all
     _matched_days = next((d for lng_sentinel, d in _SCAN_SENTINELS.items()
                           if _is_any_scan and abs(_lc_lng - lng_sentinel) < 0.05), None)
     if lc and lc != st.session_state._last_lc and _matched_days is not None:
         st.session_state._last_lc       = lc
         st.session_state._scan_days     = _matched_days
-        st.session_state._scan_all      = _is_scan_all or _is_best_all
+        st.session_state._scan_all      = _is_scan_all or _is_best_all or _is_tonight_all
         st.session_state._scan_best     = _is_best30 or _is_best_all
+        st.session_state._scan_tonight  = _is_tonight30 or _is_tonight_all
         st.session_state._scan_scanning = True
         st.rerun()
+
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
     # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
