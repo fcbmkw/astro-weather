@@ -3588,13 +3588,7 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 # Legend note
-st.markdown(
-    "<div style='text-align:center;font-size:12px;color:#94a3b8;margin-top:-8px;'>"
-    "<span style='color:#fbbf24;'>▬</span> Moon &nbsp;&nbsp;"
-    "<span style='color:#38bdf8;'>╌╌</span> Sun &nbsp;&nbsp;"
-    "<span style='color:#a78bfa;'>·····</span> Milky Way &nbsp;&nbsp;&nbsp;&nbsp;"
-    "<span style='color:rgba(251,146,60,0.8);'></div>",
-    unsafe_allow_html=True
+
 )
 
 
