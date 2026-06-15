@@ -1286,7 +1286,7 @@ _ENDPOINTS = [
     ("gfs_only",f"&hourly={_FIELDS}&models=gfs_seamless&wind_speed_unit=ms&timezone=auto"),
 ]
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_weather_raw(lat, lon):
     """Raw API fetch với retry + multi-endpoint fallback.
     Returns (hourly_dict, utc_offset_seconds, endpoint_used_label, last_error)"""
@@ -1469,7 +1469,7 @@ desired_slots = [
 _full_night_slots = list(desired_slots)
 # (past slots kept — table and graph always display 18:00→06:00)
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_utc_offset_h):
     """Cache toàn bộ vòng lặp tính weather table + moon/sun/MW altitudes.
     Key cache = (lat, lon, slots, source) — chỉ recompute khi thực sự đổi ngày/địa điểm/source."""
