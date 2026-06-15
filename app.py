@@ -346,7 +346,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
              ("_need_fly", False), ("_skip_prefetch", False),
-             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_all", False)]:
+             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_all", False), ("_scan_best", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1849,14 +1849,64 @@ def _run_great_night_scan(start_day=0, scan_all=False):
         }
     return None
 
+# ── BEST NIGHT SCAN — quét toàn bộ 7 ngày × N địa điểm, chọn 1 tốt nhất ────────
+# Tiêu chí: moon<35%, tier=PERFECT NIGHT > GOOD STARRY NIGHT, streak dài nhất.
+def _run_best_scan(scan_all=False):
+    """Quét 7 ngày tới cho N địa điểm, trả về 1 kết quả tốt nhất (streak dài nhất).
+    Ưu tiên: PERFECT NIGHT > GOOD STARRY NIGHT. Trả về None nếu không có."""
+    _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
+    _locs = _FAV_ALL if scan_all else _FAV_30
+    best = None  # (tier_rank, streak, date, day_off, loc_name, loc_coords, verdict, moon_illum)
+    for day_off in range(0, 7):
+        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        moon_illum, _ = get_moon_phase_percent(d)
+        if moon_illum >= 35:
+            continue
+        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        for loc_name, loc_coords in _locs:
+            lat, lon = loc_coords
+            try:
+                hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+            except Exception:
+                continue
+            if not hourly:
+                continue
+            frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+            try:
+                table, _, _, sun_alts, *_ = _build_night_data(
+                    lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+            except Exception:
+                continue
+            verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if not verdict:
+                continue
+            rank = _TIER_RANK.get(verdict["tier"], 0)
+            if rank == 0:
+                continue
+            streak = verdict.get("best_streak", 0)
+            if best is None or (rank, streak) > (best[0], best[1]):
+                best = (rank, streak, d, day_off, loc_name, loc_coords, verdict, moon_illum)
+    if best is None:
+        return None
+    _, _, d, day_off, loc_name, loc_coords, verdict, moon_illum = best
+    return {
+        "date": d, "day_off": day_off,
+        "loc_name": loc_name, "loc_coords": loc_coords,
+        "moon_illum": moon_illum, "verdict": verdict,
+        "all_locs": [(loc_name, loc_coords, verdict)],
+    }
+
 # ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
 # Thực hiện scan TRƯỚC khi map render → sau khi scan xong, rerun lần 2 mới vẽ banner.
 # Spinner cũ (st.spinner ngoài map) đã bị xóa — "Scanning..." hiện bên trong map
 # qua overlay bottom-left (xem phần banner bên dưới).
 if st.session_state._scan_scanning:
-    st.session_state._scan_scanning = False   # reset ngay để lần rerun sau không loop
-    _start = st.session_state._scan_days      # 0 / 3 / 5 / 7
-    _scan_res = _run_great_night_scan(start_day=_start, scan_all=st.session_state._scan_all)
+    st.session_state._scan_scanning = False
+    if st.session_state._scan_best:
+        _scan_res = _run_best_scan(scan_all=st.session_state._scan_all)
+    else:
+        _start = st.session_state._scan_days
+        _scan_res = _run_great_night_scan(start_day=_start, scan_all=st.session_state._scan_all)
     st.session_state._scan_result = _scan_res if _scan_res is not None else "none"
     st.rerun()
 
@@ -2020,6 +2070,8 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
         map.fire('click', { latlng: L.latLng(89.8, lng) });
       };
+      window._triggerBest    = function() { map.fire('click', { latlng: L.latLng(89.7, 99.9) }); };
+      window._triggerBestAll = function() { map.fire('click', { latlng: L.latLng(89.6, 99.9) }); };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -2467,9 +2519,33 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
         // Hidden keyword — "scan" / "scan 1" ... "scan 6"
-        if (/^scan(\s+(all|\d+|all\s+\d+))?$/.test(q)) {
+        if (/^(scan|best)(\s+(all|\d+|all\s+\d+))?$/.test(q)) {
           dropdown.innerHTML = '';
+          var isBest = q.startsWith('best');
           var isAll = q.indexOf('all') !== -1;
+          if (isBest) {
+            dropdown.innerHTML = '';
+            var bestHints = [
+              {label: 'best',     desc: 'Best night 7d · 30 spots (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBest(); }},
+              {label: 'best all', desc: 'Best night 7d · 266 spots (PERFECT/GOOD STARRY)', fn: function(){ window._triggerBestAll(); }},
+            ];
+            bestHints.forEach(function(h) {
+              var row = L.DomUtil.create('div', '', dropdown);
+              row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+                + 'color:#34d399;border-bottom:1px solid rgba(51,65,85,0.4);'
+                + 'display:flex;justify-content:space-between;align-items:center;';
+              var lbl = L.DomUtil.create('span', '', row);
+              lbl.textContent = h.label; lbl.style.fontWeight = '700';
+              var desc = L.DomUtil.create('span', '', row);
+              desc.textContent = h.desc; desc.style.cssText = 'font-size:10px;opacity:0.65;';
+              L.DomEvent.on(row, 'click', (function(fn){ return function(){
+                inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+                fn();
+              }; })(h.fn));
+            });
+            dropdown.style.display = 'block';
+            return;
+          }
           var hints30 = [
             {label: 'scan',   desc: 'Earliest night PERFECT NIGHT (30 spots)', days: 0, all: false},
             {label: 'scan 1', desc: 'Tonight (30 spots)',             days: 1, all: false},
@@ -2536,6 +2612,16 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           e.preventDefault();
           // ── Hidden SCAN trigger: "scan" / "scan 3" / "scan 5" / "scan 7" + Enter ──
           var _sv = inp.value.trim().toLowerCase();
+          if (_sv === 'best all') {
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBestAll === 'function') window._triggerBestAll();
+            return;
+          }
+          if (_sv === 'best') {
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBest === 'function') window._triggerBest();
+            return;
+          }
           var _scanAllMatch = _sv.match(/^scan\s+all\s*(\d*)$/);
           var _scanMatch    = _sv.match(/^scan\s*(\d*)$/);
           if (_scanAllMatch) {
@@ -2900,15 +2986,19 @@ if map_data:
     _SCAN_SENTINELS = {99.9: 0, 91.1: 1, 92.2: 2, 93.3: 3, 94.4: 4, 95.5: 5, 96.6: 6}
     _lc_lat = lc.get("lat", 0) if lc else 0
     _lc_lng = lc.get("lng", 0) if lc else 0
-    # lat=89.9 → scan 30, lat=89.8 → scan all 266
-    _is_scan30  = abs(_lc_lat - 89.9) < 0.05
+    # lat=89.9→scan30, 89.8→scanAll, 89.7→best30, 89.6→bestAll
+    _is_scan30   = abs(_lc_lat - 89.9) < 0.05
     _is_scan_all = abs(_lc_lat - 89.8) < 0.05
+    _is_best30   = abs(_lc_lat - 89.7) < 0.05
+    _is_best_all = abs(_lc_lat - 89.6) < 0.05
+    _is_any_scan = _is_scan30 or _is_scan_all or _is_best30 or _is_best_all
     _matched_days = next((d for lng_sentinel, d in _SCAN_SENTINELS.items()
-                          if (_is_scan30 or _is_scan_all) and abs(_lc_lng - lng_sentinel) < 0.05), None)
+                          if _is_any_scan and abs(_lc_lng - lng_sentinel) < 0.05), None)
     if lc and lc != st.session_state._last_lc and _matched_days is not None:
         st.session_state._last_lc       = lc
         st.session_state._scan_days     = _matched_days
-        st.session_state._scan_all      = _is_scan_all
+        st.session_state._scan_all      = _is_scan_all or _is_best_all
+        st.session_state._scan_best     = _is_best30 or _is_best_all
         st.session_state._scan_scanning = True
         st.rerun()
 
