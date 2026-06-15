@@ -2069,6 +2069,25 @@ if st.session_state._scan_scanning:
         _start = st.session_state._scan_days
         _scan_res = _run_great_night_scan(start_day=_start, scan_all=st.session_state._scan_all)
     st.session_state._scan_result = _scan_res if _scan_res is not None else "none"
+
+    # ── Apply kết quả 1st vào session state → map + table cập nhật ngay ──────
+    # Giống hệt Priority 1 (click sao): set lat/lon, location_name, day_offset,
+    # sel_date, map_center, _need_fly để map bay đến địa điểm + ngày kết quả 1st.
+    if _scan_res is not None:
+        _r1_name   = _scan_res["loc_name"]
+        _r1_coords = _scan_res["loc_coords"]
+        _r1_dayoff = _scan_res.get("day_off", 0)
+        st.session_state.lat             = _r1_coords[0]
+        st.session_state.lon             = _r1_coords[1]
+        st.session_state.map_center      = [_r1_coords[0], _r1_coords[1]]
+        st.session_state.location_name   = _r1_name
+        st.session_state.is_custom_point = False
+        st.session_state.day_offset      = _r1_dayoff
+        st.session_state.sel_date        = date_options[_r1_dayoff]
+        st.session_state._need_fly       = True
+        st.session_state._last_tip       = None
+        st.session_state._skip_prefetch  = True
+
     st.rerun()
 
 # ── MAP ───────────────────────────────────────────────────────────────────────
