@@ -2237,16 +2237,18 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
 
-      // ── SCAN trigger — hidden; called by search box with "scan / scan N" ───
+      // ── SCAN trigger — hidden; called by search box with "kanto / kanto N" or "all japan / all japan N" ───
       // lat=89.9 (valid sentinel, below Mercator max 85.05), lng encodes start_day:
       //   day 0→lng 99.9, day 1→91.1, day 2→92.2, ..., day 6→96.6
       window._triggerScan = function(days) {
-        var d = (days >= 0 && days <= 6) ? days : 0;
+        var n = (days >= 0 && days <= 6) ? days : 0;
+        var d = (n === 0) ? 0 : (n - 1); // "kanto N" (N>=1) -> day_off N-1 (tonight = N=1)
         var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
         map.fire('click', { latlng: L.latLng(89.9, lng) });
       };
       window._triggerScanAll = function(days) {
-        var d = (days >= 0 && days <= 6) ? days : 0;
+        var n = (days >= 0 && days <= 6) ? days : 0;
+        var d = (n === 0) ? 0 : (n - 1); // "all japan N" (N>=1) -> day_off N-1 (tonight = N=1)
         var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
         map.fire('click', { latlng: L.latLng(89.8, lng) });
       };
@@ -2700,12 +2702,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase();
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
-        // Hidden keyword — "scan" / "scan 1" ... "scan 6"
-        if (/^(scan|best|tonight)(\s+(all|\d+|all\s+\d+))?$/.test(q)) {
+        // Hidden keyword — "kanto" / "kanto 1" ... "kanto 6", "all japan" / "all japan 1" ... "all japan 6"
+        if (/^(kanto|all\s*japan|best|tonight)(\s+(\d+))?$/.test(q)) {
           dropdown.innerHTML = '';
           var isBest = q.startsWith('best');
           var isTonight = q.startsWith('tonight');
-          var isAll = q.indexOf('all') !== -1;
+          var isAll = q.indexOf('all') !== -1 || q.indexOf('japan') !== -1;
           if (isTonight) {
             dropdown.innerHTML = '';
             var tonightHints = [
@@ -2753,22 +2755,22 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             return;
           }
           var hints30 = [
-            {label: 'scan',   desc: 'Earliest night PERFECT NIGHT (30 spots)', days: 0, all: false},
-            {label: 'scan 1', desc: 'Tonight (30 spots)',             days: 1, all: false},
-            {label: 'scan 2', desc: 'Tomorrow night (30 spots)',      days: 2, all: false},
-            {label: 'scan 3', desc: 'Day after tomorrow (30 spots)',  days: 3, all: false},
-            {label: 'scan 4', desc: '4th night (30 spots)',           days: 4, all: false},
-            {label: 'scan 5', desc: '5th night (30 spots)',           days: 5, all: false},
-            {label: 'scan 6', desc: '6th night (30 spots)',           days: 6, all: false},
+            {label: 'kanto',   desc: 'Earliest PERFECT NIGHT (Kanto area)', days: 0, all: false},
+            {label: 'kanto 1', desc: 'Tonight (Kanto area)',             days: 1, all: false},
+            {label: 'kanto 2', desc: 'Tomorrow night (Kanto area)',      days: 2, all: false},
+            {label: 'kanto 3', desc: 'Day after tomorrow (Kanto area)',  days: 3, all: false},
+            {label: 'kanto 4', desc: '4th night (Kanto area)',           days: 4, all: false},
+            {label: 'kanto 5', desc: '5th night (Kanto area)',           days: 5, all: false},
+            {label: 'kanto 6', desc: '6th night (Kanto area)',           days: 6, all: false},
           ];
           var hintsAll = [
-            {label: 'scan all',   desc: 'Earliest night PERFECT NIGHT (266 spots)', days: 0, all: true},
-            {label: 'scan all 1', desc: 'Tonight (266 spots)',             days: 1, all: true},
-            {label: 'scan all 2', desc: 'Tomorrow night (266 spots)',      days: 2, all: true},
-            {label: 'scan all 3', desc: 'Day after tomorrow (266 spots)',  days: 3, all: true},
-            {label: 'scan all 4', desc: '4th night (266 spots)',           days: 4, all: true},
-            {label: 'scan all 5', desc: '5th night (266 spots)',           days: 5, all: true},
-            {label: 'scan all 6', desc: '6th night (266 spots)',           days: 6, all: true},
+            {label: 'all japan',   desc: 'Earliest PERFECT NIGHT (All Japan)', days: 0, all: true},
+            {label: 'all japan 1', desc: 'Tonight (All Japan)',             days: 1, all: true},
+            {label: 'all japan 2', desc: 'Tomorrow night (All Japan)',      days: 2, all: true},
+            {label: 'all japan 3', desc: 'Day after tomorrow (All Japan)',  days: 3, all: true},
+            {label: 'all japan 4', desc: '4th night (All Japan)',           days: 4, all: true},
+            {label: 'all japan 5', desc: '5th night (All Japan)',           days: 5, all: true},
+            {label: 'all japan 6', desc: '6th night (All Japan)',           days: 6, all: true},
           ];
           var hints = isAll ? hintsAll : hints30;
           hints.forEach(function(h) {
@@ -2816,7 +2818,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       L.DomEvent.on(inp, 'keydown', function(e){
         if (e.key === 'Enter') {
           e.preventDefault();
-          // ── Hidden SCAN trigger: "scan" / "scan 3" / "scan 5" / "scan 7" + Enter ──
+          // ── Hidden SCAN trigger: "kanto" / "kanto N" / "all japan" / "all japan N" + Enter ──
           var _sv = inp.value.trim().toLowerCase();
           if (_sv === 'best all') {
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
@@ -2838,8 +2840,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerTonight === 'function') window._triggerTonight();
             return;
           }
-          var _scanAllMatch = _sv.match(/^scan\s+all\s*(\d*)$/);
-          var _scanMatch    = _sv.match(/^scan\s*(\d*)$/);
+          var _scanAllMatch = _sv.match(/^all\s*japan\s*(\d*)$/);
+          var _scanMatch    = _sv.match(/^kanto\s*(\d*)$/);
           if (_scanAllMatch) {
             var _days = parseInt(_scanAllMatch[1]) || 0;
             if (_days < 0 || _days > 6) _days = 0;
