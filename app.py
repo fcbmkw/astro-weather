@@ -1839,6 +1839,19 @@ _REGION_LABELS = {
     "kansai": "Kansai", "chugoku": "Chugoku", "shikoku": "Shikoku", "kyushu": "Kyushu",
     "okinawa": "Okinawa", "japan": "All Japan",
 }
+# ── Region representative city center (lat, lon, zoom) — dùng để fly map khi scan ──
+_REGION_MAP_CENTER = {
+    "hokkaido": (43.0618, 141.3545, 7),   # Sapporo
+    "tohoku":   (38.2688, 140.8721, 7),   # Sendai
+    "kanto":    (35.6895, 139.6917, 8),   # Tokyo
+    "chubu":    (36.6513, 138.1810, 7),   # Nagano (central Chubu)
+    "kansai":   (34.6937, 135.5023, 8),   # Osaka
+    "chugoku":  (34.3853, 132.4553, 7),   # Hiroshima
+    "shikoku":  (33.5597, 133.5311, 7),   # Kochi
+    "kyushu":   (33.5904, 130.4017, 7),   # Fukuoka
+    "okinawa":  (26.2124, 127.6809, 8),   # Naha
+    "japan":    (36.5000, 138.0000, 6),   # Japan center
+}
 
 _FAV_RAW_BY_REGION = {
     rk: [(n, c) for n, c in LOCATION_DATABASE.items()
@@ -2151,9 +2164,23 @@ if st.session_state._scan_scanning:
     if _is_fallback_only:
         st.session_state._scan_result = "none"
         st.session_state._scan_fallback_label = _scan_res.get("_fallback_label", "unsettled weather")
+        # ── Fly map to region representative city even when no PERFECT NIGHT found ──
+        _fb_region = st.session_state._scan_region
+        if _fb_region in _REGION_MAP_CENTER:
+            _fb_lat, _fb_lon, _fb_zoom = _REGION_MAP_CENTER[_fb_region]
+            st.session_state.map_center = [_fb_lat, _fb_lon]
+            st.session_state.zoom       = _fb_zoom
+            st.session_state._need_fly  = True
     elif _scan_res is None:
         st.session_state._scan_result = "none"
         st.session_state._scan_fallback_label = "unsettled weather"
+        # Fly to region center even when no data at all
+        _fb_region = st.session_state._scan_region
+        if _fb_region in _REGION_MAP_CENTER:
+            _fb_lat, _fb_lon, _fb_zoom = _REGION_MAP_CENTER[_fb_region]
+            st.session_state.map_center = [_fb_lat, _fb_lon]
+            st.session_state.zoom       = _fb_zoom
+            st.session_state._need_fly  = True
     else:
         st.session_state._scan_result = _scan_res
         st.session_state._scan_fallback_label = None
@@ -3461,18 +3488,40 @@ elif _scan_r2 == "none":
         _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
     _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
     _fallback_lbl = st.session_state.get("_scan_fallback_label") or "unsettled weather"
+    # ── Map fallback label → weather icons ──────────────────────────────────────
+    def _fallback_icons(label):
+        """Trả về 1-3 icon tương ứng với thời tiết trong fallback label."""
+        _icons = []
+        _lbl_lower = label.lower()
+        if "snow" in _lbl_lower:
+            _icons.append("❄️")
+        if "rain" in _lbl_lower:
+            _icons.append("🌧️")
+        if "cloud" in _lbl_lower:
+            _icons.append("☁️")
+        if not _icons:
+            if "clear" in _lbl_lower or "mostly clear" in _lbl_lower:
+                _icons.append("🌟")
+            elif "patchy" in _lbl_lower:
+                _icons.append("🌤️")
+            elif "bright" in _lbl_lower:
+                _icons.append("🌃")
+            else:
+                _icons.append("🌥️")
+        return " ".join(_icons)
+    _fallback_icon_str = _fallback_icons(_fallback_lbl)
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
   position:absolute;top:557px;left:2px;
-  display:inline-flex;white-space:nowrap;width:fit-content;
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;width:fit-content;
   background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
   border-radius:10px;padding:6px 13px;
   font-family:sans-serif;color:#94a3b8;font-size:12px;font-weight:600;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
-{_fallback_lbl} in {_region_lbl_none} {_range_lbl}
+<span style="font-size:15px;">{_fallback_icon_str}</span><span>{_fallback_lbl} in {_region_lbl_none} {_range_lbl}</span>
 </div>
 </div>""", unsafe_allow_html=True)
 
