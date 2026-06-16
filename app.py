@@ -265,7 +265,7 @@ LOCATION_DATABASE = {
 
     # ── 251-266: 追加地点 ────────────────────────────────────────────────────────
     # Chiba
-    "251. Isumi Railway Crossing いすみ第二五之町踏切, Chiba": [35.2827, 140.2973],
+    "251. Isumi Railway Crossing いすみ鉄道第二五之町踏切, Chiba": [35.2827, 140.2973],
     "252. Oyama Senmaida 大山千枚田, Chiba": [35.1300, 139.9740],
     "253. Tonami no Torii 東浪見の鳥居, Chiba": [35.3357, 140.3941],
     # Toyama
@@ -278,10 +278,10 @@ LOCATION_DATABASE = {
     "258. Shikanotsuno Observatory 鹿角平天文台, Fukushima": [37.1760, 140.3870],
     "259. Koriyama Nunobiki Wind Farm 郡山布引風の高原, Fukushima": [37.5064, 140.3260],
     "260. Bandaisan Viewpoint 磐梯山眺望箇所, Fukushima": [37.5680, 140.1360],
-    "261. Kaneyama Fureai Hiroba かねやまふれあい広場, Fukushima": [37.4160, 139.5770],
+    "261. Kaneyama Fureai Square かねやまふれあい広場, Fukushima": [37.4160, 139.5770],
     # Gunma
     "262. Ueno Sky Bridge 上野スカイブリッジ, Gunma": [36.0720, 138.7771],
-    "263. Kurabuchi Children Observatory くらぶちこども天文台, Gunma": [36.4164, 138.7779],
+    "263. Kurabuchi Children くらぶちこども天文台, Gunma": [36.4164, 138.7779],
     "264. Kozumaki Ranch Observatory 神津牧場天文台, Gunma": [36.3460, 138.8200],
     "265. Takane Observatory 高根展望台, Gunma": [36.5800, 139.0400],
     # Niigata
@@ -496,7 +496,7 @@ def calculate_accurate_bortle(lat, lon):
         (35.4437, 139.6380): (9, 17.90),   # Yokohama core         — very bright urban core
         # ── Chiba / Boso ──────────────────────────────────────────────────────
         (34.9517, 139.8103): (4, 21.20),   #  2 Tateyama           green
-        (34.9071, 139.8611): (4, 21.20),   #  3 Minamiboso         green
+        (34.9088, 139.8294): (4, 21.20),   #  3 Shirahama          green
         (35.1795, 140.3729): (4, 21.25),   #  4 Onjuku             green
         (35.3196, 140.4091): (4, 21.25),   #  5 Isumi              green
         # ── Shizuoka / Izu ────────────────────────────────────────────────────
@@ -505,7 +505,7 @@ def calculate_accurate_bortle(lat, lon):
         (34.7213, 138.7431): (3, 21.75),   #  9 Matsuzaki          dark green
         # ── Shizuoka inland ───────────────────────────────────────────────────
         (35.1704, 138.1811): (3, 21.75),   # 10 Okuoikojo          dark green
-        (35.3832, 138.5836): (3, 21.75),   # 11 Asagiri Arena      dark green
+        (35.4224, 138.5927): (3, 21.75),   # 11 Asagiri Plateau    dark green
         # ── Yamanashi ─────────────────────────────────────────────────────────
         (35.4912, 138.6049): (4, 21.70),   # 12 Shoji-ko           dark green (slight glow from Kofu)
         # ── Nagano ────────────────────────────────────────────────────────────
@@ -533,12 +533,12 @@ def calculate_accurate_bortle(lat, lon):
         
         # ── Chiba ─────────────────────────────────────────────────────────────
         (35.7077, 140.8685): (4, 21.20),   # 28 Inubosaki
-        (35.5307, 140.4428): (4.5, 21.00), # 29 Kujukuri
-        (35.1604, 139.8357): (4.5, 21.00), # 30 Nokogiriyama
+        (35.5002, 140.4315): (4.5, 21.00), # 29 Kujukuri
+        (34.9146, 139.9355): (4.5, 21.00), # 30 Awa Shirahama
         # ── Ibaraki ───────────────────────────────────────────────────────────
-        (36.3145, 140.5844): (5, 20.80),   # 31 Oarai
-        (36.7657, 140.3542): (4, 21.40),   # 32 Fukuroda
-        (36.6658, 140.4986): (4, 21.75),   # 33 Plateau Satomi
+        (36.3151, 140.5894): (5, 20.80),   # 31 Oarai
+        (36.7641, 140.4062): (4, 21.40),   # 32 Fukuroda
+        (36.7992, 140.5364): (4, 21.75),   # 33 Plateau Satomi
         # ── Gunma ─────────────────────────────────────────────────────────────
         (36.9306, 139.2150): (3, 21.90),   # 34 Oze
         (36.7833, 139.0830): (3.5, 21.60), # 35 Tanbara
@@ -555,19 +555,19 @@ def calculate_accurate_bortle(lat, lon):
         (27.0944, 142.1917): (2, 22.00),   # 86 Ogasawara
         # ── Yamanashi ─────────────────────────────────────────────────────────
         (35.4154, 138.8758): (4, 21.50),   # 41 Yamanakako Panorama
-        (35.8967, 138.4355): (3.5, 21.65), # 42 Kiyosato
+        (35.9245, 138.4214): (3.5, 21.65), # 42 Kiyosato
         (35.5466, 138.7318): (4, 21.40),   # 43 Shindo Pass
         # ── Nagano ────────────────────────────────────────────────────────────
-        (35.9405, 138.4740): (3, 21.80),   # 44 Nobeyama
-        (36.1045, 138.0170): (4, 21.80),   # 45 Takabocchi
+        (35.9414, 138.4704): (3, 21.80),   # 44 Nobeyama
+        (36.1319, 138.0350): (4, 21.80),   # 45 Takabocchi
         (36.1030, 138.1946): (4, 21.75),   # 87 Kirigamine
-        (36.1038, 138.1926): (4, 21.75),   # 88 Kurumayama
-        (36.0690, 138.4567): (3, 21.80),   # 89 Yachiho
+        (36.0510, 138.3597): (3, 21.80),   # 88 Shirakoma Pond
+        (36.0694, 138.3806): (3, 21.80),   # 89 Yachiho
         (35.7725, 137.8173): (3, 21.90),   # 90 Senjojiki
-        (36.6988, 137.8355): (3, 21.85),   # 91 Happo Pond
+        (36.6940, 137.7844): (3, 21.85),   # 91 Happo Pond
         (36.7582, 137.8758): (3, 21.85),   # 92 Tsugaike
-        (36.7083, 137.8443): (3, 21.85),   # 93 Hakuba Iwatake
-        (36.7172, 138.5177): (3, 21.80),   # 94 Shiga Highlands
+        (36.7167, 137.8594): (3, 21.85),   # 93 Hakuba Iwatake
+        (36.7182, 138.4921): (3, 21.80),   # 94 Shiga Highlands
         # ── Niigata ───────────────────────────────────────────────────────────
         (36.8917, 138.1708): (3, 21.75),   # 95 Myoko
         (37.7052, 138.8178): (4, 21.20),   # 96 Yahiko
@@ -580,10 +580,10 @@ def calculate_accurate_bortle(lat, lon):
         (41.2570, 140.3495): (3, 21.75),   # 100 Cape Tappi
         # ── Gifu ──────────────────────────────────────────────────────────────
         (36.1068, 137.5538): (2.5, 21.95), # 47 Norikura
-        (36.1658, 137.5507): (3, 21.90),   # 48 Hirayu
-        (36.2898, 137.6462): (3, 21.90),   # 49 Shinhotaka
+        (36.1808, 137.5303): (3, 21.90),   # 48 Hirayu
+        (36.2854, 137.5743): (3, 21.90),   # 49 Shinhotaka
         # ── Ishikawa ──────────────────────────────────────────────────────────
-        (36.2212, 136.7928): (3, 21.80),   # 50 Hakusan
+        (36.2573, 136.9060): (3, 21.80),   # 50 Shirakawago, Gifu
         (36.8157, 136.7448): (4, 21.30),   # 51 Chirihama
         # ── Fukui ─────────────────────────────────────────────────────────────
         (35.5945, 135.8824): (4, 21.30),   # 52 Mikatagoko
@@ -601,13 +601,11 @@ def calculate_accurate_bortle(lat, lon):
         (35.2770, 133.6740): (3, 21.80),   # 59 Hiruzen
         # ── Tottori ───────────────────────────────────────────────────────────
         (35.5397, 134.2383): (3.5, 21.60), # 60 Tottori Sand Dunes
-        (35.4087, 133.8618): (3.5, 21.60), # 61 Misasa
+        (35.4105, 133.8924): (3.5, 21.60), # 61 Misasa
         # ── Yamaguchi ─────────────────────────────────────────────────────────
         (34.2576, 131.3070): (3, 21.80),   # 62 Akiyoshidai
         # ── Ehime ─────────────────────────────────────────────────────────────
         (33.3804, 132.9536): (2.5, 21.95), # 63 Shikoku Karst
-        (33.4304, 132.1062): (3, 21.80),   # 65 Sata Cape
-        # ── Kochi ─────────────────────────────────────────────────────────────
         (32.7196, 133.0182): (2.5, 21.95), # 64 Ashizuri
         # ── Saga ──────────────────────────────────────────────────────────────
         (33.5878, 129.8780): (3.5, 21.50), # 69 Yobuko
@@ -615,12 +613,13 @@ def calculate_accurate_bortle(lat, lon):
         (33.3720, 129.3988): (3, 21.80),   # 68 Ikitsuki
         # ── Kumamoto ──────────────────────────────────────────────────────────
         (32.8845, 131.0808): (2.5, 21.95), # 66 Kusasenri
-        (32.9506, 131.0904): (2.5, 21.95), # 67 Daikanbo
+        (32.99963, 131.0671): (2.5, 21.95), # 67 Daikanbo
         # ── Miyazaki ──────────────────────────────────────────────────────────
         (32.7092, 131.3086): (3, 21.80),   # 70 Takachiho
         (31.3674, 131.3458): (2.5, 21.95), # 71 Cape Toi
         # ── Kagoshima ─────────────────────────────────────────────────────────
         (31.1805, 130.5284): (3, 21.80),   # 72 Kaimondake
+        (30.9924, 130.6595): (2.5, 21.90), # 65 Sata Cape
         (27.0452, 128.4246): (2, 22.00),   # 73 Yoron
         # ── Okinawa ───────────────────────────────────────────────────────────
         (24.6053, 124.3427): (2, 22.00),   # 74 Hirakubozaki
@@ -670,7 +669,7 @@ def calculate_accurate_bortle(lat, lon):
         (36.1560, 136.7490): (2.5, 21.95), # 134 Hakusan Chokaisanso, Ishikawa
         (35.4859, 137.4118): (3.5, 21.60), # 135 Ena Ravine, Gifu
         (36.7340, 137.9660): (3.0, 21.85), # 136 Daibo Pass, Nagano
-        (36.1205, 137.6310): (2.5, 21.95), # 137 Norikura Kogen, Nagano
+        (36.1145, 137.6130): (2.5, 21.95), # 137 Norikura Kogen, Nagano
         (36.8280, 137.7860): (3.0, 21.90), # 138 Shirouma Oike, Nagano
         (34.9013, 139.8882): (4.0, 21.20), # 139 Nojimazaki, Chiba
         (35.1134, 140.1988): (4.0, 21.20), # 140 Kobentenjima, Chiba
@@ -788,10 +787,10 @@ def calculate_accurate_bortle(lat, lon):
         (26.4110, 127.7420): (3.5, 21.10), # 249 Zakimi Castle
         (26.4460, 127.7800): (3.0, 21.30), # 250 Cape Maeda
 
-        # ── 251-266: 追加地点 ──────────────────────────────────────────────────────
-        (35.2827, 140.3465): (4.0, 21.20), # 251 Isumi Railway Crossing, Chiba
-        (35.2040, 140.1130): (4.5, 21.00), # 252 Oyama Senmaida, Chiba
-        (35.3541, 140.3842): (4.0, 21.20), # 253 Tonami no Torii, Chiba
+        # ── 251-269: 追加地点 ──────────────────────────────────────────────────────
+        (35.2827, 140.2973): (4.0, 21.20), # 251 Isumi Railway Crossing, Chiba
+        (35.1300, 139.9740): (4.5, 21.00), # 252 Oyama Senmaida, Chiba
+        (35.3357, 140.3941): (4.0, 21.20), # 253 Tonami no Torii, Chiba
         (36.9610, 137.5580): (3.0, 21.80), # 254 Asahi Funakawa, Toyama
         (37.2838, 137.1780): (3.0, 21.75), # 255 Mawaki Ruins, Ishikawa
         (36.1880, 136.6680): (3.0, 21.80), # 256 Hoshi no Kanrankan, Ishikawa
@@ -800,14 +799,14 @@ def calculate_accurate_bortle(lat, lon):
         (37.5064, 140.3260): (3.5, 21.60), # 259 Koriyama Nunobiki, Fukushima
         (37.5680, 140.1360): (3.0, 21.75), # 260 Bandaisan Viewpoint, Fukushima
         (37.4160, 139.5770): (3.0, 21.80), # 261 Kaneyama Fureai, Fukushima
-        (36.1150, 138.8340): (4.0, 21.30), # 262 Ueno Sky Bridge, Gunma
-        (36.5330, 138.9210): (3.5, 21.60), # 263 Kurabuchi Observatory, Gunma
+        (36.0720, 138.7771): (4.0, 21.30), # 262 Ueno Sky Bridge, Gunma
+        (36.4164, 138.7779): (3.5, 21.60), # 263 Kurabuchi Observatory, Gunma
         (36.3460, 138.8200): (3.5, 21.60), # 264 Kozumaki Ranch, Gunma
         (36.5800, 139.0400): (3.5, 21.60), # 265 Takane Observatory, Gunma
         (37.0730, 139.1050): (2.5, 21.90), # 266 Okutadami Dam, Niigata
-        (34.7380, 139.3710): (2.0, 22.00), # 267 Oshima Mihara-yama summit (758m, Izu Oshima)
-        (34.6873, 139.4363): (2.0, 21.95), # 268 Oshima Habu Port (south, away from Motomachi)
-        (25.8470, 131.2330): (1.5, 22.05), # 269 Minami-Daito Island, Okinawa (remote Pacific island, pristine sky)
+        (34.7384, 139.3800): (2.0, 22.00), # 267 Oshima Mihara-yama summit
+        (34.6873, 139.4363): (2.0, 21.95), # 268 Oshima Habu Port
+        (25.8470, 131.2330): (1.5, 22.05), # 269 Minami-Daito Island, Okinawa
     }
 
     def _km(la1, lo1, la2, lo2):
@@ -3120,6 +3119,74 @@ def _get_loc_image_b64(loc_name: str):
 
 _selected_marker_args = None  # lưu lại marker được chọn, vẽ sau cùng để nổi lên trên
 
+# ── Region color map — mỗi vùng 1 màu riêng để phân biệt trên map ─────────────
+# prefecture → (normal_color, selected_color, selected_glow)
+_PREF_REGION_COLOR = {
+    # Hokkaido — ice blue
+    "Hokkaido":    ("#67E8F9", "#00FFFF", "drop-shadow(0 0 7px #67E8F9)"),
+    # Tohoku — soft violet
+    "Aomori":      ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
+    "Iwate":       ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
+    "Miyagi":      ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
+    "Akita":       ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
+    "Yamagata":    ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
+    "Fukushima":   ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
+    # Kanto — cyan (giữ màu cũ vì quen)
+    "Tokyo":       ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Kanagawa":    ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Chiba":       ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Saitama":     ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Ibaraki":     ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Tochigi":     ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Gunma":       ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    # Chubu — lime green
+    "Niigata":     ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Toyama":      ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Ishikawa":    ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Fukui":       ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Yamanashi":   ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Nagano":      ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Gifu":        ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Shizuoka":    ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Aichi":       ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    # Kansai — amber/gold
+    "Osaka":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    "Kyoto":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    "Hyogo":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    "Nara":        ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    "Shiga":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    "Wakayama":    ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    "Mie":         ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
+    # Chugoku — orange
+    "Tottori":     ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Shimane":     ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Okayama":     ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Hiroshima":   ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Yamaguchi":   ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    # Shikoku — pink
+    "Tokushima":   ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
+    "Kagawa":      ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
+    "Ehime":       ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
+    "Kochi":       ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
+    # Kyushu — red/coral
+    "Fukuoka":     ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    "Saga":        ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    "Nagasaki":    ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    "Kumamoto":    ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    "Oita":        ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    "Miyazaki":    ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    "Kagoshima":   ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
+    # Okinawa — warm yellow-green
+    "Okinawa":     ("#BEF264", "#A3E635", "drop-shadow(0 0 7px #BEF264)"),
+}
+_DEFAULT_COLOR = ("#FFA500", "#FFD700", "drop-shadow(0 0 6px gold)")
+
+def _get_star_colors(loc_name):
+    """Extract prefecture from loc name (last segment after last comma) and return colors."""
+    parts = loc_name.rsplit(",", 1)
+    pref = parts[-1].strip() if len(parts) > 1 else ""
+    return _PREF_REGION_COLOR.get(pref, _DEFAULT_COLOR)
+
 for loc_name, loc_coords in LOCATION_DATABASE.items():
     is_sel = abs(loc_coords[0]-st.session_state.lat)<0.001 and abs(loc_coords[1]-st.session_state.lon)<0.001
     try:
@@ -3127,12 +3194,13 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
     except ValueError:
         loc_num = 99
     is_frequent = (loc_num <= 27)
+    _nc, _sc, _sg = _get_star_colors(loc_name)
     if is_sel:
-        star_color = "#00FFFF" if is_frequent else "#FFD700"
-        star_glow  = "drop-shadow(0 0 7px cyan)" if is_frequent else "drop-shadow(0 0 6px gold)"
+        star_color = _sc
+        star_glow  = _sg
         star_size  = "22px"
     else:
-        star_color = "#22D3EE" if is_frequent else "#FFA500"
+        star_color = _nc
         star_glow  = "none"
         star_size  = "16px"
     b64, mime = _get_loc_image_b64(loc_name)
