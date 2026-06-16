@@ -55,7 +55,7 @@ LOCATION_DATABASE = {
     "42. Kiyosato Seisenryo 清泉寮, Yamanashi": [35.9245, 138.4214],
     "43. Shindo Pass 新道峠, Yamanashi": [35.5466, 138.7318],
     "44. Nobeyama Radio Observatory 野辺山, Nagano": [35.9414, 138.4704],
-    "45. Takabocchi Highlands 高ボッチ高原, Nagano": [36.1045, 138.0170],
+    "45. Takabocchi Highlands 高ボッチ高原, Nagano": [36.1319, 138.0350],
     "46. Soni Highlands 曽爾高原, Nara": [34.5346, 136.1506],
     "47. Norikura Tatamidaira 乗鞍畳平, Gifu": [36.1068, 137.5538],
     "48. Hirayu Pass 平湯峠, Gifu": [36.1808, 137.5303],
