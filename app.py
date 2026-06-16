@@ -234,7 +234,7 @@ LOCATION_DATABASE = {
     "220. Mt. Ibuki Summit 伊吹山頂, Shiga": [35.4200, 136.4060],
     "221. Gozaisho Summit 御在所岳, Mie": [35.0120, 136.4380],
     "222. Iide Mountains 飯豊連峰, Yamagata": [37.8520, 139.7830],
-    "223. Achi Village 阿智村 (日本一の星空), Nagano": [35.5180, 137.7280],
+    "223. Karasawa Cirque 涸沢カール, Nagano": [36.2944, 137.6619],
     "224. Dorokyo Gorge 瀞峡, Wakayama": [33.9070, 135.8500],
     "225. Awaji Southern Cape 淡路島南端, Hyogo": [34.2650, 134.8930],
     "226. Tottori Daisen 大山, Tottori": [35.3780, 133.5350],
@@ -759,7 +759,7 @@ def calculate_accurate_bortle(lat, lon):
         (35.4200, 136.4060): (3.0, 21.60), # 220 Mt. Ibuki Summit, Shiga (1377m)
         (35.0120, 136.4380): (3.0, 21.55), # 221 Gozaisho Summit, Mie (1212m, Suzuka range)
         (37.8520, 139.7830): (2.0, 21.95), # 222 Iide Mountains, Yamagata (deep Tohoku mountains)
-        (35.5180, 137.7280): (2.0, 21.95), # 223 Achi Village, Nagano (Japan's "starriest sky")
+        (36.2944, 137.6619): (1.5, 22.10), # 223 Karasawa Cirque 涸沢カール, Nagano (Japan Alps, high altitude)
         (33.9070, 135.8500): (2.5, 21.85), # 224 Dorokyo Gorge, Wakayama
         (34.2650, 134.8930): (3.5, 21.40), # 225 Awaji Southern Cape, Hyogo (away from Kobe/Osaka)
         (35.3780, 133.5350): (2.5, 21.60), # 226 Tottori Daisen
