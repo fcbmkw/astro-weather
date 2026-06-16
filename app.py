@@ -286,7 +286,7 @@ LOCATION_DATABASE = {
     "265. Takane Observatory 高根展望台, Gunma": [36.5800, 139.0400],
     # Niigata
     "266. Okutadami Dam 奥只見ダム, Niigata": [37.0730, 139.1050],
-    "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7380, 139.3710],
+    "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7384, 139.3800],
     "268. Oshima Habu Port 波浮港, Tokyo": [34.6873, 139.4363],
     "269. Minami-Daito Island 南大東島, Okinawa": [25.8470, 131.2330],
 }
