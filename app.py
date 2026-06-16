@@ -346,7 +346,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
              ("_need_fly", False), ("_skip_prefetch", False),
-             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_all", False), ("_scan_best", False),
+             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
              ("_scan_tonight", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -1781,14 +1781,32 @@ _FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
             if (lambda nm: nm.split(".")[0].strip().isdigit()
                 and int(nm.split(".")[0].strip()) <= 30)(n)]
 _FAV_ALL = list(LOCATION_DATABASE.items())
-# best/scan command: tất cả địa điểm thuộc các tỉnh Kanto và lân cận
-_BEST_PREFECTURES = {
-    "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma",
-    "Fukushima", "Nagano", "Toyama", "Yamanashi", "Shizuoka", "Kanagawa",
-    "Ishikawa", "Gifu"
+
+# ── REGION REGISTRY — Nhật Bản chia theo 8 vùng địa lý truyền thống + "japan" (toàn quốc) ──
+# Mỗi vùng áp dụng đồng nhất cho cả 3 loại lệnh: <region> (scan) / best <region> / tonight <region>
+_REGIONS = {
+    "hokkaido": {"Hokkaido"},
+    "tohoku":   {"Aomori", "Iwate", "Miyagi", "Akita", "Yamagata", "Fukushima"},
+    "kanto":    {"Tokyo", "Kanagawa", "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma"},
+    "chubu":    {"Niigata", "Toyama", "Ishikawa", "Fukui", "Yamanashi", "Nagano", "Gifu", "Shizuoka", "Aichi"},
+    "kansai":   {"Osaka", "Kyoto", "Hyogo", "Nara", "Shiga", "Wakayama", "Mie"},
+    "chugoku":  {"Tottori", "Shimane", "Okayama", "Hiroshima", "Yamaguchi"},
+    "shikoku":  {"Tokushima", "Kagawa", "Ehime", "Kochi"},
+    "kyushu":   {"Fukuoka", "Saga", "Nagasaki", "Kumamoto", "Oita", "Miyazaki", "Kagoshima"},
+    "okinawa":  {"Okinawa"},
 }
-_FAV_BEST_RAW = [(n,c) for n,c in LOCATION_DATABASE.items()
-                 if any(p in n for p in _BEST_PREFECTURES)]
+_REGION_ORDER = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa"]
+_REGION_LABELS = {
+    "hokkaido": "Hokkaido", "tohoku": "Tohoku", "kanto": "Kanto", "chubu": "Chubu",
+    "kansai": "Kansai", "chugoku": "Chugoku", "shikoku": "Shikoku", "kyushu": "Kyushu",
+    "okinawa": "Okinawa", "japan": "All Japan",
+}
+
+_FAV_RAW_BY_REGION = {
+    rk: [(n, c) for n, c in LOCATION_DATABASE.items()
+         if n.rsplit(",", 1)[-1].strip() in prefs]
+    for rk, prefs in _REGIONS.items()
+}
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Khoảng cách Haversine giữa 2 điểm (km)."""
@@ -1798,7 +1816,7 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# Bỏ địa điểm gần nhau <km để tăng tốc best/tonight/scan
+# Bỏ địa điểm gần nhau <km để tăng tốc scan/best/tonight
 def _dedupe_locs_km(locs, km=30):
     kept = []
     for name, coords in locs:
@@ -1809,12 +1827,22 @@ def _dedupe_locs_km(locs, km=30):
         if not too_close:
             kept.append((name, coords))
     return kept
-_FAV_BEST = _dedupe_locs_km(_FAV_BEST_RAW, km=60)   # best/tonight: dedupe <60km
-_FAV_SCAN_KANTO = _dedupe_locs_km(_FAV_BEST_RAW, km=30)  # scan: giữ dedupe <30km
 
-def _run_great_night_scan(start_day=0, scan_all=False):
-    """Quét từ start_day (0-6) trong 7 ngày tới.
-    scan_all=True → toàn bộ địa điểm, False → vùng Kanto (dedupe <30km, giống best).
+# Mỗi vùng: bản dedupe <60km dùng cho best/tonight, <30km dùng cho scan thường (region-only).
+# "japan" = toàn bộ 269 địa điểm (_FAV_ALL), dedupe tương tự các vùng khác.
+_FAV_BY_REGION_60 = {rk: _dedupe_locs_km(locs, km=60) for rk, locs in _FAV_RAW_BY_REGION.items()}
+_FAV_BY_REGION_30 = {rk: _dedupe_locs_km(locs, km=30) for rk, locs in _FAV_RAW_BY_REGION.items()}
+_FAV_BY_REGION_60["japan"] = _dedupe_locs_km(_FAV_ALL, km=60)
+_FAV_BY_REGION_30["japan"] = _dedupe_locs_km(_FAV_ALL, km=30)
+
+def _locs_for_region(region_key, for_best_or_tonight):
+    """Trả về danh sách địa điểm cho 1 vùng. region_key in _REGION_ORDER + 'japan'.
+    for_best_or_tonight=True → dedupe 60km, False (scan thường) → dedupe 30km."""
+    table = _FAV_BY_REGION_60 if for_best_or_tonight else _FAV_BY_REGION_30
+    return table.get(region_key, table["kanto"])
+
+def _run_great_night_scan(start_day=0, region="kanto"):
+    """Quét từ start_day (0-6) trong 7 ngày tới, cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc).
     - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày sớm nhất thoả (sau khi lọc <20km)
     - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
     Trả về None nếu không có ngày nào thoả."""
@@ -1824,7 +1852,7 @@ def _run_great_night_scan(start_day=0, scan_all=False):
         if moon_illum >= 32:
             continue
         slots = _make_slots_for_offset(_night_base_jst, day_off)
-        _locs_to_scan = _FAV_ALL if scan_all else _FAV_SCAN_KANTO
+        _locs_to_scan = _locs_for_region(region, for_best_or_tonight=False)
         perfect_locs = []  # (loc_name, loc_coords, verdict) tất cả địa điểm pass
         for loc_name, loc_coords in _locs_to_scan:
             lat, lon = loc_coords
@@ -1870,6 +1898,7 @@ def _run_great_night_scan(start_day=0, scan_all=False):
             "loc_name": first_name, "loc_coords": first_coords,
             "moon_illum": moon_illum, "verdict": first_verdict,
             "all_locs": deduped,  # [(loc_name, loc_coords, verdict), ...]
+            "region": region,
         }
     return None
 
@@ -1878,13 +1907,13 @@ def _run_great_night_scan(start_day=0, scan_all=False):
 # Ưu tiên cuối tuần (Fri=4, Sat=5, Sun=6). Weekday (Mon-Thu) hiển thị màu trắng.
 _WEEKEND_DAYS = {4, 5, 6}  # weekday(): Mon=0..Sun=6; Fri=4, Sat=5, Sun=6
 
-def _run_best_scan(scan_all=False):
-    """Quét 7 ngày tới cho N địa điểm, trả về top 3 địa điểm tốt nhất (dedupe <30km).
+def _run_best_scan(region="kanto"):
+    """Quét 7 ngày tới cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc), trả về top 3 (dedupe <60km).
     - Ưu tiên cuối tuần (Fri/Sat/Sun) trước Mon-Thu.
     - Trong cùng tier + streak: ưu tiên cuối tuần, rồi streak dài hơn.
     - Trả về None nếu không có kết quả nào."""
     _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
-    _locs = _FAV_ALL if scan_all else _FAV_BEST
+    _locs = _locs_for_region(region, for_best_or_tonight=True)
     # candidates: list of (tier_rank, is_weekend, streak, good_hours, date, day_off, loc_name, loc_coords, verdict, moon_illum)
     candidates = []
     for day_off in range(0, 7):
@@ -1981,17 +2010,18 @@ def _run_best_scan(scan_all=False):
         "moon_illum": moon_illum0, "verdict": verdict0,
         "all_locs": [(loc_name0, loc_coords0, verdict0)],  # vòng tròn map chỉ cho loc chính
         "top3": top3_with_weekend,  # [(date, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend)]
+        "region": region,
     }
 
 # ── TONIGHT SCAN — quét đêm nay (day_off=0) cho Kanto hoặc toàn quốc ────────
-def _run_tonight_scan(scan_all=False):
-    """Quét đêm nay (day_off=0) và trả về top3 địa điểm tốt nhất màu pink.
-    scan_all=True → 269 địa điểm toàn quốc, False → vùng Kanto (dedupe <30km).
+def _run_tonight_scan(region="kanto"):
+    """Quét đêm nay (day_off=0) và trả về top3 địa điểm tốt nhất màu pink, cho 1 vùng địa lý.
+    region='japan' → 269 địa điểm toàn quốc, khác → vùng tương ứng (dedupe <60km).
     - Không yêu cầu moon < 35% (tonight hiển thị kết quả dù trăng sáng).
     - Tiêu chí: tier PERFECT NIGHT > GOOD STARRY NIGHT, streak dài nhất.
     Trả về None nếu không có kết quả nào."""
     _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
-    _locs = _FAV_ALL if scan_all else _FAV_BEST
+    _locs = _locs_for_region(region, for_best_or_tonight=True)
     day_off = 0
     d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
     moon_illum, _ = get_moon_phase_percent(d)
@@ -2053,6 +2083,7 @@ def _run_tonight_scan(scan_all=False):
         "all_locs": [(loc_name0, loc_coords0, verdict0)],
         "top3": top3,
         "_is_tonight": True,
+        "region": region,
     }
 
 # ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
@@ -2061,13 +2092,14 @@ def _run_tonight_scan(scan_all=False):
 # qua overlay bottom-left (xem phần banner bên dưới).
 if st.session_state._scan_scanning:
     st.session_state._scan_scanning = False
+    _region = st.session_state._scan_region
     if st.session_state._scan_tonight:
-        _scan_res = _run_tonight_scan(scan_all=st.session_state._scan_all)
+        _scan_res = _run_tonight_scan(region=_region)
     elif st.session_state._scan_best:
-        _scan_res = _run_best_scan(scan_all=st.session_state._scan_all)
+        _scan_res = _run_best_scan(region=_region)
     else:
         _start = st.session_state._scan_days
-        _scan_res = _run_great_night_scan(start_day=_start, scan_all=st.session_state._scan_all)
+        _scan_res = _run_great_night_scan(start_day=_start, region=_region)
     st.session_state._scan_result = _scan_res if _scan_res is not None else "none"
 
     # ── Apply kết quả 1st vào session state → map + table cập nhật ngay ──────
@@ -2237,25 +2269,28 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
 
-      // ── SCAN trigger — hidden; called by search box with "kanto / kanto N" or "all japan / all japan N" ───
-      // lat=89.9 (valid sentinel, below Mercator max 85.05), lng encodes start_day:
-      //   day 0→lng 99.9, day 1→91.1, day 2→92.2, ..., day 6→96.6
-      window._triggerScan = function(days) {
+      // ── SCAN trigger — hidden; called by search box with "<region>", "<region> N", "best <region>", "tonight <region>" ───
+      // Sentinel encoding (lat below Mercator max 85.05, always valid click):
+      //   lat=89.95 → plain region scan (day_off encoded in lng)
+      //   lat=89.85 → best <region>   (no day_off needed — always scans 7 days)
+      //   lat=89.75 → tonight <region> (no day_off needed — always tonight)
+      // lng = 100 + region_idx + day_off*0.01  (region_idx: 0=hokkaido..8=okinawa, 9=japan)
+      var _REGION_IDX = { hokkaido:0, tohoku:1, kanto:2, chubu:3, kansai:4, chugoku:5, shikoku:6, kyushu:7, okinawa:8, japan:9 };
+      window._triggerScan = function(region, days) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
         var n = (days >= 0 && days <= 6) ? days : 0;
-        var d = (n === 0) ? 0 : (n - 1); // "kanto N" (N>=1) -> day_off N-1 (tonight = N=1)
-        var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
-        map.fire('click', { latlng: L.latLng(89.9, lng) });
+        var d = (n === 0) ? 0 : (n - 1); // "<region> N" (N>=1) -> day_off N-1 (tonight = N=1)
+        var lng = 100 + idx + d * 0.01;
+        map.fire('click', { latlng: L.latLng(89.95, lng) });
       };
-      window._triggerScanAll = function(days) {
-        var n = (days >= 0 && days <= 6) ? days : 0;
-        var d = (n === 0) ? 0 : (n - 1); // "all japan N" (N>=1) -> day_off N-1 (tonight = N=1)
-        var lng = (d === 0) ? 99.9 : (90 + d + d * 0.1);
-        map.fire('click', { latlng: L.latLng(89.8, lng) });
+      window._triggerBest = function(region) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        map.fire('click', { latlng: L.latLng(89.85, 100 + idx) });
       };
-      window._triggerBest    = function() { map.fire('click', { latlng: L.latLng(89.7, 99.9) }); };
-      window._triggerBestAll = function() { map.fire('click', { latlng: L.latLng(89.6, 99.9) }); };
-      window._triggerTonight    = function() { map.fire('click', { latlng: L.latLng(89.5, 99.9) }); };
-      window._triggerTonightAll = function() { map.fire('click', { latlng: L.latLng(89.4, 99.9) }); };
+      window._triggerTonight = function(region) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        map.fire('click', { latlng: L.latLng(89.75, 100 + idx) });
+      };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -2702,22 +2737,24 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase();
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
-        // Hidden keyword — "kanto" / "kanto 1" ... "kanto 6", "all japan" / "all japan 1" ... "all japan 6"
-        if (/^(kanto|all\s*japan|best|tonight)(\s+(\d+))?$/.test(q)) {
+        // Hidden keyword — "<region>" / "<region> N" / "best <region>" / "tonight <region>"
+        var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+        var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
+        var _bareRegionRe   = new RegExp('^' + _regionPattern + '(\\s+(\\d+))?$');
+        var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
+        var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
+        var _qIsBest    = /^best(\s|$)/.test(q);
+        var _qIsTonight = /^tonight(\s|$)/.test(q);
+        var _qIsBareRegion = _bareRegionRe.test(q);
+        if (_qIsBest || _qIsTonight || _qIsBareRegion) {
           dropdown.innerHTML = '';
-          var isBest = q.startsWith('best');
-          var isTonight = q.startsWith('tonight');
-          var isAll = q.indexOf('all') !== -1 || q.indexOf('japan') !== -1;
-          if (isTonight) {
-            dropdown.innerHTML = '';
-            var tonightHints = [
-              {label: 'tonight',     desc: 'Best spots tonight (Kanto area)', fn: function(){ window._triggerTonight(); }},
-              {label: 'tonight all', desc: 'Best spots tonight (All 269 spots)', fn: function(){ window._triggerTonightAll(); }},
-            ];
-            tonightHints.forEach(function(h) {
+          var _REGION_LABEL = { hokkaido:'Hokkaido', tohoku:'Tohoku', kanto:'Kanto', chubu:'Chubu',
+            kansai:'Kansai', chugoku:'Chugoku', shikoku:'Shikoku', kyushu:'Kyushu', okinawa:'Okinawa', japan:'All Japan' };
+          function _renderRegionHints(items, color, borderRgba) {
+            items.forEach(function(h) {
               var row = L.DomUtil.create('div', '', dropdown);
               row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
-                + 'color:#fbcfe8;border-bottom:1px solid rgba(251,207,232,0.2);'
+                + 'color:' + color + ';border-bottom:1px solid ' + borderRgba + ';'
                 + 'display:flex;justify-content:space-between;align-items:center;';
               var lbl = L.DomUtil.create('span', '', row);
               lbl.textContent = h.label; lbl.style.fontWeight = '700';
@@ -2729,70 +2766,39 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               }; })(h.fn));
             });
             dropdown.style.display = 'block';
-            return;
           }
-          if (isBest) {
-            dropdown.innerHTML = '';
-            var bestHints = [
-              {label: 'best',     desc: 'best night 7d Kanto area', fn: function(){ window._triggerBest(); }},
-              {label: 'best all', desc: 'best night 7d All prefecture', fn: function(){ window._triggerBestAll(); }},
-            ];
-            bestHints.forEach(function(h) {
-              var row = L.DomUtil.create('div', '', dropdown);
-              row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
-                + 'color:#34d399;border-bottom:1px solid rgba(51,65,85,0.4);'
-                + 'display:flex;justify-content:space-between;align-items:center;';
-              var lbl = L.DomUtil.create('span', '', row);
-              lbl.textContent = h.label; lbl.style.fontWeight = '700';
-              var desc = L.DomUtil.create('span', '', row);
-              desc.textContent = h.desc; desc.style.cssText = 'font-size:10px;opacity:0.65;';
-              L.DomEvent.on(row, 'click', (function(fn){ return function(){
-                inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-                fn();
-              }; })(h.fn));
+          if (_qIsTonight) {
+            var _mTn = q.match(_tonightRegionRe);
+            var _typedTn = _mTn && _mTn[1] ? _mTn[1].trim() : '';
+            var _regionsTn = _typedTn ? [_typedTn] : _REGION_NAMES;
+            var tonightHints = _regionsTn.map(function(r){
+              return {label: 'tonight ' + r, desc: 'Best spots tonight (' + _REGION_LABEL[r] + ')',
+                       fn: (function(rr){ return function(){ window._triggerTonight(rr); }; })(r)};
             });
-            dropdown.style.display = 'block';
+            _renderRegionHints(tonightHints, '#fbcfe8', 'rgba(251,207,232,0.2)');
             return;
           }
-          var hints30 = [
-            {label: 'kanto',   desc: 'Earliest PERFECT NIGHT (Kanto area)', days: 0, all: false},
-            {label: 'kanto 1', desc: 'Tonight (Kanto area)',             days: 1, all: false},
-            {label: 'kanto 2', desc: 'Tomorrow night (Kanto area)',      days: 2, all: false},
-            {label: 'kanto 3', desc: 'Day after tomorrow (Kanto area)',  days: 3, all: false},
-            {label: 'kanto 4', desc: '4th night (Kanto area)',           days: 4, all: false},
-            {label: 'kanto 5', desc: '5th night (Kanto area)',           days: 5, all: false},
-            {label: 'kanto 6', desc: '6th night (Kanto area)',           days: 6, all: false},
-          ];
-          var hintsAll = [
-            {label: 'all japan',   desc: 'Earliest PERFECT NIGHT (All Japan)', days: 0, all: true},
-            {label: 'all japan 1', desc: 'Tonight (All Japan)',             days: 1, all: true},
-            {label: 'all japan 2', desc: 'Tomorrow night (All Japan)',      days: 2, all: true},
-            {label: 'all japan 3', desc: 'Day after tomorrow (All Japan)',  days: 3, all: true},
-            {label: 'all japan 4', desc: '4th night (All Japan)',           days: 4, all: true},
-            {label: 'all japan 5', desc: '5th night (All Japan)',           days: 5, all: true},
-            {label: 'all japan 6', desc: '6th night (All Japan)',           days: 6, all: true},
-          ];
-          var hints = isAll ? hintsAll : hints30;
-          hints.forEach(function(h) {
-            var row = L.DomUtil.create('div', '', dropdown);
-            row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
-              + 'color:#34d399;border-bottom:1px solid rgba(51,65,85,0.4);'
-              + 'display:flex;justify-content:space-between;align-items:center;';
-            var lbl = L.DomUtil.create('span', '', row);
-            lbl.textContent = h.label;
-            lbl.style.fontWeight = '700';
-            var desc = L.DomUtil.create('span', '', row);
-            desc.textContent = h.desc;
-            desc.style.cssText = 'font-size:10px;opacity:0.65;';
-            L.DomEvent.on(row, 'click', (function(days, all){ return function(){
-              inp.value = '';
-              clr.style.display = 'none';
-              dropdown.style.display = 'none';
-              var fn = all ? window._triggerScanAll : window._triggerScan;
-              if (typeof fn === 'function') fn(days);
-            }; })(h.days, h.all));
+          if (_qIsBest) {
+            var _mBest = q.match(_bestRegionRe);
+            var _typedBest = _mBest && _mBest[1] ? _mBest[1].trim() : '';
+            var _regionsBest = _typedBest ? [_typedBest] : _REGION_NAMES;
+            var bestHints = _regionsBest.map(function(r){
+              return {label: 'best ' + r, desc: 'Best night 7d (' + _REGION_LABEL[r] + ')',
+                       fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(r)};
+            });
+            _renderRegionHints(bestHints, '#34d399', 'rgba(51,65,85,0.4)');
+            return;
+          }
+          // Bare region command: "<region>" / "<region> N" → scan hints with day offsets 0-6
+          var _mBare = q.match(_bareRegionRe);
+          var _region = _mBare[1];
+          var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
+          var scanHints = _dayLabels.map(function(lbl, n){
+            return {label: _region + (n === 0 ? '' : ' ' + n),
+                     desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
+                     fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)};
           });
-          dropdown.style.display = 'block';
+          _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
           return;
         }
 
@@ -2818,42 +2824,31 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       L.DomEvent.on(inp, 'keydown', function(e){
         if (e.key === 'Enter') {
           e.preventDefault();
-          // ── Hidden SCAN trigger: "kanto" / "kanto N" / "all japan" / "all japan N" + Enter ──
+          // ── Hidden SCAN trigger: "<region>" / "<region> N" / "best <region>" / "tonight <region>" + Enter ──
           var _sv = inp.value.trim().toLowerCase();
-          if (_sv === 'best all') {
+          var _RN = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+          var _rgx = '(' + _RN.join('|') + ')';
+          var _mTonight = _sv.match(new RegExp('^tonight(\\s+' + _rgx + ')?$'));
+          if (_mTonight) {
+            var _rTn = _mTonight[2] || 'kanto';
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerBestAll === 'function') window._triggerBestAll();
+            if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTn);
             return;
           }
-          if (_sv === 'best') {
+          var _mBest = _sv.match(new RegExp('^best(\\s+' + _rgx + ')?$'));
+          if (_mBest) {
+            var _rBest = _mBest[2] || 'kanto';
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerBest === 'function') window._triggerBest();
+            if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
           }
-          if (_sv === 'tonight all') {
-            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerTonightAll === 'function') window._triggerTonightAll();
-            return;
-          }
-          if (_sv === 'tonight') {
-            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerTonight === 'function') window._triggerTonight();
-            return;
-          }
-          var _scanAllMatch = _sv.match(/^all\s*japan\s*(\d*)$/);
-          var _scanMatch    = _sv.match(/^kanto\s*(\d*)$/);
-          if (_scanAllMatch) {
-            var _days = parseInt(_scanAllMatch[1]) || 0;
+          var _mScan = _sv.match(new RegExp('^' + _rgx + '(\\s+(\\d+))?$'));
+          if (_mScan) {
+            var _rScan = _mScan[1];
+            var _days = parseInt(_mScan[3]) || 0;
             if (_days < 0 || _days > 6) _days = 0;
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerScanAll === 'function') window._triggerScanAll(_days);
-            return;
-          }
-          if (_scanMatch) {
-            var _days = parseInt(_scanMatch[1]) || 0;
-            if (_days < 0 || _days > 6) _days = 0;
-            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerScan === 'function') window._triggerScan(_days);
+            if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
             return;
           }
           if (dropdown.style.display === 'none') return;
@@ -3218,6 +3213,7 @@ if _scan_r2 and _scan_r2 != "none":
             )
         _moon_tn = _scan_r2["moon_illum"]
         _rows_joined_tn = "".join(_rows_html_parts_tn)
+        _region_lbl_tn = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
@@ -3230,7 +3226,7 @@ if _scan_r2 and _scan_r2 != "none":
   pointer-events:none;
 ">
 <div style="color:#fbcfe8;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
-🌸 Tonight — best spots / moon {_moon_tn:.0f}%
+🌸 Tonight — best spots ({_region_lbl_tn}) / moon {_moon_tn:.0f}%
 </div>
 {_rows_joined_tn}
 </div>
@@ -3251,6 +3247,8 @@ if _scan_r2 and _scan_r2 != "none":
         else:
             _dparts = [f"{_dx.month}/{_dx.day} {_EN_WD[_dx.weekday()]}" for _dx in _top3_dates_list]
             _date_header = f"Best locations this week ({', '.join(_dparts)})"
+        _region_lbl_best = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+        _date_header = f"{_date_header} — {_region_lbl_best}"
         _rank_icons = ["🥇", "🥈", "🥉"]
         _rows_html_parts = []
         _top3_len = len(_top3)
@@ -3300,12 +3298,14 @@ if _scan_r2 and _scan_r2 != "none":
             _ban_clr = "#fcd34d"
             _ban_loc = _scan_r2["loc_name"].split(",")[0].strip()
             _ban_loc = _ban_loc.split(".",1)[-1].strip() if "." in _ban_loc else _ban_loc
-            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} / moon {_scan_r2['moon_illum']:.0f}%"
+            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} ({_region_lbl_fb}) / moon {_scan_r2['moon_illum']:.0f}%"
         else:
             _ban_bg  = "rgba(5,25,18,0.92)"
             _ban_bdr = "rgba(52,211,153,0.75)"
             _ban_clr = "#6ee7b7"
-            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
+            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT ({_region_lbl_fb})   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
@@ -3325,6 +3325,7 @@ if _scan_r2 and _scan_r2 != "none":
 elif _scan_r2 == "none":
     _scan_days_lbl = st.session_state._scan_days
     _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
+    _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
@@ -3336,7 +3337,7 @@ elif _scan_r2 == "none":
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
-🔍 None — {_range_lbl}
+🔍 None ({_region_lbl_none}) — {_range_lbl}
 </div>
 </div>""", unsafe_allow_html=True)
 
@@ -3350,28 +3351,36 @@ if map_data:
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
 
-    # ── Priority 0: SCAN sentinel (lat≈89.9, lng encodes scan_days) ────────────
-    # lng: 99.9=scan(0), 93.3=scan3, 95.5=scan5, 97.7=scan7
-    # lng sentinel: day 0→99.9, day 1→91.1, day 2→92.2, ..., day 6→96.6
-    _SCAN_SENTINELS = {99.9: 0, 91.1: 1, 92.2: 2, 93.3: 3, 94.4: 4, 95.5: 5, 96.6: 6}
+    # ── Priority 0: SCAN sentinel — generic region-based encoding ───────────────
+    # lat=89.95 → plain region scan (lng = 100+region_idx+day_off*0.01)
+    # lat=89.85 → best <region>     (lng = 100+region_idx)
+    # lat=89.75 → tonight <region>  (lng = 100+region_idx)
+    # region_idx: 0=hokkaido,1=tohoku,2=kanto,3=chubu,4=kansai,5=chugoku,6=shikoku,7=kyushu,8=okinawa,9=japan
+    _REGION_BY_IDX = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa", "japan"]
     _lc_lat = lc.get("lat", 0) if lc else 0
     _lc_lng = lc.get("lng", 0) if lc else 0
-    # lat=89.9→scan30, 89.8→scanAll, 89.7→best30, 89.6→bestAll
-    _is_scan30   = abs(_lc_lat - 89.9) < 0.05
-    _is_scan_all = abs(_lc_lat - 89.8) < 0.05
-    _is_best30   = abs(_lc_lat - 89.7) < 0.05
-    _is_best_all = abs(_lc_lat - 89.6) < 0.05
-    _is_tonight30  = abs(_lc_lat - 89.5) < 0.05
-    _is_tonight_all = abs(_lc_lat - 89.4) < 0.05
-    _is_any_scan = _is_scan30 or _is_scan_all or _is_best30 or _is_best_all or _is_tonight30 or _is_tonight_all
-    _matched_days = next((d for lng_sentinel, d in _SCAN_SENTINELS.items()
-                          if _is_any_scan and abs(_lc_lng - lng_sentinel) < 0.05), None)
-    if lc and lc != st.session_state._last_lc and _matched_days is not None:
+    _is_scan_trig    = abs(_lc_lat - 89.95) < 0.02
+    _is_best_trig    = abs(_lc_lat - 89.85) < 0.02
+    _is_tonight_trig = abs(_lc_lat - 89.75) < 0.02
+    _is_any_scan = _is_scan_trig or _is_best_trig or _is_tonight_trig
+    _matched_region = None
+    _matched_days = None
+    if _is_any_scan:
+        _offset = _lc_lng - 100.0
+        if -0.01 <= _offset <= 9.07:  # region_idx 0-9, day_off 0-6 (*0.01)
+            _ridx = int(round(_offset))
+            # day_off chỉ áp dụng cho plain scan; với best/tonight luôn lng = 100+idx (day frac ~0)
+            _frac = _offset - _ridx
+            _dayoff_guess = int(round(_frac * 100))
+            if 0 <= _ridx <= 9 and 0 <= _dayoff_guess <= 6:
+                _matched_region = _REGION_BY_IDX[_ridx]
+                _matched_days = _dayoff_guess
+    if lc and lc != st.session_state._last_lc and _matched_region is not None:
         st.session_state._last_lc       = lc
-        st.session_state._scan_days     = _matched_days
-        st.session_state._scan_all      = _is_scan_all or _is_best_all or _is_tonight_all
-        st.session_state._scan_best     = _is_best30 or _is_best_all
-        st.session_state._scan_tonight  = _is_tonight30 or _is_tonight_all
+        st.session_state._scan_days     = _matched_days if _is_scan_trig else 0
+        st.session_state._scan_region   = _matched_region
+        st.session_state._scan_best     = _is_best_trig
+        st.session_state._scan_tonight  = _is_tonight_trig
         st.session_state._scan_scanning = True
         st.rerun()
 
