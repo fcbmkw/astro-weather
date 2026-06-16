@@ -266,7 +266,7 @@ LOCATION_DATABASE = {
     # ── 251-266: 追加地点 ────────────────────────────────────────────────────────
     # Chiba
     "251. Isumi Railway Crossing いすみ鉄道第二五之町踏切, Chiba": [35.2827, 140.3465],
-    "252. Oyama Senmaida 大山千枚田, Chiba": [35.2040, 140.1130],
+    "252. Oyama Senmaida 大山千枚田, Chiba": [35.1300, 139.9740],
     "253. Tonami no Torii 東浪見の鳥居, Chiba": [35.3541, 140.3842],
     # Toyama
     "254. Asahi Funakawa あさひ舟川「春の四重奏」, Toyama": [36.9610, 137.5580],
