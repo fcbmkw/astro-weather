@@ -2372,16 +2372,17 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'white-space:nowrap;display:inline-block;';
 
       var a = L.DomUtil.create('a', '', infoRow);
-      a.href = '{{ this.lpm_url }}';
-      a.target = '_blank'; a.rel = 'noopener'; a.title = 'Light Pollution Map';
-      a.textContent = 'LPM';
+      var _gMapUrl = 'https://www.google.com/maps?q={{ this.lat }},{{ this.lon }}';
+      a.href = _gMapUrl;
+      a.target = '_blank'; a.rel = 'noopener'; a.title = 'Open in Google Maps';
+      a.textContent = 'GoogleMap';
       a.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
-        + 'background:rgba(124,58,237,0.22);border:1.5px solid rgba(124,58,237,0.65);'
-        + 'border-radius:6px;padding:2px 8px;text-decoration:none;'
-        + 'color:#a78bfa;font-size:12px;font-weight:700;'
+        + 'background:rgba(34,197,94,0.12);border:1.5px solid rgba(34,197,94,0.45);'
+        + 'border-radius:6px;padding:2px 7px;text-decoration:none;'
+        + 'color:#86efac;font-size:10px;font-weight:700;'
         + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
-      a.onmouseover = function(){ a.style.background = 'rgba(124,58,237,0.42)'; };
-      a.onmouseout  = function(){ a.style.background = 'rgba(124,58,237,0.22)'; };
+      a.onmouseover = function(){ a.style.background = 'rgba(34,197,94,0.28)'; };
+      a.onmouseout  = function(){ a.style.background = 'rgba(34,197,94,0.12)'; };
 
       // ── SCAN trigger — hidden; called by search box with "<region>", "<region> N", "best <region>", "tonight <region>" ───
       // Sentinel encoding (lat below Mercator max 85.05, always valid click):
@@ -2482,19 +2483,23 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 """)
 
 class _CombinedControl(MacroElement):
-    def __init__(self, lpm_url, location_name, initial_tile="windy"):
+    def __init__(self, lpm_url, location_name, initial_tile="windy", lat=35.6895, lon=139.6917):
         super().__init__()
         self._name = '_CombinedControl'
         self._template = _COMBINED_CTRL_TEMPLATE
         self.lpm_url = lpm_url
         self.location_name = location_name
         self.initial_tile = initial_tile
+        self.lat = round(lat, 4)
+        self.lon = round(lon, 4)
 
-# ── COMBINED CONTROL (Label/LPM on top, Tile switcher below, gap=6px) ─────────
+# ── COMBINED CONTROL (Label/GoogleMap on top, Tile switcher below, gap=6px) ────
 _CombinedControl(
     lpm_url=_lpm_url,
     location_name=_strip_loc_num(st.session_state.location_name),
     initial_tile=st.session_state.map_tile,
+    lat=st.session_state.lat,
+    lon=st.session_state.lon,
 ).add_to(m)
 
 # ── SEARCH CONTROL — inject location list vào JS, nằm topleft trên map ──────
@@ -3783,7 +3788,18 @@ with col_right:
     if _in_japan:
         st.markdown(f"""
         <div class="metric-card">
-            <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+                <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
+                <a href="{_lpm_url}" target="_blank" rel="noopener" title="Light Pollution Map"
+                   style="display:inline-flex;align-items:center;justify-content:center;
+                          background:rgba(124,58,237,0.18);border:1.5px solid rgba(124,58,237,0.55);
+                          border-radius:5px;padding:2px 7px;text-decoration:none;
+                          color:#a78bfa;font-size:10px;font-weight:700;
+                          white-space:nowrap;cursor:pointer;flex-shrink:0;
+                          transition:background 0.2s;"
+                   onmouseover="this.style.background='rgba(124,58,237,0.38)'"
+                   onmouseout="this.style.background='rgba(124,58,237,0.18)'">LPM</a>
+            </div>
             <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
             <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
         </div>""", unsafe_allow_html=True)
