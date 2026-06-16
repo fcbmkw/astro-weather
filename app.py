@@ -2738,7 +2738,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
 
       L.DomEvent.on(inp, 'input', function(){
         var qRaw = inp.value.trim();
-        var q = qRaw.toLowerCase();
+        var q = qRaw.toLowerCase().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
         var _REGION_LABEL = { hokkaido:'Hokkaido', tohoku:'Tohoku', kanto:'Kanto', chubu:'Chubu',
@@ -2746,11 +2746,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         // ── "help" — hiển thị danh sách keyword, không thực hiện lệnh gì ──────
         if (/^help$/.test(q)) {
           dropdown.innerHTML = '';
+          _items = []; _activeIdx = -1;
           var helpLines = [
-            {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan'},
-            {label: 'Search best location keyword:', desc: 'best'},
-            {label: 'Search tonight keyword:', desc: 'tonight'},
-            {label: 'Turn off search results:', desc: 'off'},
+            {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan', color: '#94a3b8'},
+            {label: 'Search best location keyword:', desc: 'best', color: '#34d399'},
+            {label: 'Search tonight keyword:', desc: 'tonight', color: '#fbcfe8'},
+            {label: 'Turn off search results:', desc: 'off', color: '#94a3b8'},
           ];
           helpLines.forEach(function(h) {
             var row = L.DomUtil.create('div', '', dropdown);
@@ -2758,9 +2759,9 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               + 'color:#cbd5e1;border-bottom:1px solid rgba(51,65,85,0.4);'
               + 'cursor:default;';
             var lbl = L.DomUtil.create('div', '', row);
-            lbl.textContent = h.label; lbl.style.cssText = 'font-weight:700;color:#94a3b8;margin-bottom:2px;';
+            lbl.textContent = h.label; lbl.style.cssText = 'font-weight:700;color:' + h.color + ';margin-bottom:2px;';
             var desc = L.DomUtil.create('div', '', row);
-            desc.textContent = h.desc; desc.style.cssText = 'font-size:11px;opacity:0.85;';
+            desc.textContent = h.desc; desc.style.cssText = 'font-size:11px;opacity:0.85;color:' + h.color + ';';
           });
           dropdown.style.display = 'block';
           return;
@@ -2768,6 +2769,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         // ── "off" — tắt kết quả search ngay, không load data ──────────────────
         if (/^off$/.test(q)) {
           dropdown.innerHTML = '';
+          _items = []; _activeIdx = -1;
           var row = L.DomUtil.create('div', '', dropdown);
           row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
             + 'color:#94a3b8;display:flex;justify-content:space-between;align-items:center;';
@@ -2793,6 +2795,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var _qIsBareRegion = _bareRegionRe.test(q);
         if (_qIsBest || _qIsTonight || _qIsBareRegion) {
           dropdown.innerHTML = '';
+          _items = []; _activeIdx = -1;
           function _renderRegionHints(items, color, borderRgba) {
             items.forEach(function(h) {
               var row = L.DomUtil.create('div', '', dropdown);
@@ -2868,7 +2871,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         if (e.key === 'Enter') {
           e.preventDefault();
           // ── Hidden SCAN trigger: "<region>" / "<region> N" / "best <region>" / "tonight <region>" + Enter ──
-          var _sv = inp.value.trim().toLowerCase();
+          var _sv = inp.value.trim().toLowerCase().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
           if (_sv === 'off') {
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerOff === 'function') window._triggerOff();
@@ -2901,6 +2904,22 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (_days < 0 || _days > 6) _days = 0;
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
+            return;
+          }
+          // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
+          // (e.g. unexpected whitespace) still triggers rather than falling through to geocode.
+          if (/^tonight(\s|$)/.test(_sv)) {
+            var _rTnFb = 'kanto';
+            for (var _i = 0; _i < _RN.length; _i++) { if (_sv.indexOf(_RN[_i]) !== -1) { _rTnFb = _RN[_i]; break; } }
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTnFb);
+            return;
+          }
+          if (/^best(\s|$)/.test(_sv)) {
+            var _rBestFb = 'kanto';
+            for (var _j = 0; _j < _RN.length; _j++) { if (_sv.indexOf(_RN[_j]) !== -1) { _rBestFb = _RN[_j]; break; } }
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBest === 'function') window._triggerBest(_rBestFb);
             return;
           }
           if (dropdown.style.display === 'none') return;
@@ -3375,8 +3394,15 @@ if _scan_r2 and _scan_r2 != "none":
 </div>""", unsafe_allow_html=True)
 
 elif _scan_r2 == "none":
-    _scan_days_lbl = st.session_state._scan_days
-    _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
+    _is_tonight_none = st.session_state.get("_scan_tonight", False)
+    _is_best_none    = st.session_state.get("_scan_best", False)
+    if _is_tonight_none:
+        _range_lbl = "tonight"
+    elif _is_best_none:
+        _range_lbl = "next 7 days"
+    else:
+        _scan_days_lbl = st.session_state._scan_days
+        _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
     _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
@@ -3389,7 +3415,7 @@ elif _scan_r2 == "none":
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
-🔍 None ({_region_lbl_none}) — {_range_lbl}
+☁️🌧️❄️ Cloudy/rainy/snowy in {_region_lbl_none} {_range_lbl}
 </div>
 </div>""", unsafe_allow_html=True)
 
