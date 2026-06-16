@@ -104,7 +104,7 @@ LOCATION_DATABASE = {
     "91. Happo Pond 八方池, Nagano": [36.6940, 137.7844],
     "92. Tsugaike Nature Park 栂池自然園, Nagano": [36.7582, 137.8758],
     "93. Hakuba Iwatake 白馬岩岳, Nagano": [36.7167, 137.8594],
-    "94. Shiga Highlands 志賀高原, Nagano": [36.7172, 138.5177],
+    "94. Shiga Highlands 志賀高原, Nagano": [36.7182, 138.4921],
     "95. Mt. Myoko 妙高高原, Niigata": [36.8917, 138.1708],
     "96. Yahiko Skyline 弥彦山, Niigata": [37.7052, 138.8178],
     "97. Senami Coast 瀬波海岸, Niigata": [38.2410, 139.4628],
