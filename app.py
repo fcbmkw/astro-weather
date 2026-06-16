@@ -1852,6 +1852,19 @@ _REGION_MAP_CENTER = {
     "okinawa":  (26.2124, 127.6809, 8),   # Naha
     "japan":    (36.5000, 138.0000, 6),   # Japan center
 }
+# ── Region representative city display name ────────────────────────────────────
+_REGION_CITY_NAME = {
+    "hokkaido": "Sapporo, Hokkaido",
+    "tohoku":   "Sendai, Miyagi",
+    "kanto":    "Tokyo",
+    "chubu":    "Nagano, Nagano",
+    "kansai":   "Osaka, Osaka",
+    "chugoku":  "Hiroshima, Hiroshima",
+    "shikoku":  "Kochi, Kochi",
+    "kyushu":   "Fukuoka, Fukuoka",
+    "okinawa":  "Naha, Okinawa",
+    "japan":    "Japan",
+}
 
 _FAV_RAW_BY_REGION = {
     rk: [(n, c) for n, c in LOCATION_DATABASE.items()
@@ -2164,23 +2177,41 @@ if st.session_state._scan_scanning:
     if _is_fallback_only:
         st.session_state._scan_result = "none"
         st.session_state._scan_fallback_label = _scan_res.get("_fallback_label", "unsettled weather")
-        # ── Fly map to region representative city even when no PERFECT NIGHT found ──
+        # ── Fly map + move pin to region representative city ──────────────────────
         _fb_region = st.session_state._scan_region
         if _fb_region in _REGION_MAP_CENTER:
             _fb_lat, _fb_lon, _fb_zoom = _REGION_MAP_CENTER[_fb_region]
-            st.session_state.map_center = [_fb_lat, _fb_lon]
-            st.session_state.zoom       = _fb_zoom
-            st.session_state._need_fly  = True
+            _fb_city_name = _REGION_CITY_NAME.get(_fb_region, _REGION_LABELS.get(_fb_region, _fb_region))
+            st.session_state.lat             = _fb_lat
+            st.session_state.lon             = _fb_lon
+            st.session_state.map_center      = [_fb_lat, _fb_lon]
+            st.session_state.zoom            = _fb_zoom
+            st.session_state.location_name   = _fb_city_name
+            st.session_state.is_custom_point = True
+            st.session_state.day_offset      = 0
+            st.session_state.sel_date        = date_options[0]
+            st.session_state._need_fly       = True
+            st.session_state._last_tip       = None
+            st.session_state._skip_prefetch  = True
     elif _scan_res is None:
         st.session_state._scan_result = "none"
         st.session_state._scan_fallback_label = "unsettled weather"
-        # Fly to region center even when no data at all
+        # Fly map + move pin to region center even when no data at all
         _fb_region = st.session_state._scan_region
         if _fb_region in _REGION_MAP_CENTER:
             _fb_lat, _fb_lon, _fb_zoom = _REGION_MAP_CENTER[_fb_region]
-            st.session_state.map_center = [_fb_lat, _fb_lon]
-            st.session_state.zoom       = _fb_zoom
-            st.session_state._need_fly  = True
+            _fb_city_name = _REGION_CITY_NAME.get(_fb_region, _REGION_LABELS.get(_fb_region, _fb_region))
+            st.session_state.lat             = _fb_lat
+            st.session_state.lon             = _fb_lon
+            st.session_state.map_center      = [_fb_lat, _fb_lon]
+            st.session_state.zoom            = _fb_zoom
+            st.session_state.location_name   = _fb_city_name
+            st.session_state.is_custom_point = True
+            st.session_state.day_offset      = 0
+            st.session_state.sel_date        = date_options[0]
+            st.session_state._need_fly       = True
+            st.session_state._last_tip       = None
+            st.session_state._skip_prefetch  = True
     else:
         st.session_state._scan_result = _scan_res
         st.session_state._scan_fallback_label = None
