@@ -280,7 +280,7 @@ LOCATION_DATABASE = {
     "260. Bandaisan Viewpoint 磐梯山眺望箇所, Fukushima": [37.5680, 140.1360],
     "261. Kaneyama Fureai Hiroba かねやまふれあい広場, Fukushima": [37.4160, 139.5770],
     # Gunma
-    "262. Ueno Sky Bridge 上野スカイブリッジ, Gunma": [36.1150, 138.8340],
+    "262. Ueno Sky Bridge 上野スカイブリッジ, Gunma": [36.0720, 138.7771],
     "263. Kurabuchi Children Observatory くらぶちこども天文台, Gunma": [36.5330, 138.9210],
     "264. Kozumaki Ranch Observatory 神津牧場天文台, Gunma": [36.3460, 138.8200],
     "265. Takane Observatory 高根展望台, Gunma": [36.5800, 139.0400],
