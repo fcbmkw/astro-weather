@@ -6,6 +6,7 @@ from streamlit_folium import st_folium
 import pandas as pd
 import altair as alt
 import math
+from collections import Counter
 import ephem
 
 # --- CƠ SỞ DỮ LIỆU ĐỊA ĐIỂM ---
@@ -52,7 +53,7 @@ LOCATION_DATABASE = {
     "40. Hachijojima Nambara 南原千畳岩海岸, Tokyo": [33.1003, 139.7706],
     "41. Yamanakako Panorama 山中湖パノラマ台, Yamanashi": [35.4154, 138.8758],
     "42. Kiyosato Seisenryo 清泉寮, Yamanashi": [35.9245, 138.4214],
-    "43. Misaka Pass 御坂峠, Yamanashi": [35.5493, 138.7090],
+    "43. Shindo Pass 新道峠, Yamanashi": [35.5466, 138.7318],
     "44. Nobeyama Radio Observatory 野辺山, Nagano": [35.9414, 138.4704],
     "45. Takabocchi Highlands 高ボッチ高原, Nagano": [36.1045, 138.0170],
     "46. Soni Highlands 曽爾高原, Nara": [34.5346, 136.1506],
@@ -223,7 +224,7 @@ LOCATION_DATABASE = {
     "210. Oki Islands 隠岐の島, Shimane": [36.2160, 133.2330],
     "211. Dogo Islands 隠岐・島後, Shimane": [36.2500, 133.3000],
     "212. Ise Jingu 伊勢神宮, Mie": [34.4600, 136.7230],
-    "213. Ryugadake Observatory 竜ヶ岳展望台, Yamanashi": [35.4561, 138.6102],
+    "213. Observation Tower ガーデンタワー, Yamanashi": [35.4433, 138.6023],
     "214. Gujo Hachiman 郡上八幡, Gifu": [35.7480, 136.9550],
     "215. Magome-juku 馬籠宿, Gifu": [35.4950, 137.5670],
     "216. Bessan Plateau 別山高原, Ishikawa": [36.0830, 136.7050],
@@ -347,7 +348,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("map_tile", "windy"),
              ("_need_fly", False), ("_skip_prefetch", False),
              ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
-             ("_scan_tonight", False)]:
+             ("_scan_tonight", False), ("_scan_fallback_label", None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -555,7 +556,7 @@ def calculate_accurate_bortle(lat, lon):
         # ── Yamanashi ─────────────────────────────────────────────────────────
         (35.4154, 138.8758): (4, 21.50),   # 41 Yamanakako Panorama
         (35.8967, 138.4355): (3.5, 21.65), # 42 Kiyosato
-        (35.5493, 138.7090): (4, 21.40),   # 43 Misaka Pass
+        (35.5466, 138.7318): (4, 21.40),   # 43 Shindo Pass
         # ── Nagano ────────────────────────────────────────────────────────────
         (35.9405, 138.4740): (3, 21.80),   # 44 Nobeyama
         (36.1045, 138.0170): (4, 21.80),   # 45 Takabocchi
@@ -748,7 +749,7 @@ def calculate_accurate_bortle(lat, lon):
         (36.2160, 133.2330): (2.0, 21.75), # 210 Oki Islands
         (36.2500, 133.3000): (2.0, 21.75), # 211 Dogo Islands
         (34.4600, 136.7230): (3.5, 21.00), # 212 Ise Jingu
-        (35.4561, 138.6102): (2.0, 22.00), # 213 Ryugadake Observatory, Yamanashi (1485m, near Shoji-ko)
+        (35.4433, 138.6023): (2.0, 22.00), # 213 Observation Tower, Yamanashi (near Shoji-ko)
         (35.7480, 136.9550): (3.0, 21.40), # 214 Gujo Hachiman
         (35.4950, 137.5670): (3.0, 21.30), # 215 Magome-juku
         (36.0830, 136.7050): (2.5, 21.85), # 216 Bessan Plateau, Ishikawa (Hakusan foothills)
@@ -1772,6 +1773,43 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
             "color": color, "border": border, "bg": bg, "anim": anim,
             "good_hours": good_hours, "best_streak": best_streak, "total": total}
 
+# ── Tier → short natural-language weather label (cho fallback "no result") ──
+# Dùng tier THỰC TẾ phổ biến nhất trong các verdict đã quét (không phải icon cố định).
+_TIER_SHORT_LABEL = {
+    "SNOWY NIGHT":      "snow",
+    "RAINY NIGHT":      "rain",
+    "CLOUDY NIGHT":     "cloud",
+    "PARTLY CLOUDY":    "cloud & some clear",
+    "PATCHY CLEAR":     "patchy cloud",
+    "FAIR SKIES":       "mostly clear",
+    "TOO BRIGHT":       "bright sky (no astro-dark)",
+}
+
+def _summarize_fallback_tiers(tier_counter):
+    """Nhận Counter({tier_name: count}) từ các verdict đã quét (không đạt PERFECT/GOOD),
+    trả về label ngắn dựa trên tier PHỔ BIẾN NHẤT thực tế, ví dụ 'cloud & rain'.
+    Nếu 2 tier đứng đầu có số lượng gần bằng nhau (>=40% mỗi loại), nối bằng '&'."""
+    if not tier_counter:
+        return "unsettled weather"
+    ranked = tier_counter.most_common(3)
+    total_n = sum(tier_counter.values())
+    parts = []
+    for tier_name, cnt in ranked:
+        if cnt / total_n >= 0.30 and tier_name in _TIER_SHORT_LABEL:
+            parts.append(_TIER_SHORT_LABEL[tier_name])
+        if len(parts) == 2:
+            break
+    if not parts:
+        top_tier = ranked[0][0]
+        parts = [_TIER_SHORT_LABEL.get(top_tier, "unsettled weather")]
+    # Khử trùng lặp giữ thứ tự
+    seen = set(); uniq = []
+    for p in parts:
+        if p not in seen:
+            seen.add(p); uniq.append(p)
+    return " & ".join(uniq)
+
+
 # ── GREAT NIGHT SCAN — quét 27 địa điểm yêu thích × 7 ngày tới ───────────────
 # Điều kiện thông báo (AND):
 #   1) Moon illumination < 32%
@@ -1845,7 +1883,9 @@ def _run_great_night_scan(start_day=0, region="kanto"):
     """Quét từ start_day (0-6) trong 7 ngày tới, cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc).
     - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày sớm nhất thoả (sau khi lọc <20km)
     - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
-    Trả về None nếu không có ngày nào thoả."""
+    Trả về None nếu không có ngày nào thoả (kèm "_fallback_tiers": Counter tier thực tế đã quét,
+    để hiển thị fallback "cloud & rain in (region) next 7 days" dựa trên dữ liệu thật)."""
+    _fallback_tiers = Counter()
     for day_off in range(start_day, 7):
         d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
@@ -1873,6 +1913,8 @@ def _run_great_night_scan(start_day=0, region="kanto"):
             except Exception:
                 continue
             verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if verdict:
+                _fallback_tiers[verdict["tier"]] += 1
             if verdict and verdict["tier"] == "PERFECT NIGHT":
                 perfect_locs.append((loc_name, loc_coords, verdict))
 
@@ -1900,7 +1942,7 @@ def _run_great_night_scan(start_day=0, region="kanto"):
             "all_locs": deduped,  # [(loc_name, loc_coords, verdict), ...]
             "region": region,
         }
-    return None
+    return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
 
 # ── BEST NIGHT SCAN — quét toàn bộ 7 ngày × N địa điểm, chọn top 3 tốt nhất ────────
 # Tiêu chí: moon<35%, tier=PERFECT NIGHT(4★) > GOOD STARRY NIGHT(3★), streak dài nhất.
@@ -1916,6 +1958,7 @@ def _run_best_scan(region="kanto"):
     _locs = _locs_for_region(region, for_best_or_tonight=True)
     # candidates: list of (tier_rank, is_weekend, streak, good_hours, date, day_off, loc_name, loc_coords, verdict, moon_illum)
     candidates = []
+    _fallback_tiers = Counter()
     for day_off in range(0, 7):
         d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
@@ -1940,6 +1983,7 @@ def _run_best_scan(region="kanto"):
             verdict = _build_night_verdict(table, sun_alts, moon_illum)
             if not verdict:
                 continue
+            _fallback_tiers[verdict["tier"]] += 1
             rank = _TIER_RANK.get(verdict["tier"], 0)
             if rank == 0:
                 continue
@@ -1948,7 +1992,7 @@ def _run_best_scan(region="kanto"):
             candidates.append((rank, int(is_weekend), streak, good_hours, d, day_off, loc_name, loc_coords, verdict, moon_illum))
 
     if not candidates:
-        return None
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
 
     # Sort: tier_rank DESC, is_weekend DESC, streak DESC, good_hours DESC
     candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
@@ -1994,7 +2038,7 @@ def _run_best_scan(region="kanto"):
                 break
 
     if not top3:
-        return None
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
 
     # Xác định is_weekend cho từng kết quả
     top3_with_weekend = []
@@ -2027,6 +2071,7 @@ def _run_tonight_scan(region="kanto"):
     moon_illum, _ = get_moon_phase_percent(d)
     slots = _make_slots_for_offset(_night_base_jst, day_off)
     candidates = []
+    _fallback_tiers = Counter()
     for loc_name, loc_coords in _locs:
         lat, lon = loc_coords
         try:
@@ -2044,6 +2089,7 @@ def _run_tonight_scan(region="kanto"):
         verdict = _build_night_verdict(table, sun_alts, moon_illum)
         if not verdict:
             continue
+        _fallback_tiers[verdict["tier"]] += 1
         rank = _TIER_RANK.get(verdict["tier"], 0)
         if rank == 0:
             continue
@@ -2052,7 +2098,7 @@ def _run_tonight_scan(region="kanto"):
         candidates.append((rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum))
 
     if not candidates:
-        return None
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
 
     candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
 
@@ -2073,7 +2119,7 @@ def _run_tonight_scan(region="kanto"):
             break
 
     if not top3:
-        return None
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
 
     d0, day_off0, loc_name0, loc_coords0, verdict0, moon_illum0, _ = top3[0]
     return {
@@ -2100,12 +2146,22 @@ if st.session_state._scan_scanning:
     else:
         _start = st.session_state._scan_days
         _scan_res = _run_great_night_scan(start_day=_start, region=_region)
-    st.session_state._scan_result = _scan_res if _scan_res is not None else "none"
+
+    _is_fallback_only = isinstance(_scan_res, dict) and _scan_res.get("_fallback")
+    if _is_fallback_only:
+        st.session_state._scan_result = "none"
+        st.session_state._scan_fallback_label = _scan_res.get("_fallback_label", "unsettled weather")
+    elif _scan_res is None:
+        st.session_state._scan_result = "none"
+        st.session_state._scan_fallback_label = "unsettled weather"
+    else:
+        st.session_state._scan_result = _scan_res
+        st.session_state._scan_fallback_label = None
 
     # ── Apply kết quả 1st vào session state → map + table cập nhật ngay ──────
     # Giống hệt Priority 1 (click sao): set lat/lon, location_name, day_offset,
     # sel_date, map_center, _need_fly để map bay đến địa điểm + ngày kết quả 1st.
-    if _scan_res is not None:
+    if _scan_res is not None and not _is_fallback_only:
         _r1_name   = _scan_res["loc_name"]
         _r1_coords = _scan_res["loc_coords"]
         _r1_dayoff = _scan_res.get("day_off", 0)
@@ -2417,7 +2473,7 @@ _KANJI_ALIAS = {
     "プラトーさとみ": "Plateau Satomi", "尾瀬ヶ原": "Oze Numata", "玉原高原": "Tanbara Highlands",
     "三十槌氷柱": "Chichibu Misotsuchi", "中津峡": "Nakatsu Gorge", "前浜海岸": "Kozushima Maehama",
     "御蔵島": "Mikurajima Observatory", "南原千畳岩": "Hachijojima Nambara",
-    "山中湖": "Yamanakako Panorama", "清泉寮": "Kiyosato Seisenryo", "御坂峠": "Misaka Pass",
+    "山中湖": "Yamanakako Panorama", "清泉寮": "Kiyosato Seisenryo", "新道峠": "Shindo Pass",
     "野辺山": "Nobeyama Radio Observatory", "高ボッチ高原": "Takabocchi Highlands",
     "曽爾高原": "Soni Highlands", "乗鞍畳平": "Norikura Tatamidaira", "平湯峠": "Hirayu Pass",
     "新穂高": "Shinhotaka Ropeway", "白川郷": "Shirakawago", "千里浜": "Chirihama Beach",
@@ -3404,6 +3460,7 @@ elif _scan_r2 == "none":
         _scan_days_lbl = st.session_state._scan_days
         _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
     _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
+    _fallback_lbl = st.session_state.get("_scan_fallback_label") or "unsettled weather"
     st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
@@ -3415,7 +3472,7 @@ elif _scan_r2 == "none":
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
-☁️🌧️❄️ Cloudy/rainy/snowy in {_region_lbl_none} {_range_lbl}
+{_fallback_lbl} in {_region_lbl_none} {_range_lbl}
 </div>
 </div>""", unsafe_allow_html=True)
 
@@ -3446,6 +3503,7 @@ if map_data:
         # "off": tắt kết quả search ngay — không gọi _run_*_scan, không gọi API.
         st.session_state._last_lc       = lc
         st.session_state._scan_result   = None
+        st.session_state._scan_fallback_label = None
         st.session_state._scan_scanning = False
         st.rerun()
     _is_any_scan = _is_scan_trig or _is_best_trig or _is_tonight_trig
