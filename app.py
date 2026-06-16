@@ -1844,7 +1844,7 @@ _REGION_MAP_CENTER = {
     "hokkaido": (43.0618, 141.3545, 7),   # Sapporo
     "tohoku":   (38.2688, 140.8721, 7),   # Sendai
     "kanto":    (35.6895, 139.6917, 8),   # Tokyo
-    "chubu":    (36.6513, 138.1810, 7),   # Nagano (central Chubu)
+    "chubu":    (35.1815, 136.9066, 7),   # Nagoya
     "kansai":   (34.6937, 135.5023, 8),   # Osaka
     "chugoku":  (34.3853, 132.4553, 7),   # Hiroshima
     "shikoku":  (33.5597, 133.5311, 7),   # Kochi
@@ -1857,7 +1857,7 @@ _REGION_CITY_NAME = {
     "hokkaido": "Sapporo, Hokkaido",
     "tohoku":   "Sendai, Miyagi",
     "kanto":    "Tokyo",
-    "chubu":    "Nagano, Nagano",
+    "chubu":    "Nagoya, Aichi",
     "kansai":   "Osaka, Osaka",
     "chugoku":  "Hiroshima, Hiroshima",
     "shikoku":  "Kochi, Kochi",
