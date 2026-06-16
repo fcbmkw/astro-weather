@@ -148,7 +148,7 @@ LOCATION_DATABASE = {
     "134. Hakusan Chokaisanso 白山チブリ尾根避難小屋, Ishikawa": [36.1560, 136.7490],
     "135. Ena Ravine Bridge 恵那峡大橋展望台, Gifu": [35.4859, 137.4118],
     "136. Daibo Pass 大望峠, Nagano": [36.7340, 137.9660],
-    "137. Norikura Kogen 乗鞍高原, Nagano": [36.1205, 137.6310],
+    "137. Norikura Kogen 乗鞍高原, Nagano": [36.1145, 137.6130],
     "138. Shirouma Oike 白馬大池, Nagano": [36.8280, 137.7860],
     "139. Nojimazaki 野島崎, Chiba": [34.9013, 139.8882],
     "140. Kobentenjima 小弁天島, Chiba": [35.1134, 140.1988],
