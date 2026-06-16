@@ -2291,6 +2291,10 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
         map.fire('click', { latlng: L.latLng(89.75, 100 + idx) });
       };
+      // lat=89.65 → "off": tắt banner/ring ngay, không load data
+      window._triggerOff = function() {
+        map.fire('click', { latlng: L.latLng(89.65, 100) });
+      };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -2737,6 +2741,47 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase();
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
+        var _REGION_LABEL = { hokkaido:'Hokkaido', tohoku:'Tohoku', kanto:'Kanto', chubu:'Chubu',
+          kansai:'Kansai', chugoku:'Chugoku', shikoku:'Shikoku', kyushu:'Kyushu', okinawa:'Okinawa', japan:'All Japan' };
+        // ── "help" — hiển thị danh sách keyword, không thực hiện lệnh gì ──────
+        if (/^help$/.test(q)) {
+          dropdown.innerHTML = '';
+          var helpLines = [
+            {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan'},
+            {label: 'Search best location keyword:', desc: 'best'},
+            {label: 'Search tonight keyword:', desc: 'tonight'},
+            {label: 'Turn off search results:', desc: 'off'},
+          ];
+          helpLines.forEach(function(h) {
+            var row = L.DomUtil.create('div', '', dropdown);
+            row.style.cssText = 'padding:7px 14px;font-size:12px;'
+              + 'color:#cbd5e1;border-bottom:1px solid rgba(51,65,85,0.4);'
+              + 'cursor:default;';
+            var lbl = L.DomUtil.create('div', '', row);
+            lbl.textContent = h.label; lbl.style.cssText = 'font-weight:700;color:#94a3b8;margin-bottom:2px;';
+            var desc = L.DomUtil.create('div', '', row);
+            desc.textContent = h.desc; desc.style.cssText = 'font-size:11px;opacity:0.85;';
+          });
+          dropdown.style.display = 'block';
+          return;
+        }
+        // ── "off" — tắt kết quả search ngay, không load data ──────────────────
+        if (/^off$/.test(q)) {
+          dropdown.innerHTML = '';
+          var row = L.DomUtil.create('div', '', dropdown);
+          row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+            + 'color:#94a3b8;display:flex;justify-content:space-between;align-items:center;';
+          var lbl = L.DomUtil.create('span', '', row);
+          lbl.textContent = 'off'; lbl.style.fontWeight = '700';
+          var desc = L.DomUtil.create('span', '', row);
+          desc.textContent = 'Turn off search results'; desc.style.cssText = 'font-size:10px;opacity:0.65;';
+          L.DomEvent.on(row, 'click', function(){
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerOff === 'function') window._triggerOff();
+          });
+          dropdown.style.display = 'block';
+          return;
+        }
         // Hidden keyword — "<region>" / "<region> N" / "best <region>" / "tonight <region>"
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
@@ -2748,8 +2793,6 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var _qIsBareRegion = _bareRegionRe.test(q);
         if (_qIsBest || _qIsTonight || _qIsBareRegion) {
           dropdown.innerHTML = '';
-          var _REGION_LABEL = { hokkaido:'Hokkaido', tohoku:'Tohoku', kanto:'Kanto', chubu:'Chubu',
-            kansai:'Kansai', chugoku:'Chugoku', shikoku:'Shikoku', kyushu:'Kyushu', okinawa:'Okinawa', japan:'All Japan' };
           function _renderRegionHints(items, color, borderRgba) {
             items.forEach(function(h) {
               var row = L.DomUtil.create('div', '', dropdown);
@@ -2826,6 +2869,15 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           e.preventDefault();
           // ── Hidden SCAN trigger: "<region>" / "<region> N" / "best <region>" / "tonight <region>" + Enter ──
           var _sv = inp.value.trim().toLowerCase();
+          if (_sv === 'off') {
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerOff === 'function') window._triggerOff();
+            return;
+          }
+          if (_sv === 'help') {
+            // "help" chỉ hiển thị gợi ý, không thực hiện hành động khi Enter
+            return;
+          }
           var _RN = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
           var _rgx = '(' + _RN.join('|') + ')';
           var _mTonight = _sv.match(new RegExp('^tonight(\\s+' + _rgx + ')?$'));
@@ -3355,6 +3407,7 @@ if map_data:
     # lat=89.95 → plain region scan (lng = 100+region_idx+day_off*0.01)
     # lat=89.85 → best <region>     (lng = 100+region_idx)
     # lat=89.75 → tonight <region>  (lng = 100+region_idx)
+    # lat=89.65 → "off": tắt banner/ring ngay lập tức, không load data
     # region_idx: 0=hokkaido,1=tohoku,2=kanto,3=chubu,4=kansai,5=chugoku,6=shikoku,7=kyushu,8=okinawa,9=japan
     _REGION_BY_IDX = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa", "japan"]
     _lc_lat = lc.get("lat", 0) if lc else 0
@@ -3362,6 +3415,13 @@ if map_data:
     _is_scan_trig    = abs(_lc_lat - 89.95) < 0.02
     _is_best_trig    = abs(_lc_lat - 89.85) < 0.02
     _is_tonight_trig = abs(_lc_lat - 89.75) < 0.02
+    _is_off_trig     = abs(_lc_lat - 89.65) < 0.02
+    if _is_off_trig and lc and lc != st.session_state._last_lc:
+        # "off": tắt kết quả search ngay — không gọi _run_*_scan, không gọi API.
+        st.session_state._last_lc       = lc
+        st.session_state._scan_result   = None
+        st.session_state._scan_scanning = False
+        st.rerun()
     _is_any_scan = _is_scan_trig or _is_best_trig or _is_tonight_trig
     _matched_region = None
     _matched_days = None
