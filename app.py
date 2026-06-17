@@ -346,7 +346,9 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "windy"),
-             ("_need_fly", False), ("_skip_prefetch", False)]:
+             ("_need_fly", False), ("_skip_prefetch", False),
+             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
+             ("_scan_tonight", False), ("_scan_fallback_label", None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -1807,6 +1809,432 @@ def _summarize_fallback_tiers(tier_counter):
     return " & ".join(uniq)
 
 
+# ── GREAT NIGHT SCAN — quét 27 địa điểm yêu thích × 7 ngày tới ───────────────
+# Điều kiện thông báo (AND):
+#   1) Moon illumination < 32%
+#   2) Có ít nhất 1/27 địa điểm đầu (sao xanh) đạt tier == "PERFECT NIGHT"
+#   3) Chỉ báo NGÀY SỚM NHẤT thoả mãn (1-7 ngày tới)
+_FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
+            if (lambda nm: nm.split(".")[0].strip().isdigit()
+                and int(nm.split(".")[0].strip()) <= 30)(n)]
+_FAV_ALL = list(LOCATION_DATABASE.items())
+
+# ── REGION REGISTRY — Nhật Bản chia theo 8 vùng địa lý truyền thống + "japan" (toàn quốc) ──
+# Mỗi vùng áp dụng đồng nhất cho cả 3 loại lệnh: <region> (scan) / best <region> / tonight <region>
+_REGIONS = {
+    "hokkaido": {"Hokkaido"},
+    "tohoku":   {"Aomori", "Iwate", "Miyagi", "Akita", "Yamagata", "Fukushima"},
+    "kanto":    {"Tokyo", "Kanagawa", "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma"},
+    "chubu":    {"Niigata", "Toyama", "Ishikawa", "Fukui", "Yamanashi", "Nagano", "Gifu", "Shizuoka", "Aichi"},
+    "kansai":   {"Osaka", "Kyoto", "Hyogo", "Nara", "Shiga", "Wakayama", "Mie"},
+    "chugoku":  {"Tottori", "Shimane", "Okayama", "Hiroshima", "Yamaguchi"},
+    "shikoku":  {"Tokushima", "Kagawa", "Ehime", "Kochi"},
+    "kyushu":   {"Fukuoka", "Saga", "Nagasaki", "Kumamoto", "Oita", "Miyazaki", "Kagoshima"},
+    "okinawa":  {"Okinawa"},
+}
+_REGION_ORDER = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa"]
+_REGION_LABELS = {
+    "hokkaido": "Hokkaido", "tohoku": "Tohoku", "kanto": "Kanto", "chubu": "Chubu",
+    "kansai": "Kansai", "chugoku": "Chugoku", "shikoku": "Shikoku", "kyushu": "Kyushu",
+    "okinawa": "Okinawa", "japan": "All Japan",
+}
+# ── Region representative city center (lat, lon, zoom) — dùng để fly map khi scan ──
+_REGION_MAP_CENTER = {
+    "hokkaido": (43.0618, 141.3545, 7),   # Sapporo
+    "tohoku":   (38.2688, 140.8721, 7),   # Sendai
+    "kanto":    (35.6895, 139.6917, 8),   # Tokyo
+    "chubu":    (35.1815, 136.9066, 7),   # Nagoya
+    "kansai":   (34.6937, 135.5023, 8),   # Osaka
+    "chugoku":  (34.3853, 132.4553, 7),   # Hiroshima
+    "shikoku":  (33.5597, 133.5311, 7),   # Kochi
+    "kyushu":   (33.5904, 130.4017, 7),   # Fukuoka
+    "okinawa":  (26.2124, 127.6809, 8),   # Naha
+    "japan":    (36.5000, 138.0000, 6),   # Japan center
+}
+# ── Region representative city display name ────────────────────────────────────
+_REGION_CITY_NAME = {
+    "hokkaido": "Sapporo, Hokkaido",
+    "tohoku":   "Sendai, Miyagi",
+    "kanto":    "Tokyo",
+    "chubu":    "Nagoya, Aichi",
+    "kansai":   "Osaka, Osaka",
+    "chugoku":  "Hiroshima, Hiroshima",
+    "shikoku":  "Kochi, Kochi",
+    "kyushu":   "Fukuoka, Fukuoka",
+    "okinawa":  "Naha, Okinawa",
+    "japan":    "Japan",
+}
+
+_FAV_RAW_BY_REGION = {
+    rk: [(n, c) for n, c in LOCATION_DATABASE.items()
+         if n.rsplit(",", 1)[-1].strip() in prefs]
+    for rk, prefs in _REGIONS.items()
+}
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Khoảng cách Haversine giữa 2 điểm (km)."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+# Bỏ địa điểm gần nhau <km để tăng tốc scan/best/tonight
+def _dedupe_locs_km(locs, km=30):
+    kept = []
+    for name, coords in locs:
+        too_close = any(
+            _haversine_km(coords[0], coords[1], kc[0], kc[1]) < km
+            for _, kc in kept
+        )
+        if not too_close:
+            kept.append((name, coords))
+    return kept
+
+# Mỗi vùng: bản dedupe <60km dùng cho best/tonight, <30km dùng cho scan thường (region-only).
+# "japan" = toàn bộ 269 địa điểm (_FAV_ALL), dedupe tương tự các vùng khác.
+_FAV_BY_REGION_60 = {rk: _dedupe_locs_km(locs, km=60) for rk, locs in _FAV_RAW_BY_REGION.items()}
+_FAV_BY_REGION_30 = {rk: _dedupe_locs_km(locs, km=30) for rk, locs in _FAV_RAW_BY_REGION.items()}
+_FAV_BY_REGION_60["japan"] = _dedupe_locs_km(_FAV_ALL, km=60)
+_FAV_BY_REGION_30["japan"] = _dedupe_locs_km(_FAV_ALL, km=30)
+
+def _locs_for_region(region_key, for_best_or_tonight):
+    """Trả về danh sách địa điểm cho 1 vùng. region_key in _REGION_ORDER + 'japan'.
+    for_best_or_tonight=True → dedupe 60km, False (scan thường) → dedupe 30km."""
+    table = _FAV_BY_REGION_60 if for_best_or_tonight else _FAV_BY_REGION_30
+    return table.get(region_key, table["kanto"])
+
+def _run_great_night_scan(start_day=0, region="kanto"):
+    """Quét từ start_day (0-6) trong 7 ngày tới, cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc).
+    - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày sớm nhất thoả (sau khi lọc <20km)
+    - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
+    Trả về None nếu không có ngày nào thoả (kèm "_fallback_tiers": Counter tier thực tế đã quét,
+    để hiển thị fallback "cloud & rain in (region) next 7 days" dựa trên dữ liệu thật)."""
+    _fallback_tiers = Counter()
+    for day_off in range(start_day, 7):
+        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        moon_illum, _ = get_moon_phase_percent(d)
+        if moon_illum >= 32:
+            continue
+        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        _locs_to_scan = _locs_for_region(region, for_best_or_tonight=False)
+        perfect_locs = []  # (loc_name, loc_coords, verdict) tất cả địa điểm pass
+        for loc_name, loc_coords in _locs_to_scan:
+            lat, lon = loc_coords
+            try:
+                hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+            except Exception:
+                continue
+            if not hourly:
+                continue
+            frozen = tuple(
+                (k, tuple(v) if isinstance(v, list) else v)
+                for k, v in hourly.items()
+            )
+            try:
+                table, _, _, sun_alts, *_r = _build_night_data(
+                    lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0
+                )
+            except Exception:
+                continue
+            verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if verdict:
+                _fallback_tiers[verdict["tier"]] += 1
+            if verdict and verdict["tier"] == "PERFECT NIGHT":
+                perfect_locs.append((loc_name, loc_coords, verdict))
+
+        if not perfect_locs:
+            continue
+
+        # ── Lọc bỏ các địa điểm gần nhau < 20km (giữ lại địa điểm đầu tiên) ──
+        deduped = []
+        for entry in perfect_locs:
+            _, coords, _ = entry
+            too_close = False
+            for kept in deduped:
+                _, kept_coords, _ = kept
+                if _haversine_km(coords[0], coords[1], kept_coords[0], kept_coords[1]) < 20:
+                    too_close = True
+                    break
+            if not too_close:
+                deduped.append(entry)
+
+        first_name, first_coords, first_verdict = deduped[0]
+        return {
+            "date": d, "day_off": day_off,
+            "loc_name": first_name, "loc_coords": first_coords,
+            "moon_illum": moon_illum, "verdict": first_verdict,
+            "all_locs": deduped,  # [(loc_name, loc_coords, verdict), ...]
+            "region": region,
+        }
+    return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
+
+# ── BEST NIGHT SCAN — quét toàn bộ 7 ngày × N địa điểm, chọn top 3 tốt nhất ────────
+# Tiêu chí: moon<35%, tier=PERFECT NIGHT(4★) > GOOD STARRY NIGHT(3★), streak dài nhất.
+# Ưu tiên cuối tuần (Fri=4, Sat=5, Sun=6). Weekday (Mon-Thu) hiển thị màu trắng.
+_WEEKEND_DAYS = {4, 5, 6}  # weekday(): Mon=0..Sun=6; Fri=4, Sat=5, Sun=6
+
+def _run_best_scan(region="kanto"):
+    """Quét 7 ngày tới cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc), trả về top 3 (dedupe <60km).
+    - Ưu tiên cuối tuần (Fri/Sat/Sun) trước Mon-Thu.
+    - Trong cùng tier + streak: ưu tiên cuối tuần, rồi streak dài hơn.
+    - Trả về None nếu không có kết quả nào."""
+    _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
+    _locs = _locs_for_region(region, for_best_or_tonight=True)
+    # candidates: list of (tier_rank, is_weekend, streak, good_hours, date, day_off, loc_name, loc_coords, verdict, moon_illum)
+    candidates = []
+    _fallback_tiers = Counter()
+    for day_off in range(0, 7):
+        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        moon_illum, _ = get_moon_phase_percent(d)
+        if moon_illum >= 41.5:
+            continue
+        is_weekend = d.weekday() in _WEEKEND_DAYS
+        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        for loc_name, loc_coords in _locs:
+            lat, lon = loc_coords
+            try:
+                hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+            except Exception:
+                continue
+            if not hourly:
+                continue
+            frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+            try:
+                table, _, _, sun_alts, *_ = _build_night_data(
+                    lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+            except Exception:
+                continue
+            verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if not verdict:
+                continue
+            _fallback_tiers[verdict["tier"]] += 1
+            rank = _TIER_RANK.get(verdict["tier"], 0)
+            if rank == 0:
+                continue
+            streak = verdict.get("best_streak", 0)
+            good_hours = verdict.get("good_hours", 0)
+            candidates.append((rank, int(is_weekend), streak, good_hours, d, day_off, loc_name, loc_coords, verdict, moon_illum))
+
+    if not candidates:
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
+
+    # Sort: tier_rank DESC, is_weekend DESC, streak DESC, good_hours DESC
+    candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+
+    # Pick top 3, dedupe by location <60km
+    # Guarantee: at least 1 weekend (Fri/Sat/Sun) slot in top3 if any exists.
+    # Strategy: first fill normally from sorted list, then if no weekend found,
+    # swap the worst non-weekend slot for the best available weekend candidate.
+    top3 = []
+    seen_coords = []
+    for cand in candidates:
+        _, _, _, _, d, day_off, loc_name, loc_coords, verdict, moon_illum = cand
+        # Dedupe location: skip nếu trong vòng 60km với địa điểm đã chọn
+        too_close = any(
+            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 60
+            for sc in seen_coords
+        )
+        if too_close:
+            continue
+        seen_coords.append(loc_coords)
+        top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum))
+        if len(top3) == 3:
+            break
+
+    # Guarantee at least 1 weekend in top3
+    if top3:
+        _has_weekend_in_top3 = any(d.weekday() in _WEEKEND_DAYS for d, *_ in top3)
+        if not _has_weekend_in_top3:
+            # Find best weekend candidate NOT already in top3 (dedupe <60km vs existing)
+            _seen_top3_coords = [lc for _, _, _, lc, _, _ in top3]
+            for cand in candidates:
+                _, _is_we, _, _, d_we, do_we, ln_we, lc_we, vd_we, mi_we = cand
+                if not _is_we:
+                    continue
+                too_close = any(
+                    _haversine_km(lc_we[0], lc_we[1], sc[0], sc[1]) < 60
+                    for sc in _seen_top3_coords
+                )
+                if too_close:
+                    continue
+                # Swap out the last (worst) slot in top3 for this weekend entry
+                top3[-1] = (d_we, do_we, ln_we, lc_we, vd_we, mi_we)
+                break
+
+    if not top3:
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
+
+    # Xác định is_weekend cho từng kết quả
+    top3_with_weekend = []
+    for (d, day_off, loc_name, loc_coords, verdict, moon_illum) in top3:
+        is_weekend = d.weekday() in _WEEKEND_DAYS
+        top3_with_weekend.append((d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend))
+
+    # Primary result = top3[0]
+    d0, day_off0, loc_name0, loc_coords0, verdict0, moon_illum0, _ = top3_with_weekend[0]
+    return {
+        "date": d0, "day_off": day_off0,
+        "loc_name": loc_name0, "loc_coords": loc_coords0,
+        "moon_illum": moon_illum0, "verdict": verdict0,
+        "all_locs": [(loc_name0, loc_coords0, verdict0)],  # vòng tròn map chỉ cho loc chính
+        "top3": top3_with_weekend,  # [(date, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend)]
+        "region": region,
+    }
+
+# ── TONIGHT SCAN — quét đêm nay (day_off=0) cho Kanto hoặc toàn quốc ────────
+def _run_tonight_scan(region="kanto"):
+    """Quét đêm nay (day_off=0) và trả về top3 địa điểm tốt nhất màu pink, cho 1 vùng địa lý.
+    region='japan' → 269 địa điểm toàn quốc, khác → vùng tương ứng (dedupe <60km).
+    - Không yêu cầu moon < 35% (tonight hiển thị kết quả dù trăng sáng).
+    - Tiêu chí: tier PERFECT NIGHT > GOOD STARRY NIGHT, streak dài nhất.
+    Trả về None nếu không có kết quả nào."""
+    _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
+    _locs = _locs_for_region(region, for_best_or_tonight=True)
+    day_off = 0
+    d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+    moon_illum, _ = get_moon_phase_percent(d)
+    slots = _make_slots_for_offset(_night_base_jst, day_off)
+    candidates = []
+    _fallback_tiers = Counter()
+    for loc_name, loc_coords in _locs:
+        lat, lon = loc_coords
+        try:
+            hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+        except Exception:
+            continue
+        if not hourly:
+            continue
+        frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+        try:
+            table, _, _, sun_alts, *_ = _build_night_data(
+                lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+        except Exception:
+            continue
+        verdict = _build_night_verdict(table, sun_alts, moon_illum)
+        if not verdict:
+            continue
+        _fallback_tiers[verdict["tier"]] += 1
+        rank = _TIER_RANK.get(verdict["tier"], 0)
+        if rank == 0:
+            continue
+        streak = verdict.get("best_streak", 0)
+        good_hours = verdict.get("good_hours", 0)
+        candidates.append((rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum))
+
+    if not candidates:
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
+
+    candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+
+    # Pick top 3, dedupe by location <60km
+    top3 = []
+    seen_coords = []
+    for cand in candidates:
+        rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum = cand
+        too_close = any(
+            _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 60
+            for sc in seen_coords
+        )
+        if too_close:
+            continue
+        seen_coords.append(loc_coords)
+        top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum, False))
+        if len(top3) == 3:
+            break
+
+    if not top3:
+        return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
+
+    d0, day_off0, loc_name0, loc_coords0, verdict0, moon_illum0, _ = top3[0]
+    return {
+        "date": d0, "day_off": day_off0,
+        "loc_name": loc_name0, "loc_coords": loc_coords0,
+        "moon_illum": moon_illum0, "verdict": verdict0,
+        "all_locs": [(loc_name0, loc_coords0, verdict0)],
+        "top3": top3,
+        "_is_tonight": True,
+        "region": region,
+    }
+
+# ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
+# Thực hiện scan TRƯỚC khi map render → sau khi scan xong, rerun lần 2 mới vẽ banner.
+# Spinner cũ (st.spinner ngoài map) đã bị xóa — "Scanning..." hiện bên trong map
+# qua overlay bottom-left (xem phần banner bên dưới).
+if st.session_state._scan_scanning:
+    st.session_state._scan_scanning = False
+    _region = st.session_state._scan_region
+    if st.session_state._scan_tonight:
+        _scan_res = _run_tonight_scan(region=_region)
+    elif st.session_state._scan_best:
+        _scan_res = _run_best_scan(region=_region)
+    else:
+        _start = st.session_state._scan_days
+        _scan_res = _run_great_night_scan(start_day=_start, region=_region)
+
+    _is_fallback_only = isinstance(_scan_res, dict) and _scan_res.get("_fallback")
+    if _is_fallback_only:
+        st.session_state._scan_result = "none"
+        st.session_state._scan_fallback_label = _scan_res.get("_fallback_label", "unsettled weather")
+        # ── Fly map + move pin to region representative city ──────────────────────
+        _fb_region = st.session_state._scan_region
+        if _fb_region in _REGION_MAP_CENTER:
+            _fb_lat, _fb_lon, _fb_zoom = _REGION_MAP_CENTER[_fb_region]
+            _fb_city_name = _REGION_CITY_NAME.get(_fb_region, _REGION_LABELS.get(_fb_region, _fb_region))
+            st.session_state.lat             = _fb_lat
+            st.session_state.lon             = _fb_lon
+            st.session_state.map_center      = [_fb_lat, _fb_lon]
+            st.session_state.zoom            = _fb_zoom
+            st.session_state.location_name   = _fb_city_name
+            st.session_state.is_custom_point = True
+            st.session_state.day_offset      = 0
+            st.session_state.sel_date        = date_options[0]
+            st.session_state._need_fly       = True
+            st.session_state._last_tip       = None
+            st.session_state._skip_prefetch  = True
+    elif _scan_res is None:
+        st.session_state._scan_result = "none"
+        st.session_state._scan_fallback_label = "unsettled weather"
+        # Fly map + move pin to region center even when no data at all
+        _fb_region = st.session_state._scan_region
+        if _fb_region in _REGION_MAP_CENTER:
+            _fb_lat, _fb_lon, _fb_zoom = _REGION_MAP_CENTER[_fb_region]
+            _fb_city_name = _REGION_CITY_NAME.get(_fb_region, _REGION_LABELS.get(_fb_region, _fb_region))
+            st.session_state.lat             = _fb_lat
+            st.session_state.lon             = _fb_lon
+            st.session_state.map_center      = [_fb_lat, _fb_lon]
+            st.session_state.zoom            = _fb_zoom
+            st.session_state.location_name   = _fb_city_name
+            st.session_state.is_custom_point = True
+            st.session_state.day_offset      = 0
+            st.session_state.sel_date        = date_options[0]
+            st.session_state._need_fly       = True
+            st.session_state._last_tip       = None
+            st.session_state._skip_prefetch  = True
+    else:
+        st.session_state._scan_result = _scan_res
+        st.session_state._scan_fallback_label = None
+
+    # ── Apply kết quả 1st vào session state → map + table cập nhật ngay ──────
+    # Giống hệt Priority 1 (click sao): set lat/lon, location_name, day_offset,
+    # sel_date, map_center, _need_fly để map bay đến địa điểm + ngày kết quả 1st.
+    if _scan_res is not None and not _is_fallback_only:
+        _r1_name   = _scan_res["loc_name"]
+        _r1_coords = _scan_res["loc_coords"]
+        _r1_dayoff = _scan_res.get("day_off", 0)
+        st.session_state.lat             = _r1_coords[0]
+        st.session_state.lon             = _r1_coords[1]
+        st.session_state.map_center      = [_r1_coords[0], _r1_coords[1]]
+        st.session_state.location_name   = _r1_name
+        st.session_state.is_custom_point = False
+        st.session_state.day_offset      = _r1_dayoff
+        st.session_state.sel_date        = date_options[_r1_dayoff]
+        st.session_state._need_fly       = True
+        st.session_state._last_tip       = None
+        st.session_state._skip_prefetch  = True
+
+    st.rerun()
+
 # ── MAP ───────────────────────────────────────────────────────────────────────
 # Add top margin so the in-map tile buttons are not obscured by Streamlit toolbar
 st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
@@ -1954,6 +2382,33 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'transition:background 0.2s;white-space:nowrap;cursor:pointer;flex-shrink:0;';
       a.onmouseover = function(){ a.style.background = 'rgba(34,197,94,0.28)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(34,197,94,0.12)'; };
+
+      // ── SCAN trigger — hidden; called by search box with "<region>", "<region> N", "best <region>", "tonight <region>" ───
+      // Sentinel encoding (lat below Mercator max 85.05, always valid click):
+      //   lat=89.95 → plain region scan (day_off encoded in lng)
+      //   lat=89.85 → best <region>   (no day_off needed — always scans 7 days)
+      //   lat=89.75 → tonight <region> (no day_off needed — always tonight)
+      // lng = 100 + region_idx + day_off*0.01  (region_idx: 0=hokkaido..8=okinawa, 9=japan)
+      var _REGION_IDX = { hokkaido:0, tohoku:1, kanto:2, chubu:3, kansai:4, chugoku:5, shikoku:6, kyushu:7, okinawa:8, japan:9 };
+      window._triggerScan = function(region, days) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        var n = (days >= 0 && days <= 6) ? days : 0;
+        var d = (n === 0) ? 0 : (n - 1); // "<region> N" (N>=1) -> day_off N-1 (tonight = N=1)
+        var lng = 100 + idx + d * 0.01;
+        map.fire('click', { latlng: L.latLng(89.95, lng) });
+      };
+      window._triggerBest = function(region) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        map.fire('click', { latlng: L.latLng(89.85, 100 + idx) });
+      };
+      window._triggerTonight = function(region) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        map.fire('click', { latlng: L.latLng(89.75, 100 + idx) });
+      };
+      // lat=89.65 → "off": tắt banner/ring ngay, không load data
+      window._triggerOff = function() {
+        map.fire('click', { latlng: L.latLng(89.65, 100) });
+      };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -2311,6 +2766,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         _items = [];
         _activeIdx = -1;
         if (results.length === 0) {
+          // Nếu query là region command (có trailing space chờ số) → ẩn dropdown
+          // để không rơi vào geocodeAndFly khi Enter
+          var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
+          var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+          var _isRegionCmd = _RNchk.some(function(r){ return _qNow === r || _qNow.indexOf(r+' ') === 0; });
+          if (_isRegionCmd) { dropdown.style.display = 'none'; return; }
           var empty = L.DomUtil.create('div', '', dropdown);
           empty.style.cssText = 'padding:10px 14px;color:#64748b;font-size:12px;';
           empty.textContent = 'No match — press Enter to geocode';
@@ -2404,6 +2865,113 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
+        var _REGION_LABEL = { hokkaido:'Hokkaido', tohoku:'Tohoku', kanto:'Kanto', chubu:'Chubu',
+          kansai:'Kansai', chugoku:'Chugoku', shikoku:'Shikoku', kyushu:'Kyushu', okinawa:'Okinawa', japan:'All Japan' };
+        // ── "help" — hiển thị danh sách keyword, không thực hiện lệnh gì ──────
+        if (/^help$/.test(q)) {
+          dropdown.innerHTML = '';
+          _items = []; _activeIdx = -1;
+          var helpLines = [
+            {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan', color: '#94a3b8'},
+            {label: 'Search best location keyword:', desc: 'best', color: '#34d399'},
+            {label: 'Search tonight keyword:', desc: 'tonight', color: '#fbcfe8'},
+            {label: 'Turn off search results:', desc: 'off', color: '#94a3b8'},
+          ];
+          helpLines.forEach(function(h) {
+            var row = L.DomUtil.create('div', '', dropdown);
+            row.style.cssText = 'padding:7px 14px;font-size:12px;'
+              + 'color:#cbd5e1;border-bottom:1px solid rgba(51,65,85,0.4);'
+              + 'cursor:default;';
+            var lbl = L.DomUtil.create('div', '', row);
+            lbl.textContent = h.label; lbl.style.cssText = 'font-weight:700;color:' + h.color + ';margin-bottom:2px;';
+            var desc = L.DomUtil.create('div', '', row);
+            desc.textContent = h.desc; desc.style.cssText = 'font-size:11px;opacity:0.85;color:' + h.color + ';';
+          });
+          dropdown.style.display = 'block';
+          return;
+        }
+        // ── "off" — tắt kết quả search ngay, không load data ──────────────────
+        if (/^off$/.test(q)) {
+          dropdown.innerHTML = '';
+          _items = []; _activeIdx = -1;
+          var row = L.DomUtil.create('div', '', dropdown);
+          row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+            + 'color:#94a3b8;display:flex;justify-content:space-between;align-items:center;';
+          var lbl = L.DomUtil.create('span', '', row);
+          lbl.textContent = 'off'; lbl.style.fontWeight = '700';
+          var desc = L.DomUtil.create('span', '', row);
+          desc.textContent = 'Turn off search results'; desc.style.cssText = 'font-size:10px;opacity:0.65;';
+          L.DomEvent.on(row, 'click', function(){
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerOff === 'function') window._triggerOff();
+          });
+          dropdown.style.display = 'block';
+          return;
+        }
+        // Hidden keyword — "<region>" / "<region>N" / "best <region>" / "tonight <region>"
+        var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+        var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
+        var _bareRegionRe   = new RegExp('^' + _regionPattern + '(\\d+)?$');
+        var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
+        var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
+        var _qIsBest    = /^best(\s|$)/.test(q);
+        var _qIsTonight = /^tonight(\s|$)/.test(q);
+        var _qIsBareRegion = _bareRegionRe.test(q);
+        if (_qIsBest || _qIsTonight || _qIsBareRegion) {
+          dropdown.innerHTML = '';
+          _items = []; _activeIdx = -1;
+          function _renderRegionHints(items, color, borderRgba) {
+            items.forEach(function(h) {
+              var row = L.DomUtil.create('div', '', dropdown);
+              row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+                + 'color:' + color + ';border-bottom:1px solid ' + borderRgba + ';'
+                + 'display:flex;justify-content:space-between;align-items:center;';
+              var lbl = L.DomUtil.create('span', '', row);
+              lbl.textContent = h.label; lbl.style.fontWeight = '700';
+              var desc = L.DomUtil.create('span', '', row);
+              desc.textContent = h.desc; desc.style.cssText = 'font-size:10px;opacity:0.65;';
+              L.DomEvent.on(row, 'click', (function(fn){ return function(){
+                inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+                fn();
+              }; })(h.fn));
+              _items.push(row);  // ← push vào _items để Enter key có thể click
+            });
+            dropdown.style.display = 'block';
+          }
+          if (_qIsTonight) {
+            var _mTn = q.match(_tonightRegionRe);
+            var _typedTn = _mTn && _mTn[1] ? _mTn[1].trim() : '';
+            var _regionsTn = _typedTn ? [_typedTn] : _REGION_NAMES;
+            var tonightHints = _regionsTn.map(function(r){
+              return {label: 'tonight ' + r, desc: 'Best spots tonight (' + _REGION_LABEL[r] + ')',
+                       fn: (function(rr){ return function(){ window._triggerTonight(rr); }; })(r)};
+            });
+            _renderRegionHints(tonightHints, '#fbcfe8', 'rgba(251,207,232,0.2)');
+            return;
+          }
+          if (_qIsBest) {
+            var _mBest = q.match(_bestRegionRe);
+            var _typedBest = _mBest && _mBest[1] ? _mBest[1].trim() : '';
+            var _regionsBest = _typedBest ? [_typedBest] : _REGION_NAMES;
+            var bestHints = _regionsBest.map(function(r){
+              return {label: 'best ' + r, desc: 'Best night 7d (' + _REGION_LABEL[r] + ')',
+                       fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(r)};
+            });
+            _renderRegionHints(bestHints, '#34d399', 'rgba(51,65,85,0.4)');
+            return;
+          }
+          // Bare region command: "<region>" / "<region>N" → scan hints with day offsets 0-6
+          var _mBare = q.match(_bareRegionRe);
+          var _region = _mBare[1];
+          var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
+          var scanHints = _dayLabels.map(function(lbl, n){
+            return {label: _region + (n === 0 ? '' : n),
+                     desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
+                     fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)};
+          });
+          _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
+          return;
+        }
 
         // Translate any kanji substrings in the query to their romaji alias
         var translations = [];
@@ -2427,13 +2995,86 @@ _SEARCH_CTRL_TEMPLATE = Template("""
       L.DomEvent.on(inp, 'keydown', function(e){
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (dropdown.style.display === 'none') { return; }
+          // ── Hidden SCAN trigger: "<region>" / "<region> N" / "best <region>" / "tonight <region>" + Enter ──
+          var _sv = inp.value.trim().toLowerCase().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
+          if (_sv === 'off') {
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerOff === 'function') window._triggerOff();
+            return;
+          }
+          if (_sv === 'help') {
+            // "help" chỉ hiển thị gợi ý, không thực hiện hành động khi Enter
+            return;
+          }
+          var _RN = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+          var _rgx = '(' + _RN.join('|') + ')';
+          var _mTonight = _sv.match(new RegExp('^tonight(\\s+' + _rgx + ')?$'));
+          if (_mTonight) {
+            var _rTn = _mTonight[2] || 'kanto';
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTn);
+            return;
+          }
+          var _mBest = _sv.match(new RegExp('^best(\\s+' + _rgx + ')?$'));
+          if (_mBest) {
+            var _rBest = _mBest[2] || 'kanto';
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
+            return;
+          }
+          var _mScan = _sv.match(new RegExp('^' + _rgx + '(\\d+)?$'));
+          if (_mScan) {
+            var _rScan = _mScan[1];
+            var _days = parseInt(_mScan[2]) || 0;
+            if (_days < 0 || _days > 6) _days = 0;
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
+            return;
+          }
+          // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
+          // (e.g. unexpected whitespace) still triggers rather than falling through to geocode.
+          if (/^tonight(\s|$)/.test(_sv)) {
+            var _rTnFb = 'kanto';
+            for (var _i = 0; _i < _RN.length; _i++) { if (_sv.indexOf(_RN[_i]) !== -1) { _rTnFb = _RN[_i]; break; } }
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTnFb);
+            return;
+          }
+          if (/^best(\s|$)/.test(_sv)) {
+            var _rBestFb = 'kanto';
+            for (var _j = 0; _j < _RN.length; _j++) { if (_sv.indexOf(_RN[_j]) !== -1) { _rBestFb = _RN[_j]; break; } }
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBest === 'function') window._triggerBest(_rBestFb);
+            return;
+          }
+          if (dropdown.style.display === 'none') {
+            // Dropdown ẩn nhưng có thể là region command → check trước khi return
+            var _mScanH = _sv.match(new RegExp('^' + _rgx + '(\\d+)?$'));
+            if (_mScanH) {
+              var _rScanH = _mScanH[1];
+              var _daysH = parseInt(_mScanH[2]) || 0;
+              if (_daysH < 0 || _daysH > 6) _daysH = 0;
+              inp.value = ''; clr.style.display = 'none';
+              if (typeof window._triggerScan === 'function') window._triggerScan(_rScanH, _daysH);
+            }
+            return;
+          }
           if (_activeIdx >= 0 && _activeIdx < _items.length) {
             _items[_activeIdx].click();
-          } else if (_items.length > 0) {
-            // Không item nào được highlight → chọn kết quả đầu tiên trong list
-            _items[0].click();
           } else {
+            // Last-resort: nếu dropdown đang hiện nhưng không có item được chọn,
+            // thử match region command một lần nữa trước khi geocode
+            var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+            var _rgx2 = '(' + _RN2.join('|') + ')';
+            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '(\\d+)?$'));
+            if (_mScan2) {
+              var _rScan2 = _mScan2[1];
+              var _days2 = parseInt(_mScan2[2]) || 0;
+              if (_days2 < 0 || _days2 > 6) _days2 = 0;
+              inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+              if (typeof window._triggerScan === 'function') window._triggerScan(_rScan2, _days2);
+              return;
+            }
             dropdown.style.display = 'none';
             _geocodeAndFly(inp.value.trim());
           }
@@ -2661,6 +3302,76 @@ if _selected_marker_args:
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
                   for c in LOCATION_DATABASE.values())
 
+# ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh tất cả địa điểm ──────
+# Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
+_scan_r = st.session_state._scan_result
+if _scan_r and _scan_r != "none":
+    # ── Ring helper — CSS injected once, ring div absolutely centered on the coordinate ──
+    # icon_size=(0,0) / icon_anchor=(0,0): Leaflet places the DivIcon origin exactly at
+    # the lat/lon pixel. The ring div uses position:absolute + transform:translate(-50%,-50%)
+    # to center itself around that origin — no offset from <style> tags possible.
+    _ring_css = (
+        '<style>'
+        '@keyframes great-night-pulse {'
+        '0%{transform:translate(-50%,-50%) scale(0.6);opacity:0.9;}'
+        '70%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}'
+        '100%{transform:translate(-50%,-50%) scale(0.6);opacity:0;}}'
+        '.great-night-ring{'
+        'pointer-events:none!important;'
+        'overflow:visible!important;}'
+        '</style>'
+    )
+
+    def _make_ring_div(color, shadow):
+        return (
+            '<div style="position:absolute;top:0;left:0;'
+            'width:64px;height:64px;border-radius:50%;'
+            f'border:3px solid {color};'
+            f'box-shadow:0 0 14px {shadow};'
+            'animation:great-night-pulse 1.8s ease-out infinite;'
+            'pointer-events:none;"></div>'
+        )
+
+    def _add_rings(locations, color, shadow, css_already_injected=False):
+        """Render ring markers for a list of (lat,lon) or (name,coords,verdict) entries."""
+        ring_div = _make_ring_div(color, shadow)
+        for _i, entry in enumerate(locations):
+            coords = entry[1] if isinstance(entry[0], str) else list(entry)
+            _html = (_ring_css if (_i == 0 and not css_already_injected) else "") + ring_div
+            folium.Marker(
+                list(coords),
+                icon=folium.DivIcon(
+                    html=_html,
+                    icon_size=(0, 0), icon_anchor=(0, 0),
+                    class_name="great-night-ring"),
+            ).add_to(m)
+        return True  # css injected
+
+    _is_best_ring    = st.session_state.get("_scan_best", False)
+    _is_tonight_ring = st.session_state.get("_scan_tonight", False)
+
+    if _is_tonight_ring:
+        _top3_ring_tn = _scan_r.get("top3", None)
+        if _top3_ring_tn:
+            # top3 entries: (date, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend)
+            _locs_tn = [(_tln3, _tlc3, None) for _, _, _tln3, _tlc3, *_ in _top3_ring_tn]
+        else:
+            _locs_tn = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+        _add_rings(_locs_tn, "#fbcfe8", "rgba(251,207,232,0.85)")
+
+    elif _is_best_ring:
+        _top3_ring = _scan_r.get("top3", None)
+        if _top3_ring:
+            _locs_best = [(_tln3, _tlc3, None) for _, _, _tln3, _tlc3, *_ in _top3_ring]
+        else:
+            _locs_best = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+        _add_rings(_locs_best, "#fbbf24", "rgba(251,191,36,0.85)")
+
+    else:
+        # Scan command: vẽ vòng tròn xanh cho tất cả địa điểm PERFECT NIGHT
+        _all_locs = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
+        _add_rings(_all_locs, "#6ee7b7", "rgba(110,231,183,0.8)")
+
 if not is_bookmark:
     folium.Marker(
         [st.session_state.lat, st.session_state.lon],
@@ -2749,6 +3460,206 @@ if _verdict:
 </div>"""
     st.markdown(_html_label, unsafe_allow_html=True)
 
+# ── SCAN RESULT BANNER — overlay bottom-left của map ────────────────────────
+# Dùng cùng cơ chế margin-top âm như top-center label (đã được xác nhận hoạt động).
+# Map height=575. top-center dùng margin-top=-644, position:absolute;top:40px.
+# Bottom-left: margin-top=-644 + position:absolute;top:505px (575-56px banner-14px padding)
+_scan_r2 = st.session_state._scan_result
+
+if _scan_r2 and _scan_r2 != "none":
+    _sr_date2   = _scan_r2["date"]
+    _all_locs2  = _scan_r2.get("all_locs", [(_scan_r2["loc_name"], _scan_r2["loc_coords"], _scan_r2["verdict"])])
+    _n_spots    = len(_all_locs2)
+    _is_best_banner = st.session_state.get("_scan_best", False)
+    _is_tonight_banner = st.session_state.get("_scan_tonight", False)
+    _sr_tier    = _scan_r2["verdict"].get("tier", "PERFECT NIGHT")
+    _top3       = _scan_r2.get("top3", None)
+
+    if _is_tonight_banner and _top3:
+        # ── Tonight banner: pink theme, top3 đêm nay ────────────────────────────
+        _EN_WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        _rank_icons = ["🥇", "🥈", "🥉"]
+        _rows_html_parts_tn = []
+        _top3_len_tn = len(_top3)
+        for _i, (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in enumerate(_top3):
+            _rank_icon = _rank_icons[_i] if _i < 3 else "▪"
+            _short_name = _tln.split(",")[0].strip()
+            _short_name = _short_name.split(".", 1)[-1].strip() if "." in _short_name else _short_name
+            _streak = _tv.get("best_streak", 0)
+            _stars = _tv.get("stars", "")
+            _day_str = f"{_td.month}/{_td.day} {_EN_WD[_td.weekday()]}"
+            _is_last_row_tn = (_i == _top3_len_tn - 1)
+            _row_border_tn = "" if _is_last_row_tn else "border-bottom:1px solid rgba(251,207,232,0.22);"
+            _rows_html_parts_tn.append(
+                f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;{_row_border_tn}">'
+                f'<span style="font-size:15px;flex-shrink:0;">{_rank_icon}</span>'
+                f'<span style="color:#fbcfe8;font-weight:700;font-size:13px;flex:1;'
+                f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_short_name}</span>'
+                f'<span style="color:#f9a8d4;font-size:11px;flex-shrink:0;">{_day_str}</span>'
+                f'<span style="color:#f472b6;font-size:12px;flex-shrink:0;">{_stars}</span>'
+                f'<span style="color:#fbcfe8;font-size:10px;flex-shrink:0;">{_streak}h</span>'
+                f'</div>'
+            )
+        _moon_tn = _scan_r2["moon_illum"]
+        _rows_joined_tn = "".join(_rows_html_parts_tn)
+        _region_lbl_tn = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+        st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:457px;left:2px;
+  width:320px;
+  background:rgba(40,5,20,0.95);border:1.5px solid rgba(251,207,232,0.80);
+  border-radius:10px;padding:8px 12px;
+  font-family:sans-serif;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+<div style="color:#fbcfe8;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
+🌸 Tonight — best spots ({_region_lbl_tn}) / moon {_moon_tn:.0f}%
+</div>
+{_rows_joined_tn}
+</div>
+</div>""", unsafe_allow_html=True)
+    elif _is_best_banner and _top3:
+        # ── Best banner: hiện 3 địa điểm xếp hạng cao nhất ─────────────────────
+        _EN_WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        _top3_dates_seen = set()
+        _top3_dates_list = []
+        for (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in _top3:
+            _dk = _td.strftime("%Y-%m-%d")
+            if _dk not in _top3_dates_seen:
+                _top3_dates_seen.add(_dk)
+                _top3_dates_list.append(_td)
+        if len(_top3_dates_list) == 1:
+            _dh0 = _top3_dates_list[0]
+            _date_header = f"Best locations this week ({_dh0.month}/{_dh0.day} {_EN_WD[_dh0.weekday()]})"
+        else:
+            _dparts = [f"{_dx.month}/{_dx.day} {_EN_WD[_dx.weekday()]}" for _dx in _top3_dates_list]
+            _date_header = f"Best locations this week ({', '.join(_dparts)})"
+        _region_lbl_best = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+        _date_header = f"{_date_header} — {_region_lbl_best}"
+        _rank_icons = ["🥇", "🥈", "🥉"]
+        _rows_html_parts = []
+        _top3_len = len(_top3)
+        for _i, (_td, _tdoff, _tln, _tlc, _tv, _tmi, _tiw) in enumerate(_top3):
+            _rank_icon = _rank_icons[_i] if _i < 3 else "▪"
+            _short_name = _tln.split(",")[0].strip()
+            _short_name = _short_name.split(".", 1)[-1].strip() if "." in _short_name else _short_name
+            _streak = _tv.get("best_streak", 0)
+            _stars = _tv.get("stars", "")
+            _loc_color = "#fcd34d" if _tiw else "#e2e8f0"
+            _day_str = f"{_td.month}/{_td.day} {_EN_WD[_td.weekday()]}"
+            _is_last_row = (_i == _top3_len - 1)
+            _row_border = "" if _is_last_row else "border-bottom:1px solid rgba(251,146,36,0.18);"
+            _rows_html_parts.append(
+                f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;{_row_border}">'
+                f'<span style="font-size:15px;flex-shrink:0;">{_rank_icon}</span>'
+                f'<span style="color:{_loc_color};font-weight:700;font-size:13px;flex:1;'
+                f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_short_name}</span>'
+                f'<span style="color:#94a3b8;font-size:11px;flex-shrink:0;">{_day_str}</span>'
+                f'<span style="color:#fbbf24;font-size:12px;flex-shrink:0;">{_stars}</span>'
+                f'<span style="color:#6ee7b7;font-size:10px;flex-shrink:0;">{_streak}h</span>'
+                f'</div>'
+            )
+        _rows_joined = "".join(_rows_html_parts)
+        st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:457px;left:2px;
+  width:320px;
+  background:rgba(40,15,5,0.95);border:1.5px solid rgba(251,146,36,0.85);
+  border-radius:10px;padding:8px 12px;
+  font-family:sans-serif;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+<div style="color:#fb923c;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
+🏆 {_date_header}
+</div>
+{_rows_joined}
+</div>
+</div>""", unsafe_allow_html=True)
+    else:
+        # ── scan banner (không phải best) hoặc best không có top3 ──────────────
+        if _is_best_banner:
+            _ban_bg  = "rgba(40,15,5,0.93)"
+            _ban_bdr = "rgba(251,146,36,0.85)"
+            _ban_clr = "#fcd34d"
+            _ban_loc = _scan_r2["loc_name"].split(",")[0].strip()
+            _ban_loc = _ban_loc.split(".",1)[-1].strip() if "." in _ban_loc else _ban_loc
+            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} ({_region_lbl_fb}) / moon {_scan_r2['moon_illum']:.0f}%"
+        else:
+            _ban_bg  = "rgba(5,25,18,0.92)"
+            _ban_bdr = "rgba(52,211,153,0.75)"
+            _ban_clr = "#6ee7b7"
+            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+            _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT ({_region_lbl_fb})   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
+        st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:557px;left:2px;
+  display:inline-flex;align-items:center;
+  white-space:nowrap;width:fit-content;
+  background:{_ban_bg};border:1.5px solid {_ban_bdr};
+  border-radius:10px;padding:6px 13px;
+  font-family:sans-serif;color:{_ban_clr};font-size:13px;font-weight:700;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+{_ban_txt}
+</div>
+</div>""", unsafe_allow_html=True)
+
+elif _scan_r2 == "none":
+    _is_tonight_none = st.session_state.get("_scan_tonight", False)
+    _is_best_none    = st.session_state.get("_scan_best", False)
+    if _is_tonight_none:
+        _range_lbl = "tonight"
+    elif _is_best_none:
+        _range_lbl = "next 7 days"
+    else:
+        _scan_days_lbl = st.session_state._scan_days
+        _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
+    _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
+    _fallback_lbl = st.session_state.get("_scan_fallback_label") or "unsettled weather"
+    # ── Map fallback label → weather icons ──────────────────────────────────────
+    def _fallback_icons(label):
+        """Trả về 1-3 icon tương ứng với thời tiết trong fallback label."""
+        _icons = []
+        _lbl_lower = label.lower()
+        if "snow" in _lbl_lower:
+            _icons.append("❄️")
+        if "rain" in _lbl_lower:
+            _icons.append("🌧️")
+        if "cloud" in _lbl_lower:
+            _icons.append("☁️")
+        if not _icons:
+            if "clear" in _lbl_lower or "mostly clear" in _lbl_lower:
+                _icons.append("🌟")
+            elif "patchy" in _lbl_lower:
+                _icons.append("🌤️")
+            elif "bright" in _lbl_lower:
+                _icons.append("🌃")
+            else:
+                _icons.append("🌥️")
+        return " ".join(_icons)
+    _fallback_icon_str = _fallback_icons(_fallback_lbl)
+    st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:557px;left:2px;
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;width:fit-content;
+  background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
+  border-radius:10px;padding:6px 13px;
+  font-family:sans-serif;color:#94a3b8;font-size:12px;font-weight:600;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+<span style="font-size:15px;">{_fallback_icon_str}</span><span>{_fallback_lbl} in {_region_lbl_none} {_range_lbl}</span>
+</div>
+</div>""", unsafe_allow_html=True)
+
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
 _lpm_url = (f"https://lightpollutionmap.app/"
@@ -2758,6 +3669,49 @@ _lpm_url = (f"https://lightpollutionmap.app/"
 if map_data:
     clicked_tip = map_data.get("last_object_clicked_tooltip")
     lc          = map_data.get("last_clicked")
+
+    # ── Priority 0: SCAN sentinel — generic region-based encoding ───────────────
+    # lat=89.95 → plain region scan (lng = 100+region_idx+day_off*0.01)
+    # lat=89.85 → best <region>     (lng = 100+region_idx)
+    # lat=89.75 → tonight <region>  (lng = 100+region_idx)
+    # lat=89.65 → "off": tắt banner/ring ngay lập tức, không load data
+    # region_idx: 0=hokkaido,1=tohoku,2=kanto,3=chubu,4=kansai,5=chugoku,6=shikoku,7=kyushu,8=okinawa,9=japan
+    _REGION_BY_IDX = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa", "japan"]
+    _lc_lat = lc.get("lat", 0) if lc else 0
+    _lc_lng = lc.get("lng", 0) if lc else 0
+    _is_scan_trig    = abs(_lc_lat - 89.95) < 0.02
+    _is_best_trig    = abs(_lc_lat - 89.85) < 0.02
+    _is_tonight_trig = abs(_lc_lat - 89.75) < 0.02
+    _is_off_trig     = abs(_lc_lat - 89.65) < 0.02
+    if _is_off_trig and lc and lc != st.session_state._last_lc:
+        # "off": tắt kết quả search ngay — không gọi _run_*_scan, không gọi API.
+        st.session_state._last_lc       = lc
+        st.session_state._scan_result   = None
+        st.session_state._scan_fallback_label = None
+        st.session_state._scan_scanning = False
+        st.rerun()
+    _is_any_scan = _is_scan_trig or _is_best_trig or _is_tonight_trig
+    _matched_region = None
+    _matched_days = None
+    if _is_any_scan:
+        _offset = _lc_lng - 100.0
+        if -0.01 <= _offset <= 9.07:  # region_idx 0-9, day_off 0-6 (*0.01)
+            _ridx = int(round(_offset))
+            # day_off chỉ áp dụng cho plain scan; với best/tonight luôn lng = 100+idx (day frac ~0)
+            _frac = _offset - _ridx
+            _dayoff_guess = int(round(_frac * 100))
+            if 0 <= _ridx <= 9 and 0 <= _dayoff_guess <= 6:
+                _matched_region = _REGION_BY_IDX[_ridx]
+                _matched_days = _dayoff_guess
+    if lc and lc != st.session_state._last_lc and _matched_region is not None:
+        st.session_state._last_lc       = lc
+        st.session_state._scan_days     = _matched_days if _is_scan_trig else 0
+        st.session_state._scan_region   = _matched_region
+        st.session_state._scan_best     = _is_best_trig
+        st.session_state._scan_tonight  = _is_tonight_trig
+        st.session_state._scan_scanning = True
+        st.rerun()
+
 
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
     # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
