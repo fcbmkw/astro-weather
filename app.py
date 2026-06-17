@@ -2905,7 +2905,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         // Hidden keyword — "<region>" / "<region> N" / "best <region>" / "tonight <region>"
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
-        var _bareRegionRe   = new RegExp('^' + _regionPattern + '(\\s+(\\d+))?$');
+        var _bareRegionRe   = new RegExp('^' + _regionPattern + '([\\s\\-]+(\\d+))?$');
         var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
         var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
         var _qIsBest    = /^best(\s|$)/.test(q);
@@ -3015,7 +3015,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
           }
-          var _mScan = _sv.match(new RegExp('^' + _rgx + '(\\s+(\\d+))?$'));
+          var _mScan = _sv.match(new RegExp('^' + _rgx + '([\\s\\-]+(\\d+))?$'));
           if (_mScan) {
             var _rScan = _mScan[1];
             var _days = parseInt(_mScan[3]) || 0;
