@@ -2908,10 +2908,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.style.display = 'block';
           return;
         }
-        // Hidden keyword — "<region>" / "<region> N" / "best <region>" / "tonight <region>"
+        // Hidden keyword — "<region>" / "<region>N" / "best <region>" / "tonight <region>"
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
-        var _bareRegionRe   = new RegExp('^' + _regionPattern + '([\\s\\-]+(\\d+))?$');
+        var _bareRegionRe   = new RegExp('^' + _regionPattern + '(\\d+)?$');
         var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
         var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
         var _qIsBest    = /^best(\s|$)/.test(q);
@@ -2960,12 +2960,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             _renderRegionHints(bestHints, '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // Bare region command: "<region>" / "<region> N" → scan hints with day offsets 0-6
+          // Bare region command: "<region>" / "<region>N" → scan hints with day offsets 0-6
           var _mBare = q.match(_bareRegionRe);
           var _region = _mBare[1];
           var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
           var scanHints = _dayLabels.map(function(lbl, n){
-            return {label: _region + (n === 0 ? '' : ' ' + n),
+            return {label: _region + (n === 0 ? '' : n),
                      desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
                      fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)};
           });
@@ -3022,10 +3022,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
           }
-          var _mScan = _sv.match(new RegExp('^' + _rgx + '([\\s\\-]+(\\d+))?$'));
+          var _mScan = _sv.match(new RegExp('^' + _rgx + '(\\d+)?$'));
           if (_mScan) {
             var _rScan = _mScan[1];
-            var _days = parseInt(_mScan[3]) || 0;
+            var _days = parseInt(_mScan[2]) || 0;
             if (_days < 0 || _days > 6) _days = 0;
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
@@ -3049,10 +3049,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           }
           if (dropdown.style.display === 'none') {
             // Dropdown ẩn nhưng có thể là region command → check trước khi return
-            var _mScanH = _sv.match(new RegExp('^' + _rgx + '(\\s+(\\d+))?$'));
+            var _mScanH = _sv.match(new RegExp('^' + _rgx + '(\\d+)?$'));
             if (_mScanH) {
               var _rScanH = _mScanH[1];
-              var _daysH = parseInt(_mScanH[3]) || 0;
+              var _daysH = parseInt(_mScanH[2]) || 0;
               if (_daysH < 0 || _daysH > 6) _daysH = 0;
               inp.value = ''; clr.style.display = 'none';
               if (typeof window._triggerScan === 'function') window._triggerScan(_rScanH, _daysH);
@@ -3066,10 +3066,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             // thử match region command một lần nữa trước khi geocode
             var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
             var _rgx2 = '(' + _RN2.join('|') + ')';
-            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '(\\s+(\\d+))?$'));
+            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '(\\d+)?$'));
             if (_mScan2) {
               var _rScan2 = _mScan2[1];
-              var _days2 = parseInt(_mScan2[3]) || 0;
+              var _days2 = parseInt(_mScan2[2]) || 0;
               if (_days2 < 0 || _days2 > 6) _days2 = 0;
               inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
               if (typeof window._triggerScan === 'function') window._triggerScan(_rScan2, _days2);
