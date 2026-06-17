@@ -2928,6 +2928,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
                 inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
                 fn();
               }; })(h.fn));
+              _items.push(row);  // ← push vào _items để Enter key có thể click
             });
             dropdown.style.display = 'block';
           }
@@ -3044,6 +3045,19 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           if (_activeIdx >= 0 && _activeIdx < _items.length) {
             _items[_activeIdx].click();
           } else {
+            // Last-resort: nếu dropdown đang hiện nhưng không có item được chọn,
+            // thử match region command một lần nữa trước khi geocode
+            var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+            var _rgx2 = '(' + _RN2.join('|') + ')';
+            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '(\\s+(\\d+))?$'));
+            if (_mScan2) {
+              var _rScan2 = _mScan2[1];
+              var _days2 = parseInt(_mScan2[3]) || 0;
+              if (_days2 < 0 || _days2 > 6) _days2 = 0;
+              inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+              if (typeof window._triggerScan === 'function') window._triggerScan(_rScan2, _days2);
+              return;
+            }
             dropdown.style.display = 'none';
             _geocodeAndFly(inp.value.trim());
           }
