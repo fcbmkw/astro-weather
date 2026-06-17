@@ -2766,6 +2766,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         _items = [];
         _activeIdx = -1;
         if (results.length === 0) {
+          // Nếu query là region command (có trailing space chờ số) → ẩn dropdown
+          // để không rơi vào geocodeAndFly khi Enter
+          var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
+          var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+          var _isRegionCmd = _RNchk.some(function(r){ return _qNow === r || _qNow.indexOf(r+' ') === 0; });
+          if (_isRegionCmd) { dropdown.style.display = 'none'; return; }
           var empty = L.DomUtil.create('div', '', dropdown);
           empty.style.cssText = 'padding:10px 14px;color:#64748b;font-size:12px;';
           empty.textContent = 'No match — press Enter to geocode';
@@ -3041,7 +3047,18 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBestFb);
             return;
           }
-          if (dropdown.style.display === 'none') return;
+          if (dropdown.style.display === 'none') {
+            // Dropdown ẩn nhưng có thể là region command → check trước khi return
+            var _mScanH = _sv.match(new RegExp('^' + _rgx + '(\\s+(\\d+))?$'));
+            if (_mScanH) {
+              var _rScanH = _mScanH[1];
+              var _daysH = parseInt(_mScanH[3]) || 0;
+              if (_daysH < 0 || _daysH > 6) _daysH = 0;
+              inp.value = ''; clr.style.display = 'none';
+              if (typeof window._triggerScan === 'function') window._triggerScan(_rScanH, _daysH);
+            }
+            return;
+          }
           if (_activeIdx >= 0 && _activeIdx < _items.length) {
             _items[_activeIdx].click();
           } else {
