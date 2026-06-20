@@ -2963,6 +2963,19 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           // Bare region command: "<region>" / "<region>N" → scan hints with day offsets 0-6
           var _mBare = q.match(_bareRegionRe);
           var _region = _mBare[1];
+          var _dayNum = _mBare[2] ? parseInt(_mBare[2]) : null;
+          // If user typed exact command like "kanto1" (with number) → auto-trigger immediately
+          if (_dayNum !== null && _dayNum >= 0 && _dayNum <= 6) {
+            dropdown.innerHTML = '';
+            _items = []; _activeIdx = -1;
+            var autoRow = L.DomUtil.create('div', '', dropdown);
+            autoRow.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;';
+            var _dayLabelsAuto = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
+            autoRow.textContent = '\u25ba ' + _region + _dayNum + ' → ' + _dayLabelsAuto[_dayNum] + ' (' + _REGION_LABEL[_region] + ')';
+            dropdown.style.display = 'block';
+            if (typeof window._triggerScan === 'function') window._triggerScan(_region, _dayNum);
+            return;
+          }
           var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
           var scanHints = _dayLabels.map(function(lbl, n){
             return {label: _region + (n === 0 ? '' : n),
