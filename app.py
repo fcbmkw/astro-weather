@@ -4422,4 +4422,4 @@ st.plotly_chart(fig, use_container_width=True)
 
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="footer-copyright">© Copyright: instagram: fcbmkw</div>', unsafe_allow_html=True)s
+st.markdown('<div class="footer-copyright">© Copyright: instagram: fcbmkw</div>', unsafe_allow_html=True)
