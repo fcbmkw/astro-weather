@@ -2964,25 +2964,30 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           var _mBare = q.match(_bareRegionRe);
           var _region = _mBare[1];
           var _dayNum = _mBare[2] ? parseInt(_mBare[2]) : null;
-          // If user typed exact command like "kanto1" (with number) → show clickable row + trigger
+          // If user typed exact command like "kanto1" (with number) → show clickable row only (no auto-trigger)
+          // Auto-triggering in the input event causes Streamlit to rerun/reload JS → dropdown
+          // disappears instantly → Enter then sees dropdown hidden → falls to geocode → "location not found"
           if (_dayNum !== null && _dayNum >= 0 && _dayNum <= 6) {
             dropdown.innerHTML = '';
             _items = []; _activeIdx = -1;
             var _dayLabelsAuto = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
             var autoRow = L.DomUtil.create('div', '', dropdown);
-            autoRow.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+            autoRow.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+              + 'color:#34d399;border-bottom:1px solid rgba(51,65,85,0.4);'
+              + 'display:flex;justify-content:space-between;align-items:center;';
             var autoLbl = L.DomUtil.create('span', '', autoRow);
             autoLbl.style.fontWeight = '700';
             autoLbl.textContent = _region + _dayNum;
             var autoDesc = L.DomUtil.create('span', '', autoRow);
-            autoDesc.style.cssText = 'font-size:10px;opacity:0.75;';
+            autoDesc.style.cssText = 'font-size:10px;opacity:0.65;';
             autoDesc.textContent = _dayLabelsAuto[_dayNum] + ' (' + _REGION_LABEL[_region] + ')';
             _items.push(autoRow);
-            var _capRegion = _region, _capDayNum = _dayNum;
-            L.DomEvent.on(autoRow, 'click', function(){
-              inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-              if (typeof window._triggerScan === 'function') window._triggerScan(_capRegion, _capDayNum);
-            });
+            (function(_r, _d) {
+              L.DomEvent.on(autoRow, 'click', function() {
+                inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+                if (typeof window._triggerScan === 'function') window._triggerScan(_r, _d);
+              });
+            })(_region, _dayNum);
             dropdown.style.display = 'block';
             return;
           }
