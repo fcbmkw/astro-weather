@@ -2964,16 +2964,26 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           var _mBare = q.match(_bareRegionRe);
           var _region = _mBare[1];
           var _dayNum = _mBare[2] ? parseInt(_mBare[2]) : null;
-          // If user typed exact command like "kanto1" (with number) → auto-trigger immediately
+          // If user typed exact command like "kanto1" (with number) → show clickable row + trigger
           if (_dayNum !== null && _dayNum >= 0 && _dayNum <= 6) {
             dropdown.innerHTML = '';
             _items = []; _activeIdx = -1;
-            var autoRow = L.DomUtil.create('div', '', dropdown);
-            autoRow.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;';
             var _dayLabelsAuto = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
-            autoRow.textContent = '\u25ba ' + _region + _dayNum + ' → ' + _dayLabelsAuto[_dayNum] + ' (' + _REGION_LABEL[_region] + ')';
+            var autoRow = L.DomUtil.create('div', '', dropdown);
+            autoRow.style.cssText = 'padding:8px 14px;font-size:12px;color:#34d399;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+            var autoLbl = L.DomUtil.create('span', '', autoRow);
+            autoLbl.style.fontWeight = '700';
+            autoLbl.textContent = _region + _dayNum;
+            var autoDesc = L.DomUtil.create('span', '', autoRow);
+            autoDesc.style.cssText = 'font-size:10px;opacity:0.75;';
+            autoDesc.textContent = _dayLabelsAuto[_dayNum] + ' (' + _REGION_LABEL[_region] + ')';
+            _items.push(autoRow);
+            var _capRegion = _region, _capDayNum = _dayNum;
+            L.DomEvent.on(autoRow, 'click', function(){
+              inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+              if (typeof window._triggerScan === 'function') window._triggerScan(_capRegion, _capDayNum);
+            });
             dropdown.style.display = 'block';
-            if (typeof window._triggerScan === 'function') window._triggerScan(_region, _dayNum);
             return;
           }
           var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
