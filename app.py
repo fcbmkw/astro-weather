@@ -2770,7 +2770,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           // để không rơi vào geocodeAndFly khi Enter
           var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
           var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
-          var _isRegionCmd = _RNchk.some(function(r){ return _qNow === r || _qNow.indexOf(r+' ') === 0; });
+          var _isRegionCmd = _RNchk.some(function(r){ return _qNow === r || _qNow.indexOf(r+' ') === 0 || new RegExp('^' + r + '\\d+$').test(_qNow); });
           if (_isRegionCmd) { dropdown.style.display = 'none'; return; }
           var empty = L.DomUtil.create('div', '', dropdown);
           empty.style.cssText = 'padding:10px 14px;color:#64748b;font-size:12px;';
@@ -4422,4 +4422,4 @@ st.plotly_chart(fig, use_container_width=True)
 
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="footer-copyright">© Copyright: instagram: fcbmkw</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer-copyright">© Copyright: instagram: fcbmkw</div>', unsafe_allow_html=True)s
