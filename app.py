@@ -2985,7 +2985,6 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
           var helpLines = [
-            {label: 'CODE VERSION:', desc: 'region-rewrite-v2', color: '#f87171'},
             {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan', color: '#94a3b8'},
             {label: 'Search best location keyword:', desc: 'best', color: '#34d399'},
             {label: 'Search tonight keyword:', desc: 'tonight', color: '#fbcfe8'},
@@ -3060,10 +3059,18 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             });
             dropdown.style.display = 'block';
           }
+          // Helper: lấy danh sách region khớp với prefix đã gõ (sau keyword "best"/"tonight")
+          function _filterRegionsByPrefix(typedAfterKeyword) {
+            var prefix = typedAfterKeyword ? typedAfterKeyword.trim() : '';
+            if (!prefix) return _REGION_NAMES;
+            // Nếu là exact region → chỉ trả về region đó
+            if (_REGION_NAMES.indexOf(prefix) !== -1) return [prefix];
+            // Không phải exact → filter theo startsWith prefix
+            return _REGION_NAMES.filter(function(r){ return r.indexOf(prefix) === 0; });
+          }
           if (_qIsTonight) {
-            var _mTn = q.match(_tonightRegionRe);
-            var _typedTn = _mTn && _mTn[1] ? _mTn[1].trim() : '';
-            var _regionsTn = _typedTn ? [_typedTn] : _REGION_NAMES;
+            var _typedTn = q.slice('tonight'.length).trim(); // phần sau "tonight"
+            var _regionsTn = _filterRegionsByPrefix(_typedTn);
             var tonightHints = _regionsTn.map(function(r){
               return {label: 'tonight ' + r, desc: 'Best spots tonight (' + _REGION_LABEL[r] + ')',
                        fn: (function(rr){ return function(){ window._triggerTonight(rr); }; })(r)};
@@ -3072,9 +3079,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             return;
           }
           if (_qIsBest) {
-            var _mBest = q.match(_bestRegionRe);
-            var _typedBest = _mBest && _mBest[1] ? _mBest[1].trim() : '';
-            var _regionsBest = _typedBest ? [_typedBest] : _REGION_NAMES;
+            var _typedBest = q.slice('best'.length).trim(); // phần sau "best"
+            var _regionsBest = _filterRegionsByPrefix(_typedBest);
             var bestHints = _regionsBest.map(function(r){
               return {label: 'best ' + r, desc: 'Best night 7d (' + _REGION_LABEL[r] + ')',
                        fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(r)};
@@ -3097,9 +3103,9 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             }], '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // 'kanto' (no number) → full menu: best kanto + kanto 1..6 (same shape as 'mkw' bare menu)
+          // 'kanto' (no number) → full menu: kanto best + kanto 1..6 (same shape as 'mkw' bare menu)
           var _regionHints = [{
-            label: 'best ' + _region, desc: 'Best night 7d (' + _REGION_LABEL[_region] + ')',
+            label: _region + ' best', desc: 'Best night 7d (' + _REGION_LABEL[_region] + ')',
             fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(_region)
           }];
           for (var _rn = 1; _rn <= 6; _rn++) {
