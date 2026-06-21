@@ -3087,12 +3087,20 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             }], '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // Bare "<region>" (no number) → behave like "<region> best"
-          _renderRegionHints([{
-            label: _region + ' best',
+          // Bare "<region>" (no number) → "best <region>" first, then kanto 1..6 as before
+          var _dayLabels = ['Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
+          var scanHints = [{
+            label: 'best ' + _region,
             desc:  'Best night 7d (' + _REGION_LABEL[_region] + ')',
             fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(_region)
-          }], '#34d399', 'rgba(51,65,85,0.4)');
+          }];
+          _dayLabels.forEach(function(lbl, i){
+            var n = i + 1;
+            scanHints.push({label: _region + ' ' + n,
+                     desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
+                     fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)});
+          });
+          _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
           return;
         }
 
@@ -3188,7 +3196,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
             return;
           }
-          // Bare "<region>" (no number) + Enter → same as "<region> best"
+          // Bare "<region>" (no number) + Enter → same as "best <region>"
           var _mBareEnter = _sv.match(new RegExp('^' + _rgx + '$'));
           if (_mBareEnter) {
             var _rBareEnter = _mBareEnter[1];
