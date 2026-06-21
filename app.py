@@ -2482,20 +2482,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       a.onmouseover = function(){ a.style.background = 'rgba(34,197,94,0.28)'; };
       a.onmouseout  = function(){ a.style.background = 'rgba(34,197,94,0.12)'; };
 
-      // ── SCAN trigger — hidden; called by search box with "<region>", "<region> N", "best <region>", "tonight <region>" ───
+      // ── SCAN trigger — hidden; called by search box with "best <region>", "tonight <region>" ───
       // Sentinel encoding (lat below Mercator max 85.05, always valid click):
-      //   lat=89.95 → plain region scan (day_off encoded in lng)
       //   lat=89.85 → best <region>   (no day_off needed — always scans 7 days)
       //   lat=89.75 → tonight <region> (no day_off needed — always tonight)
-      // lng = 100 + region_idx + day_off*0.01  (region_idx: 0=hokkaido..8=okinawa, 9=japan)
+      // lng = 100 + region_idx  (region_idx: 0=hokkaido..8=okinawa, 9=japan)
       var _REGION_IDX = { hokkaido:0, tohoku:1, kanto:2, chubu:3, kansai:4, chugoku:5, shikoku:6, kyushu:7, okinawa:8, japan:9 };
-      window._triggerScan = function(region, days) {
-        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
-        var n = (days >= 0 && days <= 6) ? days : 0;
-        var d = (n === 0) ? 0 : (n - 1); // "<region> N" (N>=1) -> day_off N-1 (tonight = N=1)
-        var lng = 100 + idx + d * 0.01;
-        map.fire('click', { latlng: L.latLng(89.95, lng) });
-      };
       window._triggerBest = function(region) {
         var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
         map.fire('click', { latlng: L.latLng(89.85, 100 + idx) });
@@ -2517,6 +2509,16 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       window._triggerMkwBest = function() {
         map.fire('click', { latlng: L.latLng(89.45, 200) });
       };
+      // ── REGION scan trigger — rewritten from scratch, mirrors mkw's pattern exactly ──
+      // lat=89.35 → region scan "<region> N" (N=1..6), region_idx in tens place, day_off-1 in hundredths.
+      // lng = 300 + region_idx*10 + (N-1)   (region_idx 0-9, N-1 is 0-5 → always fits, no rounding ambiguity)
+      window._triggerRegionScan = function(region, n) {
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        var nn = (n >= 1 && n <= 6) ? n : 1;
+        var lng = 300 + idx * 10 + (nn - 1);
+        map.fire('click', { latlng: L.latLng(89.35, lng) });
+      };
+
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -3019,7 +3021,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.style.display = 'block';
           return;
         }
-        // Hidden keyword — "<region>" / "<region>N" / "best <region>" / "tonight <region>"
+        // Hidden keyword — "<region>" / "<region> N" / "best <region>" / "tonight <region>"
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
         var _bareRegionRe  = new RegExp('^' + _regionPattern + '(\\s+[1-6])?$');
@@ -3072,35 +3074,31 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             _renderRegionHints(bestHints, '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // Bare region command: "<region>" / "<region>N" → scan hints with day offsets 0-6
+          // ── Bare region command — rewritten from scratch, mirrors mkw dropdown exactly ──
           var _mBare = q.match(_bareRegionRe);
           var _region = _mBare ? _mBare[1] : (q.match(_bareTypingRe)||[])[1];
           var _suffix = (_mBare && _mBare[2]) ? _mBare[2].trim() : null; // '1'~'6' | null
-          // Exact command e.g. 'kanto 3' → single clickable row
+          var _regionDayLbl = ['Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
           if (_suffix !== null) {
+            // Exact command e.g. 'kanto 3' → single clickable row (same as 'mkw 3')
             var _dayNum = parseInt(_suffix);
-            var _dl = ['Earliest','Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
             _renderRegionHints([{
-              label: _region + ' ' + _suffix,
-              desc:  _dl[_dayNum] + ' (' + _REGION_LABEL[_region] + ')',
-              fn: (function(rr,nn){ return function(){ window._triggerScan(rr,nn); }; })(_region,_dayNum)
+              label: _region + ' ' + _dayNum,
+              desc:  _regionDayLbl[_dayNum - 1] + ' (' + _REGION_LABEL[_region] + ')',
+              fn: (function(rr,nn){ return function(){ window._triggerRegionScan(rr,nn); }; })(_region,_dayNum)
             }], '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // Bare "<region>" (no number) → "best <region>" first, then kanto 1..6 as before
-          var _dayLabels = ['Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
-          var scanHints = [{
-            label: 'best ' + _region,
-            desc:  'Best night 7d (' + _REGION_LABEL[_region] + ')',
+          // 'kanto' (no number) → full menu: best kanto + kanto 1..6 (same shape as 'mkw' bare menu)
+          var _regionHints = [{
+            label: 'best ' + _region, desc: 'Best night 7d (' + _REGION_LABEL[_region] + ')',
             fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(_region)
           }];
-          _dayLabels.forEach(function(lbl, i){
-            var n = i + 1;
-            scanHints.push({label: _region + ' ' + n,
-                     desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
-                     fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)});
-          });
-          _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
+          for (var _rn = 1; _rn <= 6; _rn++) {
+            _regionHints.push({label: _region + ' ' + _rn, desc: _regionDayLbl[_rn - 1] + ' (' + _REGION_LABEL[_region] + ')',
+              fn: (function(rr,nn){ return function(){ window._triggerRegionScan(rr,nn); }; })(_region,_rn)});
+          }
+          _renderRegionHints(_regionHints, '#34d399', 'rgba(51,65,85,0.4)');
           return;
         }
 
@@ -3193,15 +3191,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             var _rScan = _mScan[1];
             var _days = parseInt(_mScan[2]);
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
-            return;
-          }
-          // Bare "<region>" (no number) + Enter → same as "best <region>"
-          var _mBareEnter = _sv.match(new RegExp('^' + _rgx + '$'));
-          if (_mBareEnter) {
-            var _rBareEnter = _mBareEnter[1];
-            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-            if (typeof window._triggerBest === 'function') window._triggerBest(_rBareEnter);
+            if (typeof window._triggerRegionScan === 'function') window._triggerRegionScan(_rScan, _days);
             return;
           }
           // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
@@ -3239,7 +3229,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               var _rScanH = _mScanH[1];
               var _daysH = parseInt(_mScanH[2]);
               inp.value = ''; clr.style.display = 'none';
-              if (typeof window._triggerScan === 'function') window._triggerScan(_rScanH, _daysH);
+              if (typeof window._triggerRegionScan === 'function') window._triggerRegionScan(_rScanH, _daysH);
             }
             return;
           }
@@ -3255,7 +3245,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
               var _rScan2 = _mScan2[1];
             var _days2 = parseInt(_mScan2[2]);
               inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
-              if (typeof window._triggerScan === 'function') window._triggerScan(_rScan2, _days2);
+              if (typeof window._triggerRegionScan === 'function') window._triggerRegionScan(_rScan2, _days2);
               return;
             }
             dropdown.style.display = 'none';
@@ -3854,20 +3844,20 @@ if map_data:
     lc          = map_data.get("last_clicked")
 
     # ── Priority 0: SCAN sentinel — generic region-based encoding ───────────────
-    # lat=89.95 → plain region scan (lng = 100+region_idx+day_off*0.01)
     # lat=89.85 → best <region>     (lng = 100+region_idx)
     # lat=89.75 → tonight <region>  (lng = 100+region_idx)
     # lat=89.65 → "off": tắt banner/ring ngay lập tức, không load data
+    # lat=89.35 → "<region> N" plain scan (lng = 300 + region_idx*10 + (N-1))  ← rewritten from scratch
     # region_idx: 0=hokkaido,1=tohoku,2=kanto,3=chubu,4=kansai,5=chugoku,6=shikoku,7=kyushu,8=okinawa,9=japan
     _REGION_BY_IDX = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa", "japan"]
     _lc_lat = lc.get("lat", 0) if lc else 0
     _lc_lng = lc.get("lng", 0) if lc else 0
-    _is_scan_trig    = abs(_lc_lat - 89.95) < 0.02
     _is_best_trig    = abs(_lc_lat - 89.85) < 0.02
     _is_tonight_trig = abs(_lc_lat - 89.75) < 0.02
     _is_off_trig     = abs(_lc_lat - 89.65) < 0.02
     _is_mkw_scan_trig = abs(_lc_lat - 89.55) < 0.02
     _is_mkw_best_trig = abs(_lc_lat - 89.45) < 0.02
+    _is_region_scan_trig = abs(_lc_lat - 89.35) < 0.02
     if _is_mkw_scan_trig and lc and lc != st.session_state._last_lc:
         _d = max(0, min(6, round((_lc_lng - 200.0) * 100)))
         st.session_state._last_lc = lc
@@ -3892,22 +3882,29 @@ if map_data:
         st.session_state._scan_fallback_label = None
         st.session_state._scan_scanning = False
         st.rerun()
-    _is_any_scan = _is_scan_trig or _is_best_trig or _is_tonight_trig
+    if _is_region_scan_trig and lc and lc != st.session_state._last_lc:
+        # lng = 300 + region_idx*10 + (N-1)  →  region_idx = (lng-300)//10, N-1 = (lng-300)%10
+        _raw = int(round(_lc_lng - 300.0))
+        _ridx2 = max(0, min(9, _raw // 10))
+        _nminus1 = max(0, min(5, _raw % 10))
+        st.session_state._last_lc = lc
+        st.session_state._scan_days = _nminus1
+        st.session_state._scan_region = _REGION_BY_IDX[_ridx2]
+        st.session_state._scan_best = False
+        st.session_state._scan_tonight = False
+        st.session_state._scan_scanning = True
+        st.rerun()
+    _is_any_scan = _is_best_trig or _is_tonight_trig
     _matched_region = None
-    _matched_days = None
     if _is_any_scan:
         _offset = _lc_lng - 100.0
-        if -0.01 <= _offset <= 9.07:  # region_idx 0-9, day_off 0-6 (*0.01)
+        if -0.01 <= _offset <= 9.01:  # region_idx 0-9
             _ridx = int(round(_offset))
-            # day_off chỉ áp dụng cho plain scan; với best/tonight luôn lng = 100+idx (day frac ~0)
-            _frac = _offset - _ridx
-            _dayoff_guess = int(round(_frac * 100))
-            if 0 <= _ridx <= 9 and 0 <= _dayoff_guess <= 6:
+            if 0 <= _ridx <= 9:
                 _matched_region = _REGION_BY_IDX[_ridx]
-                _matched_days = _dayoff_guess
     if lc and lc != st.session_state._last_lc and _matched_region is not None:
         st.session_state._last_lc       = lc
-        st.session_state._scan_days     = _matched_days if _is_scan_trig else 0
+        st.session_state._scan_days     = 0
         st.session_state._scan_region   = _matched_region
         st.session_state._scan_best     = _is_best_trig
         st.session_state._scan_tonight  = _is_tonight_trig
