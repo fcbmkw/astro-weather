@@ -2917,11 +2917,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
         // Match: bare region name (while typing), "region all", or "region N" (N=1..6)
         var _bareRegionRe   = new RegExp('^' + _regionPattern + '(\\s+(all|[1-6]))?$');
+        var _bareTypingRe   = new RegExp('^' + _regionPattern + '\\s+a?l?$');
         var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
         var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
         var _qIsBest    = /^best(\s|$)/.test(q);
         var _qIsTonight = /^tonight(\s|$)/.test(q);
-        var _qIsBareRegion = _bareRegionRe.test(q);
+        var _qIsBareRegion = _bareRegionRe.test(q) || _bareTypingRe.test(q);
         if (_qIsBest || _qIsTonight || _qIsBareRegion) {
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
@@ -2967,8 +2968,9 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           }
           // Bare region command → show menu: "region all" + "region 1".."region 6"
           var _mBare = q.match(_bareRegionRe);
-          var _region = _mBare[1];
-          var _suffix = _mBare[3] ? _mBare[3].trim() : null; // "all" | "1".."6" | null
+          var _mBareTyping = !_mBare && q.match(_bareTypingRe);
+          var _region = _mBare ? _mBare[1] : _mBareTyping[1];
+          var _suffix = (_mBare && _mBare[3]) ? _mBare[3].trim() : null; // "all" | "1".."6" | null (null = show full menu)
           var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
           if (_suffix !== null) {
             // User typed exact command e.g. "kanto all" or "kanto 3" → show single clickable row
