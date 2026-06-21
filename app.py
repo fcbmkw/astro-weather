@@ -2881,8 +2881,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
           var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
           var _isRegionCmd = _RNchk.some(function(r){
-            return _qNow === r || new RegExp('^'+r+'\\s+[1-6]$').test(_qNow)
-              || new RegExp('^'+r+'\\s*$').test(_qNow);
+            return _qNow === r || new RegExp('^'+r+' [1-6]$').test(_qNow)
+              || new RegExp('^'+r+' *$').test(_qNow);
           }) || /^mkw(\s+(best|[1-6]))?$/.test(_qNow);
           if (_isRegionCmd) { dropdown.style.display = 'none'; return; }
           var empty = L.DomUtil.create('div', '', dropdown);
@@ -3023,16 +3023,22 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           return;
         }
         // Hidden keyword — "<region>" / "<region> N" / "best <region>" / "tonight <region>"
+        // NOTE: q is already normalized (single space between words) by the input handler above,
+        // so we use a literal space character here instead of \s+ to avoid any risk of backslash
+        // characters being altered across Python/Jinja2/iframe-srcdoc serialization layers.
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
-        var _bareRegionRe  = new RegExp('^' + _regionPattern + '(\\s+[1-6])?$');
-        var _bareTypingRe  = new RegExp('^' + _regionPattern + '\\s*$');
-        var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
-        var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
-        var _qIsBest    = /^best(\s|$)/.test(q);
-        var _qIsTonight = /^tonight(\s|$)/.test(q);
+        var _bareRegionRe  = new RegExp('^' + _regionPattern + '( [1-6])?$');
+        var _bareTypingRe  = new RegExp('^' + _regionPattern + ' *$');
+        var _bestRegionRe   = new RegExp('^best( ' + _regionPattern + ')?$');
+        var _tonightRegionRe= new RegExp('^tonight( ' + _regionPattern + ')?$');
+        var _qIsBest    = (q === 'best' || q.indexOf('best ') === 0);
+        var _qIsTonight = (q === 'tonight' || q.indexOf('tonight ') === 0);
         var _qIsBareRegion = _bareRegionRe.test(q) || _bareTypingRe.test(q);
         console.log('[mkw-debug] q=', JSON.stringify(q), 'qIsBareRegion=', _qIsBareRegion, 'qIsBest=', _qIsBest, 'qIsTonight=', _qIsTonight);
+        console.log('[mkw-debug] _bareRegionRe.source=', JSON.stringify(_bareRegionRe.source));
+        console.log('[mkw-debug] _bareRegionRe.toString=', _bareRegionRe.toString());
+        console.log('[mkw-debug] _regionPattern=', JSON.stringify(_regionPattern));
         if (_qIsBest || _qIsTonight || _qIsBareRegion) {
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
@@ -3174,21 +3180,21 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           }
           var _RN = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
           var _rgx = '(' + _RN.join('|') + ')';
-          var _mTonight = _sv.match(new RegExp('^tonight(\\s+' + _rgx + ')?$'));
+          var _mTonight = _sv.match(new RegExp('^tonight( ' + _rgx + ')?$'));
           if (_mTonight) {
             var _rTn = _mTonight[2] || 'kanto';
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTn);
             return;
           }
-          var _mBest = _sv.match(new RegExp('^best(\\s+' + _rgx + ')?$'));
+          var _mBest = _sv.match(new RegExp('^best( ' + _rgx + ')?$'));
           if (_mBest) {
             var _rBest = _mBest[2] || 'kanto';
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
           }
-          var _mScan = _sv.match(new RegExp('^' + _rgx + '\\s+([1-6])$'));
+          var _mScan = _sv.match(new RegExp('^' + _rgx + ' ([1-6])$'));
           if (_mScan) {
             var _rScan = _mScan[1];
             var _days = parseInt(_mScan[2]);
@@ -3226,7 +3232,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           }
           if (dropdown.style.display === 'none') {
             // Dropdown ẩn nhưng có thể là region command → check trước khi return
-            var _mScanH = _sv.match(new RegExp('^' + _rgx + '\\s+([1-6])$'));
+            var _mScanH = _sv.match(new RegExp('^' + _rgx + ' ([1-6])$'));
             if (_mScanH) {
               var _rScanH = _mScanH[1];
               var _daysH = parseInt(_mScanH[2]);
@@ -3242,7 +3248,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             // thử match region command một lần nữa trước khi geocode
             var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
             var _rgx2 = '(' + _RN2.join('|') + ')';
-            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '\\s+([1-6])$'));
+            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + ' ([1-6])$'));
             if (_mScan2) {
               var _rScan2 = _mScan2[1];
             var _days2 = parseInt(_mScan2[2]);
