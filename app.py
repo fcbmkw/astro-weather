@@ -2985,6 +2985,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
           var helpLines = [
+            {label: 'CODE VERSION:', desc: 'region-rewrite-v2', color: '#f87171'},
             {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan', color: '#94a3b8'},
             {label: 'Search best location keyword:', desc: 'best', color: '#34d399'},
             {label: 'Search tonight keyword:', desc: 'tonight', color: '#fbcfe8'},
@@ -3031,6 +3032,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var _qIsBest    = /^best(\s|$)/.test(q);
         var _qIsTonight = /^tonight(\s|$)/.test(q);
         var _qIsBareRegion = _bareRegionRe.test(q) || _bareTypingRe.test(q);
+        console.log('[mkw-debug] q=', JSON.stringify(q), 'qIsBareRegion=', _qIsBareRegion, 'qIsBest=', _qIsBest, 'qIsTonight=', _qIsTonight);
         if (_qIsBest || _qIsTonight || _qIsBareRegion) {
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
