@@ -3221,6 +3221,13 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerRegionScan === 'function') window._triggerRegionScan(_rScan, _days);
             return;
           }
+          var _mRegionBest = _sv.match(new RegExp('^' + _rgx + ' best$'));
+          if (_mRegionBest) {
+            var _rRB = _mRegionBest[1];
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBest === 'function') window._triggerBest(_rRB);
+            return;
+          }
           // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
           // (e.g. unexpected whitespace) still triggers rather than falling through to geocode.
           if (/^tonight(\s|$)/.test(_sv)) {
@@ -3820,7 +3827,7 @@ elif _scan_r2 == "none":
         _range_lbl = "next 7 days"
     else:
         _scan_days_lbl = st.session_state._scan_days
-        _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "next 7 days"
+        _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "tonight+"
     _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
     _fallback_lbl = st.session_state.get("_scan_fallback_label") or "unsettled weather"
     # ── Map fallback label → weather icons ──────────────────────────────────────
