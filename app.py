@@ -2258,6 +2258,7 @@ def _run_mkw_best_scan():
 # qua overlay bottom-left (xem phần banner bên dưới).
 if st.session_state._scan_scanning:
     st.session_state._scan_scanning = False
+    _region = st.session_state._scan_region
     if _region == "__mkw__":
         if st.session_state._scan_best:
             _scan_res = _run_mkw_best_scan()
