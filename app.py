@@ -3087,13 +3087,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             }], '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
-          var scanHints = _dayLabels.map(function(lbl, n){
-            return {label: n === 0 ? _region : _region + ' ' + n,
-                     desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
-                     fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)};
-          });
-          _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
+          // Bare "<region>" (no number) → behave like "<region> best"
+          _renderRegionHints([{
+            label: _region + ' best',
+            desc:  'Best night 7d (' + _REGION_LABEL[_region] + ')',
+            fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(_region)
+          }], '#34d399', 'rgba(51,65,85,0.4)');
           return;
         }
 
@@ -3187,6 +3186,14 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             var _days = parseInt(_mScan[2]);
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
+            return;
+          }
+          // Bare "<region>" (no number) + Enter → same as "<region> best"
+          var _mBareEnter = _sv.match(new RegExp('^' + _rgx + '$'));
+          if (_mBareEnter) {
+            var _rBareEnter = _mBareEnter[1];
+            inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+            if (typeof window._triggerBest === 'function') window._triggerBest(_rBareEnter);
             return;
           }
           // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
