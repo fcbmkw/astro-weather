@@ -2770,7 +2770,12 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           // để không rơi vào geocodeAndFly khi Enter
           var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
           var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
-          var _isRegionCmd = _RNchk.some(function(r){ return _qNow === r || _qNow === r+' all' || new RegExp('^' + r + '\\s+[1-6]$').test(_qNow); });
+          var _isRegionCmd = _RNchk.some(function(r){
+            return _qNow === r || _qNow === r+' all'
+              || new RegExp('^'+r+'\\s+[1-6]$').test(_qNow)
+              || new RegExp('^'+r+'\\s+al?l?$').test(_qNow)
+              || new RegExp('^'+r+'\\s+$').test(_qNow);
+          });
           if (_isRegionCmd) { dropdown.style.display = 'none'; return; }
           var empty = L.DomUtil.create('div', '', dropdown);
           empty.style.cssText = 'padding:10px 14px;color:#64748b;font-size:12px;';
@@ -2872,7 +2877,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
           var helpLines = [
-            {label: 'Search area keyword:', desc: 'kanto all / kanto 1~6  (same for hokkaido/tohoku/chubu/kansai/chugoku/shikoku/kyushu/okinawa/japan)', color: '#94a3b8'},
+            {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan', color: '#94a3b8'},
             {label: 'Search best location keyword:', desc: 'best', color: '#34d399'},
             {label: 'Search tonight keyword:', desc: 'tonight', color: '#fbcfe8'},
             {label: 'Turn off search results:', desc: 'off', color: '#94a3b8'},
@@ -2908,16 +2913,11 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           dropdown.style.display = 'block';
           return;
         }
-        // ── Region scan commands (new syntax): ──────────────────────────────────
-        // "kanto all"   → scan earliest PERFECT NIGHT in Kanto
-        // "kanto 1"~"kanto 6" → scan tonight / tomorrow / ... in Kanto
-        // (same for all regions: hokkaido/tohoku/chubu/kansai/chugoku/shikoku/kyushu/okinawa/japan)
-        // "best <region>" / "tonight <region>" unchanged
+        // Hidden keyword — "<region>" / "<region>N" / "best <region>" / "tonight <region>"
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
-        // Match: bare region name (while typing), "region all", or "region N" (N=1..6)
-        var _bareRegionRe   = new RegExp('^' + _regionPattern + '(\\s+(all|[1-6]))?$');
-        var _bareTypingRe   = new RegExp('^' + _regionPattern + '\\s+a?l?$');
+        var _bareRegionRe  = new RegExp('^' + _regionPattern + '(\\s+(all|[1-6]))?$');
+        var _bareTypingRe  = new RegExp('^' + _regionPattern + '(?:\\s+al?l?|\\s+)$');
         var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
         var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
         var _qIsBest    = /^best(\s|$)/.test(q);
@@ -2940,13 +2940,13 @@ _SEARCH_CTRL_TEMPLATE = Template("""
                 inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
                 fn();
               }; })(h.fn));
-              _items.push(row);
+              _items.push(row);  // ← push vào _items để Enter key có thể click
             });
             dropdown.style.display = 'block';
           }
           if (_qIsTonight) {
             var _mTn = q.match(_tonightRegionRe);
-            var _typedTn = _mTn && _mTn[2] ? _mTn[2].trim() : '';
+            var _typedTn = _mTn && _mTn[1] ? _mTn[1].trim() : '';
             var _regionsTn = _typedTn ? [_typedTn] : _REGION_NAMES;
             var tonightHints = _regionsTn.map(function(r){
               return {label: 'tonight ' + r, desc: 'Best spots tonight (' + _REGION_LABEL[r] + ')',
@@ -2957,7 +2957,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           }
           if (_qIsBest) {
             var _mBest = q.match(_bestRegionRe);
-            var _typedBest = _mBest && _mBest[2] ? _mBest[2].trim() : '';
+            var _typedBest = _mBest && _mBest[1] ? _mBest[1].trim() : '';
             var _regionsBest = _typedBest ? [_typedBest] : _REGION_NAMES;
             var bestHints = _regionsBest.map(function(r){
               return {label: 'best ' + r, desc: 'Best night 7d (' + _REGION_LABEL[r] + ')',
@@ -2966,33 +2966,27 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             _renderRegionHints(bestHints, '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // Bare region command → show menu: "region all" + "region 1".."region 6"
+          // Bare region command: "<region>" / "<region>N" → scan hints with day offsets 0-6
           var _mBare = q.match(_bareRegionRe);
-          var _mBareTyping = !_mBare && q.match(_bareTypingRe);
-          var _region = _mBare ? _mBare[1] : _mBareTyping[1];
-          var _suffix = (_mBare && _mBare[3]) ? _mBare[3].trim() : null; // "all" | "1".."6" | null (null = show full menu)
-          var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
+          var _region = _mBare ? _mBare[1] : (q.match(_bareTypingRe)||[])[1];
+          var _suffix = (_mBare && _mBare[3]) ? _mBare[3] : null;
           if (_suffix !== null) {
-            // User typed exact command e.g. "kanto all" or "kanto 3" → show single clickable row
             var _dayNum = (_suffix === 'all') ? 0 : parseInt(_suffix);
-            var singleHint = [{
+            var _dl = ['Earliest PERFECT NIGHT','Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
+            _renderRegionHints([{
               label: _region + ' ' + _suffix,
-              desc: _dayLabels[_dayNum] + ' (' + _REGION_LABEL[_region] + ')',
-              fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, _dayNum)
-            }];
-            _renderRegionHints(singleHint, '#34d399', 'rgba(51,65,85,0.4)');
-          } else {
-            // User typed bare region name → show full menu
-            var scanHints = _dayLabels.map(function(lbl, n){
-              var sfx = (n === 0) ? 'all' : String(n);
-              return {
-                label: _region + ' ' + sfx,
-                desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
-                fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)
-              };
-            });
-            _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
+              desc:  _dl[_dayNum] + ' (' + _REGION_LABEL[_region] + ')',
+              fn: (function(rr,nn){ return function(){ window._triggerScan(rr,nn); }; })(_region,_dayNum)
+            }], '#34d399', 'rgba(51,65,85,0.4)');
+            return;
           }
+          var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
+          var scanHints = _dayLabels.map(function(lbl, n){
+            return {label: _region + ' ' + (n === 0 ? 'all' : String(n)),
+                     desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
+                     fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)};
+          });
+          _renderRegionHints(scanHints, '#34d399', 'rgba(51,65,85,0.4)');
           return;
         }
 
@@ -3045,7 +3039,6 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
           }
-          // New syntax: "kanto all" or "kanto 3" (space-separated, no old kanto1~6)
           var _mScan = _sv.match(new RegExp('^' + _rgx + '\\s+(all|[1-6])$'));
           if (_mScan) {
             var _rScan = _mScan[1];
@@ -3055,6 +3048,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             return;
           }
           // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
+          // (e.g. unexpected whitespace) still triggers rather than falling through to geocode.
           if (/^tonight(\s|$)/.test(_sv)) {
             var _rTnFb = 'kanto';
             for (var _i = 0; _i < _RN.length; _i++) { if (_sv.indexOf(_RN[_i]) !== -1) { _rTnFb = _RN[_i]; break; } }
@@ -3070,7 +3064,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             return;
           }
           if (dropdown.style.display === 'none') {
-            // Dropdown hidden: check for "region all" / "region N" before falling to geocode
+            // Dropdown ẩn nhưng có thể là region command → check trước khi return
             var _mScanH = _sv.match(new RegExp('^' + _rgx + '\\s+(all|[1-6])$'));
             if (_mScanH) {
               var _rScanH = _mScanH[1];
@@ -3083,6 +3077,18 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           if (_activeIdx >= 0 && _activeIdx < _items.length) {
             _items[_activeIdx].click();
           } else {
+            // Last-resort: nếu dropdown đang hiện nhưng không có item được chọn,
+            // thử match region command một lần nữa trước khi geocode
+            var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+            var _rgx2 = '(' + _RN2.join('|') + ')';
+            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '\\s+(all|[1-6])$'));
+            if (_mScan2) {
+              var _rScan2 = _mScan2[1];
+            var _days2 = (_mScan2[2] === 'all') ? 0 : parseInt(_mScan2[2]);
+              inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
+              if (typeof window._triggerScan === 'function') window._triggerScan(_rScan2, _days2);
+              return;
+            }
             dropdown.style.display = 'none';
             _geocodeAndFly(inp.value.trim());
           }
