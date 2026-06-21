@@ -3029,16 +3029,18 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
         var _bareRegionRe  = new RegExp('^' + _regionPattern + '( [1-6])?$');
         var _bareTypingRe  = new RegExp('^' + _regionPattern + ' *$');
+        var _regionBestRe  = new RegExp('^' + _regionPattern + ' best$');
         var _bestRegionRe   = new RegExp('^best( ' + _regionPattern + ')?$');
         var _tonightRegionRe= new RegExp('^tonight( ' + _regionPattern + ')?$');
         var _qIsBest    = (q === 'best' || q.indexOf('best ') === 0);
         var _qIsTonight = (q === 'tonight' || q.indexOf('tonight ') === 0);
+        var _qIsRegionBest = _regionBestRe.test(q);
         var _qIsBareRegion = _bareRegionRe.test(q) || _bareTypingRe.test(q);
         console.log('[mkw-debug] q=', JSON.stringify(q), 'qIsBareRegion=', _qIsBareRegion, 'qIsBest=', _qIsBest, 'qIsTonight=', _qIsTonight);
         console.log('[mkw-debug] _bareRegionRe.source=', JSON.stringify(_bareRegionRe.source));
         console.log('[mkw-debug] _bareRegionRe.toString=', _bareRegionRe.toString());
         console.log('[mkw-debug] _regionPattern=', JSON.stringify(_regionPattern));
-        if (_qIsBest || _qIsTonight || _qIsBareRegion) {
+        if (_qIsBest || _qIsTonight || _qIsRegionBest || _qIsBareRegion) {
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
           function _renderRegionHints(items, color, borderRgba) {
@@ -3067,6 +3069,17 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (_REGION_NAMES.indexOf(prefix) !== -1) return [prefix];
             // Không phải exact → filter theo startsWith prefix
             return _REGION_NAMES.filter(function(r){ return r.indexOf(prefix) === 0; });
+          }
+          if (_qIsRegionBest) {
+            var _mRB = q.match(_regionBestRe);
+            var _rbRegion = _mRB ? _mRB[1] : null;
+            if (_rbRegion) {
+              _renderRegionHints([{
+                label: _rbRegion + ' best', desc: 'Best night 7d (' + _REGION_LABEL[_rbRegion] + ')',
+                fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(_rbRegion)
+              }], '#34d399', 'rgba(51,65,85,0.4)');
+            }
+            return;
           }
           if (_qIsTonight) {
             var _typedTn = q.slice('tonight'.length).trim(); // phần sau "tonight"
