@@ -1817,6 +1817,9 @@ def _summarize_fallback_tiers(tier_counter):
 _FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
             if (lambda nm: nm.split(".")[0].strip().isdigit()
                 and int(nm.split(".")[0].strip()) <= 30)(n)]
+_FAV_50  = [(n,c) for n,c in LOCATION_DATABASE.items()
+            if (lambda nm: nm.split(".")[0].strip().isdigit()
+                and int(nm.split(".")[0].strip()) <= 50)(n)]
 _FAV_ALL = list(LOCATION_DATABASE.items())
 
 # ── REGION REGISTRY — Nhật Bản chia theo 8 vùng địa lý truyền thống + "japan" (toàn quốc) ──
@@ -2157,21 +2160,116 @@ def _run_tonight_scan(region="kanto"):
         "region": region,
     }
 
+# ── MKW SCAN — top-50 personal favourite locations ──────────────────────
+_MKW_LOCS = _FAV_50
+
+def _run_mkw_scan(start_day=0):
+    """Scan from start_day in 7 days, using mkw list (top-50 locations)."""
+    _fallback_tiers = Counter()
+    for day_off in range(start_day, 7):
+        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        moon_illum, _ = get_moon_phase_percent(d)
+        if moon_illum >= 32:
+            continue
+        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        perfect_locs = []
+        for loc_name, loc_coords in _MKW_LOCS:
+            lat, lon = loc_coords
+            try:
+                hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+            except Exception:
+                continue
+            if not hourly: continue
+            frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+            try:
+                table, _, _, sun_alts, *_ = _build_night_data(
+                    lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+            except Exception:
+                continue
+            verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if not verdict: continue
+            _fallback_tiers[verdict["tier"]] += 1
+            if verdict["tier"] == "PERFECT NIGHT":
+                perfect_locs.append((loc_name, loc_coords, verdict))
+        if perfect_locs:
+            deduped = _dedupe_locs_km([(n, c) for n, c, _ in perfect_locs], km=20)
+            best = deduped[0]
+            return {"loc_name": best[0], "loc_coords": best[1], "all_locs": deduped,
+                    "day_off": day_off, "date": d, "_is_mkw": True}
+    if _fallback_tiers:
+        top = _fallback_tiers.most_common(1)[0][0]
+        return {"_fallback": True, "_fallback_label": top}
+    return None
+
+def _run_mkw_best_scan():
+    """Best night in next 7 days across mkw list (top-50)."""
+    _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
+    candidates = []
+    _fallback_tiers = Counter()
+    for day_off in range(0, 7):
+        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        moon_illum, _ = get_moon_phase_percent(d)
+        if moon_illum >= 41.5: continue
+        is_weekend = d.weekday() in _WEEKEND_DAYS
+        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        for loc_name, loc_coords in _MKW_LOCS:
+            lat, lon = loc_coords
+            try:
+                hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+            except Exception:
+                continue
+            if not hourly: continue
+            frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+            try:
+                table, _, _, sun_alts, *_ = _build_night_data(
+                    lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+            except Exception:
+                continue
+            verdict = _build_night_verdict(table, sun_alts, moon_illum)
+            if not verdict: continue
+            _fallback_tiers[verdict["tier"]] += 1
+            rank = _TIER_RANK.get(verdict["tier"], 0)
+            if rank == 0: continue
+            streak = verdict.get("good_hours", 0)
+            candidates.append((-rank, not is_weekend, -streak, day_off, loc_name, loc_coords, verdict, moon_illum))
+    if not candidates:
+        if _fallback_tiers:
+            return {"_fallback": True, "_fallback_label": _fallback_tiers.most_common(1)[0][0]}
+        return None
+    candidates.sort(key=lambda x: x[:4])
+    seen = []; results = []
+    for row in candidates:
+        _, _, _, day_off, loc_name, loc_coords, verdict, moon_illum = row
+        if all(abs(loc_coords[0]-s[1][0]) > 0.5 or abs(loc_coords[1]-s[1][1]) > 0.5 for s in seen):
+            results.append((loc_name, loc_coords, verdict, day_off, moon_illum))
+            seen.append((loc_name, loc_coords))
+        if len(results) >= 3: break
+    if not results: return None
+    best = results[0]
+    return {"loc_name": best[0], "loc_coords": best[1],
+            "all_locs": [(r[0], r[1]) for r in results],
+            "day_off": best[3],
+            "date": (_night_base_jst + timedelta(days=best[3])).replace(tzinfo=None),
+            "_is_best": True, "_is_mkw": True}
+
 # ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
 # Thực hiện scan TRƯỚC khi map render → sau khi scan xong, rerun lần 2 mới vẽ banner.
 # Spinner cũ (st.spinner ngoài map) đã bị xóa — "Scanning..." hiện bên trong map
 # qua overlay bottom-left (xem phần banner bên dưới).
 if st.session_state._scan_scanning:
     st.session_state._scan_scanning = False
-    _region = st.session_state._scan_region
-    if st.session_state._scan_tonight:
+    if _region == "__mkw__":
+        if st.session_state._scan_best:
+            _scan_res = _run_mkw_best_scan()
+        else:
+            _scan_res = _run_mkw_scan(start_day=st.session_state._scan_days)
+    elif st.session_state._scan_tonight:
         _scan_res = _run_tonight_scan(region=_region)
     elif st.session_state._scan_best:
         _scan_res = _run_best_scan(region=_region)
     else:
         _start = st.session_state._scan_days
         _scan_res = _run_great_night_scan(start_day=_start, region=_region)
-
     _is_fallback_only = isinstance(_scan_res, dict) and _scan_res.get("_fallback")
     if _is_fallback_only:
         st.session_state._scan_result = "none"
@@ -2408,6 +2506,15 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       // lat=89.65 → "off": tắt banner/ring ngay, không load data
       window._triggerOff = function() {
         map.fire('click', { latlng: L.latLng(89.65, 100) });
+      };
+      // lat=89.55 → mkw scan  (lng=200+day_off*0.01, day_off=days-1 for days 1-6, 0 for days=0)
+      window._triggerMkwScan = function(days) {
+        var d = (days >= 1 && days <= 6) ? (days - 1) : 0;
+        map.fire('click', { latlng: L.latLng(89.55, 200 + d * 0.01) });
+      };
+      // lat=89.45 → mkw best
+      window._triggerMkwBest = function() {
+        map.fire('click', { latlng: L.latLng(89.45, 200) });
       };
 
       // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
@@ -2771,11 +2878,9 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
           var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
           var _isRegionCmd = _RNchk.some(function(r){
-            return _qNow === r || _qNow === r+' all'
-              || new RegExp('^'+r+'\\s+[1-6]$').test(_qNow)
-              || new RegExp('^'+r+'\\s+al?l?$').test(_qNow)
-              || new RegExp('^'+r+'\\s+$').test(_qNow);
-          });
+            return _qNow === r || new RegExp('^'+r+'\\s+[1-6]$').test(_qNow)
+              || new RegExp('^'+r+'\\s*$').test(_qNow);
+          }) || /^mkw(\s+(best|[1-6]))?$/.test(_qNow);
           if (_isRegionCmd) { dropdown.style.display = 'none'; return; }
           var empty = L.DomUtil.create('div', '', dropdown);
           empty.style.cssText = 'padding:10px 14px;color:#64748b;font-size:12px;';
@@ -2916,8 +3021,8 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         // Hidden keyword — "<region>" / "<region>N" / "best <region>" / "tonight <region>"
         var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
-        var _bareRegionRe  = new RegExp('^' + _regionPattern + '(\\s+(all|[1-6]))?$');
-        var _bareTypingRe  = new RegExp('^' + _regionPattern + '(?:\\s+al?l?|\\s+)$');
+        var _bareRegionRe  = new RegExp('^' + _regionPattern + '(\\s+[1-6])?$');
+        var _bareTypingRe  = new RegExp('^' + _regionPattern + '\\s*$');
         var _bestRegionRe   = new RegExp('^best(\\s+' + _regionPattern + ')?$');
         var _tonightRegionRe= new RegExp('^tonight(\\s+' + _regionPattern + ')?$');
         var _qIsBest    = /^best(\s|$)/.test(q);
@@ -2969,10 +3074,11 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           // Bare region command: "<region>" / "<region>N" → scan hints with day offsets 0-6
           var _mBare = q.match(_bareRegionRe);
           var _region = _mBare ? _mBare[1] : (q.match(_bareTypingRe)||[])[1];
-          var _suffix = (_mBare && _mBare[3]) ? _mBare[3] : null;
+          var _suffix = (_mBare && _mBare[2]) ? _mBare[2].trim() : null; // '1'~'6' | null
+          // Exact command e.g. 'kanto 3' → single clickable row
           if (_suffix !== null) {
-            var _dayNum = (_suffix === 'all') ? 0 : parseInt(_suffix);
-            var _dl = ['Earliest PERFECT NIGHT','Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
+            var _dayNum = parseInt(_suffix);
+            var _dl = ['Earliest','Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
             _renderRegionHints([{
               label: _region + ' ' + _suffix,
               desc:  _dl[_dayNum] + ' (' + _REGION_LABEL[_region] + ')',
@@ -2982,7 +3088,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           }
           var _dayLabels = ['Earliest PERFECT NIGHT', 'Tonight', 'Tomorrow night', 'Day after tomorrow', '4th night', '5th night', '6th night'];
           var scanHints = _dayLabels.map(function(lbl, n){
-            return {label: _region + ' ' + (n === 0 ? 'all' : String(n)),
+            return {label: n === 0 ? _region : _region + ' ' + n,
                      desc: lbl + ' (' + _REGION_LABEL[_region] + ')',
                      fn: (function(rr, nn){ return function(){ window._triggerScan(rr, nn); }; })(_region, n)};
           });
@@ -2990,6 +3096,41 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           return;
         }
 
+        // ── mkw commands (private): 'mkw 1'~'mkw 6' / 'mkw best' ──────────────
+        if (/^mkw(\s+(best|[1-6]))?$/.test(q)) {
+          dropdown.innerHTML = ''; _items = []; _activeIdx = -1;
+          var _mkwHints = [];
+          if (q === 'mkw' || q === 'mkw ') {
+            // show full menu
+            _mkwHints.push({label:'mkw best', desc:'Best night 7d (My locations)', fn:function(){ window._triggerMkwBest(); }});
+            var _mkwDl = ['Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
+            for (var _mi=1; _mi<=6; _mi++) {
+              _mkwHints.push({label:'mkw '+_mi, desc:_mkwDl[_mi-1]+' (My locations)',
+                fn:(function(dd){ return function(){ window._triggerMkwScan(dd); }; })(_mi)});
+            }
+          } else if (q === 'mkw best') {
+            _mkwHints.push({label:'mkw best', desc:'Best night 7d (My locations)', fn:function(){ window._triggerMkwBest(); }});
+          } else {
+            var _mkwN = parseInt(q.replace('mkw','').trim());
+            var _mkwDl2 = ['Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
+            _mkwHints.push({label:'mkw '+_mkwN, desc:_mkwDl2[_mkwN-1]+' (My locations)',
+              fn:(function(dd){ return function(){ window._triggerMkwScan(dd); }; })(_mkwN)});
+          }
+          _mkwHints.forEach(function(h){
+            var row = L.DomUtil.create('div','',dropdown);
+            row.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;'
+              +'color:#a78bfa;border-bottom:1px solid rgba(167,139,250,0.25);'
+              +'display:flex;justify-content:space-between;align-items:center;';
+            var lbl=L.DomUtil.create('span','',row); lbl.textContent=h.label; lbl.style.fontWeight='700';
+            var desc=L.DomUtil.create('span','',row); desc.textContent=h.desc; desc.style.cssText='font-size:10px;opacity:0.65;';
+            L.DomEvent.on(row,'click',(function(fn){ return function(){
+              inp.value=''; clr.style.display='none'; dropdown.style.display='none'; fn();
+            }; })(h.fn));
+            _items.push(row);
+          });
+          dropdown.style.display = 'block';
+          return;
+        }
         // Translate any kanji substrings in the query to their romaji alias
         var translations = [];
         for (var kanji in _ALIAS) {
@@ -3039,10 +3180,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
           }
-          var _mScan = _sv.match(new RegExp('^' + _rgx + '\\s+(all|[1-6])$'));
+          var _mScan = _sv.match(new RegExp('^' + _rgx + '\\s+([1-6])$'));
           if (_mScan) {
             var _rScan = _mScan[1];
-            var _days = (_mScan[2] === 'all') ? 0 : parseInt(_mScan[2]);
+            var _days = parseInt(_mScan[2]);
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerScan === 'function') window._triggerScan(_rScan, _days);
             return;
@@ -3063,12 +3204,24 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBestFb);
             return;
           }
+          // mkw commands in keydown
+          if (/^mkw\s+best$/.test(_sv)) {
+            inp.value=''; clr.style.display='none'; dropdown.style.display='none';
+            if (typeof window._triggerMkwBest==='function') window._triggerMkwBest();
+            return;
+          }
+          var _mkwMatch = _sv.match(/^mkw\s+([1-6])$/);
+          if (_mkwMatch) {
+            inp.value=''; clr.style.display='none'; dropdown.style.display='none';
+            if (typeof window._triggerMkwScan==='function') window._triggerMkwScan(parseInt(_mkwMatch[1]));
+            return;
+          }
           if (dropdown.style.display === 'none') {
             // Dropdown ẩn nhưng có thể là region command → check trước khi return
-            var _mScanH = _sv.match(new RegExp('^' + _rgx + '\\s+(all|[1-6])$'));
+            var _mScanH = _sv.match(new RegExp('^' + _rgx + '\\s+([1-6])$'));
             if (_mScanH) {
               var _rScanH = _mScanH[1];
-              var _daysH = (_mScanH[2] === 'all') ? 0 : parseInt(_mScanH[2]);
+              var _daysH = parseInt(_mScanH[2]);
               inp.value = ''; clr.style.display = 'none';
               if (typeof window._triggerScan === 'function') window._triggerScan(_rScanH, _daysH);
             }
@@ -3081,10 +3234,10 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             // thử match region command một lần nữa trước khi geocode
             var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
             var _rgx2 = '(' + _RN2.join('|') + ')';
-            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '\\s+(all|[1-6])$'));
+            var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + '\\s+([1-6])$'));
             if (_mScan2) {
               var _rScan2 = _mScan2[1];
-            var _days2 = (_mScan2[2] === 'all') ? 0 : parseInt(_mScan2[2]);
+            var _days2 = parseInt(_mScan2[2]);
               inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
               if (typeof window._triggerScan === 'function') window._triggerScan(_rScan2, _days2);
               return;
@@ -3697,6 +3850,25 @@ if map_data:
     _is_best_trig    = abs(_lc_lat - 89.85) < 0.02
     _is_tonight_trig = abs(_lc_lat - 89.75) < 0.02
     _is_off_trig     = abs(_lc_lat - 89.65) < 0.02
+    _is_mkw_scan_trig = abs(_lc_lat - 89.55) < 0.02
+    _is_mkw_best_trig = abs(_lc_lat - 89.45) < 0.02
+    if _is_mkw_scan_trig and lc and lc != st.session_state._last_lc:
+        _d = max(0, min(6, round((_lc_lng - 200.0) * 100)))
+        st.session_state._last_lc = lc
+        st.session_state._scan_days = _d
+        st.session_state._scan_region = "__mkw__"
+        st.session_state._scan_best = False
+        st.session_state._scan_tonight = False
+        st.session_state._scan_scanning = True
+        st.rerun()
+    if _is_mkw_best_trig and lc and lc != st.session_state._last_lc:
+        st.session_state._last_lc = lc
+        st.session_state._scan_days = 0
+        st.session_state._scan_region = "__mkw__"
+        st.session_state._scan_best = True
+        st.session_state._scan_tonight = False
+        st.session_state._scan_scanning = True
+        st.rerun()
     if _is_off_trig and lc and lc != st.session_state._last_lc:
         # "off": tắt kết quả search ngay — không gọi _run_*_scan, không gọi API.
         st.session_state._last_lc       = lc
