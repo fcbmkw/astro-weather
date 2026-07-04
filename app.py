@@ -275,7 +275,7 @@ LOCATION_DATABASE = {
     "256. Hoshi no Kanrankan 星の観察館, Ishikawa": [36.1880, 136.6680],
     "257. Hakusan Tenbodai 白山展望台, Ishikawa": [36.1350, 136.7720],
     # Fukushima
-    "258. Shikanotsuno Observatory 鹿角平天文台, Fukushima": [37.1760, 140.3870],
+    "258. Shikanotsuno Observatory 鹿角平天文台, Fukushima": [36.9820, 140.5299],
     "259. Koriyama Nunobiki Wind Farm 郡山布引風の高原, Fukushima": [37.5064, 140.3260],
     "260. Bandaisan Viewpoint 磐梯山眺望箇所, Fukushima": [37.5680, 140.1360],
     "261. Kaneyama Fureai Square かねやまふれあい広場, Fukushima": [37.4160, 139.5770],
