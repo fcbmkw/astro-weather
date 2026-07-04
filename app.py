@@ -2192,9 +2192,12 @@ def _run_mkw_scan(start_day=0):
             if verdict["tier"] == "PERFECT NIGHT":
                 perfect_locs.append((loc_name, loc_coords, verdict))
         if perfect_locs:
-            deduped = _dedupe_locs_km([(n, c) for n, c, _ in perfect_locs], km=20)
+            deduped_nc = _dedupe_locs_km([(n, c) for n, c, _ in perfect_locs], km=20)
+            _v_map = {(n, c): v for n, c, v in perfect_locs}
+            deduped = [(n, c, _v_map.get((n, c))) for n, c in deduped_nc]
             best = deduped[0]
-            return {"loc_name": best[0], "loc_coords": best[1], "all_locs": deduped,
+            return {"loc_name": best[0], "loc_coords": best[1], "verdict": best[2],
+                    "moon_illum": moon_illum, "all_locs": deduped,
                     "day_off": day_off, "date": d, "_is_mkw": True}
     if _fallback_tiers:
         top = _fallback_tiers.most_common(1)[0][0]
@@ -2246,8 +2249,9 @@ def _run_mkw_best_scan():
         if len(results) >= 3: break
     if not results: return None
     best = results[0]
-    return {"loc_name": best[0], "loc_coords": best[1],
-            "all_locs": [(r[0], r[1]) for r in results],
+    return {"loc_name": best[0], "loc_coords": best[1], "verdict": best[2],
+            "moon_illum": best[4],
+            "all_locs": [(r[0], r[1], r[2]) for r in results],
             "day_off": best[3],
             "date": (_night_base_jst + timedelta(days=best[3])).replace(tzinfo=None),
             "_is_best": True, "_is_mkw": True}
