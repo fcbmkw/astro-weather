@@ -2654,14 +2654,14 @@ with _ai_panel:
         <style>
         [class*="st-key-astro_ai_answer_box"] p {
             font-size: 13px !important;
-            line-height: 0.2 !important;
-            margin-bottom: 0.1rem !important;
+            line-height: 1.0 !important;
+            margin-bottom: 0.2rem !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    _astro_chat_box = st.container(height=80, border=True, key="astro_ai_answer_box")
+    _astro_chat_box = st.container(height=85, border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
