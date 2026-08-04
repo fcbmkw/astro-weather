@@ -2642,6 +2642,32 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # - Trạng thái "đang kiểm tra..." hiện greyout NGAY TRONG khung kết quả
 #   (st.caption, không dùng st.spinner rời rạc nữa).
 # ------------------------------------------------------------------------------
+# --- NÚT NEW CHAT — góc trên-phải màn hình, cùng kỹ thuật position:fixed
+# như .st-key-newchat_btn_main bên app_ai.py, để không bị lệch dù resize. ---
+st.markdown(
+    """
+    <style>
+    .st-key-astro_newchat_btn {
+        position: fixed !important;
+        top: 0.85rem !important;
+        right: 0.9rem !important;
+        z-index: 999999 !important;
+        width: 40px !important;
+    }
+    .st-key-astro_newchat_btn button {
+        width: 40px !important;
+        height: 40px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+with st.container(key="astro_newchat_btn"):
+    if st.button("", key="astro_new_chat", icon=":material/edit_square:", help="New chat", use_container_width=True):
+        st.session_state.astro_ai_history = []
+        st.session_state.astro_ai_answer = None
+        st.session_state.astro_last_question = "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway..."
+        st.rerun()
 _ai_panel = st.container()
 with _ai_panel:
     # --- CSS ÉP KHOẢNG CÁCH DÍNH LIỀN KHÔNG CÒN KHOẢNG HỞ ---
