@@ -2540,18 +2540,19 @@ _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 if st.session_state.map_tile not in ("satellite", "street", "windy"):
     st.session_state.map_tile = "windy"
 # ------------------------------------------------------------------------------
-# KHỐI C (v2) — chat box gọn, luôn mở, Enter/nút mũi tên gửi (st.chat_input),
-# placeholder = chính tiêu đề, không cần label/expander riêng nữa.
+# KHỐI C (v3) — chat input CỐ ĐỊNH TRÊN, nội dung trả lời hiển thị bên dưới.
+# Chiều cao khung nội dung giảm 1 nửa (170 -> 85px).
 # ------------------------------------------------------------------------------
-_astro_chat_box = st.container(height=170, border=True)
-with _astro_chat_box:
-    if st.session_state.get("astro_ai_answer"):
-        st.markdown(st.session_state.astro_ai_answer)
-
+_ai_panel = st.container()
+with _ai_panel:
     _ai_question = st.chat_input(
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao...",
         key="astro_ai_input",
     )
+    _astro_chat_box = st.container(height=85, border=True)
+    with _astro_chat_box:
+        if st.session_state.get("astro_ai_answer"):
+            st.markdown(st.session_state.astro_ai_answer)
 
 if _ai_question and _ai_question.strip():
     with st.spinner("AI đang kiểm tra thời tiết & địa điểm..."):
@@ -2563,7 +2564,7 @@ if _ai_question and _ai_question.strip():
         st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
         st.session_state.zoom = 9
     st.rerun()
-# ------------------------------------------------------------------------------ (hết KHỐI C v2)
+# ------------------------------------------------------------------------------ (hết KHỐI C v3)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
 # Điều này là chìa khoá giúp pan/zoom mượt: Streamlit không can thiệp vào
