@@ -2656,8 +2656,14 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
     st.session_state.map_tile = "windy"
  
 # ==============================================================================
-# KHỐI C (v6 — bản đầy đủ, xoá sạch KHỐI C cũ rồi dán nguyên khối này vào,
-# ngay trước dòng "m = folium.Map(").
+# KHỐI C (v7 — bản sửa đúng) — xoá sạch KHỐI C cũ, dán nguyên khối này vào,
+# ngay trước dòng "m = folium.Map(".
+#
+# So với bản trước: GIỮ NGUYÊN kích thước chatbox đã "vừa mắt" (không dùng
+# :has(), không set height cho container kết quả), CHỈ thêm đúng 1 dòng
+# "flex-direction: row !important;" để sửa lệch nút gửi — vì hàng chứa
+# textarea + nút gửi mặc định có thể là flex-direction: column, khiến
+# align-items: center chỉ canh giữa theo chiều NGANG chứ không phải dọc.
 # ==============================================================================
 
 # --- NÚT NEW CHAT — góc trên-phải màn hình, position:fixed ---
@@ -2687,65 +2693,101 @@ with st.container(key="astro_newchat_btn"):
         st.session_state.astro_last_processed_query = None
         st.rerun()
 
-# --- CSS: canh giữa nút gửi, chiều cao chatbox, font khung kết quả, ẩn toolbar ---
+# --- CSS: chatbox gọn (bản đã "vừa mắt"), chỉ thêm flex-direction: row để
+# sửa lệch nút gửi, ẩn toolbar Streamlit ---
 st.markdown(
     """
     <style>
-    div[data-testid="stChatInput"] div:has(> [data-testid="stChatInputSubmitButton"]) {
-        display: flex !important;
-        align-items: center !important;
+    /* 1. ẨN TOOLBAR STREAMLIT (không ẩn được thanh Share/Star/Edit/GitHub
+    của Streamlit Community Cloud — thanh đó nằm ngoài DOM app). */
+    [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    /* 2. KHUNG CHAT_INPUT */
+    div[data-testid="stChatInput"] {
+        padding: 0 !important;
+        min-height: unset !important;
+        margin-bottom: 0px !important;
+    }
+
+    div[data-testid="stChatInput"] > div {
         min-height: 38px !important;
         height: 38px !important;
         padding: 0 8px 0 12px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
     }
-    [data-testid="stChatInputSubmitButton"] {
-        width: 28px !important;
-        height: 28px !important;
-        min-width: 28px !important;
-        min-height: 28px !important;
-        padding: 0 !important;
-        flex-shrink: 0 !important;
-    }
-    [data-testid="stChatInputTextArea"] {
+
+    div[data-testid="stChatInput"] textarea {
         min-height: 24px !important;
         height: 24px !important;
-        line-height: 24px !important;
+        max-height: 24px !important;
         padding: 0 !important;
-        margin: 0 !important;
+        margin-top: 2px !important;
+        margin-bottom: 0 !important;
         font-size: 13px !important;
+        line-height: 24px !important;
+        resize: none !important;
+        overflow: hidden !important;
     }
-    [data-testid="stChatInputTextArea"]::placeholder {
+
+    div[data-testid="stChatInput"] textarea::placeholder {
         color: #888888 !important;
         opacity: 0.8 !important;
+    }
+
+    div[data-testid="stChatInput"] button {
+        position: static !important;
+        top: auto !important;
+        bottom: auto !important;
+        right: auto !important;
+        height: 26px !important;
+        width: 26px !important;
+        min-height: 26px !important;
+        min-width: 26px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        align-self: center !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* 3. KHUNG HIỂN THỊ KẾT QUẢ */
+    div[class*="st-key-astro_ai_answer_box"] {
+        min-height: auto !important;
+        height: auto !important;
+        padding: 14px 16px !important;
+        margin-top: -10px !important;
     }
     div[class*="st-key-astro_ai_answer_box"] p,
     div[class*="st-key-astro_ai_answer_box"] li,
     div[class*="st-key-astro_ai_answer_box"] span,
     div[class*="st-key-astro_ai_answer_box"] div {
         font-size: 13px !important;
-        line-height: 1.4 !important;
+        line-height: 1.5 !important;
         margin-top: 0 !important;
-        margin-bottom: 0.3rem !important;
+        margin-bottom: 0.4rem !important;
     }
     div[class*="st-key-astro_ai_answer_box"] ol,
     div[class*="st-key-astro_ai_answer_box"] ul {
         padding-left: 1.2rem !important;
-        margin-top: 0.2rem !important;
-        margin-bottom: 0.3rem !important;
+        margin-top: 0.3rem !important;
+        margin-bottom: 0.4rem !important;
     }
-    [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    div[class*="st-key-astro_ai_answer_box"] {
-    padding: 2px 8px !important;
+    div[class*="st-key-astro_ai_answer_box"] *:last-child {
+        margin-bottom: 0 !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# --- KHUNG CHAT: input cố định trên, khung kết quả bên dưới ---
+# --- KHUNG CHAT: input trên, khung kết quả bên dưới ---
 _placeholder_text = st.session_state.get(
     "astro_last_question",
     "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
@@ -2758,7 +2800,7 @@ with _ai_panel:
         key="astro_ai_input",
     )
 
-    _astro_chat_box = st.container(height=45, border=True, key="astro_ai_answer_box")
+    _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
@@ -2768,8 +2810,6 @@ with _ai_panel:
 if _ai_question and _ai_question.strip():
     user_query = _ai_question.strip()
 
-    # Chỉ gọi API nếu câu hỏi này KHÁC câu hỏi vừa xử lý xong (an toàn thêm,
-    # phòng trường hợp Streamlit rerun script nhiều lần trong 1 tương tác).
     if user_query != st.session_state.get("astro_last_processed_query"):
         st.session_state.astro_last_processed_query = user_query
         st.session_state.astro_last_question = user_query
@@ -2786,7 +2826,7 @@ if _ai_question and _ai_question.strip():
             st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
             st.session_state.zoom = 9
         st.rerun()
-# ------------------------------------------------------------------------------ (hết KHỐI C v6)
+# ------------------------------------------------------------------------------ (hết KHỐI C v7)
 
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
