@@ -2177,15 +2177,13 @@ def _run_tonight_scan(region="kanto"):
         "region": region,
     }
 # ------------------------------------------------------------------------------
-# KHỐI B — DÁN SAU DÒNG 2161 (ngay sau khi hàm `_run_tonight_scan` kết thúc,
-# TRƯỚC dòng 2163 "# ── MKW SCAN ..."). Lúc này _run_best_scan, _run_tonight_scan,
-# calculate_accurate_bortle, LOCATION_DATABASE đều đã được định nghĩa ở trên rồi.
+# KHỐI B — AI TOOLS: bọc lại các hàm scan/bortle đã có sẵn thành "tool" cho
+# Gemini. Nguyên tắc: KHÔNG viết lại logic thời tiết/bortle/moon — chỉ convert
+# output (datetime, tuple, dict UI-only) thành dict JSON gọn, dễ đọc cho AI.
+# DÁN THAY THẾ TOÀN BỘ KHỐI B CŨ (sau khi _run_tonight_scan kết thúc, trước
+# "# ── MKW SCAN...").
 # ------------------------------------------------------------------------------
- 
-# ── AI TOOLS — bọc lại các hàm scan/bortle đã có sẵn thành "tool" cho Gemini ──
-# Nguyên tắc: KHÔNG viết lại logic thời tiết/bortle/moon — chỉ convert output
-# (datetime, tuple, dict UI-only) thành dict JSON gọn, dễ đọc cho AI.
- 
+
 def _serialize_scan_result(result):
     """Chuẩn hoá output của _run_best_scan / _run_tonight_scan thành dict JSON-safe,
     bỏ các field chỉ dùng cho UI (color/border/bg/anim)."""
@@ -2197,7 +2195,7 @@ def _serialize_scan_result(result):
             "reason": f"Không có đêm nào đủ đẹp trong khoảng quét. "
                       f"Điều kiện phổ biến nhất: {result.get('_fallback_label', 'không rõ')}.",
         }
- 
+
     def _one(d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend=None):
         return {
             "date": d.strftime("%Y-%m-%d (%a)") if hasattr(d, "strftime") else str(d),
@@ -2212,60 +2210,61 @@ def _serialize_scan_result(result):
             "moon_illumination_pct": round(moon_illum, 1) if moon_illum is not None else None,
             "is_weekend": bool(is_weekend) if is_weekend is not None else None,
         }
- 
+
     top3 = result.get("top3", [])
     is_weekend_best = top3[0][6] if top3 and len(top3[0]) > 6 else None
     best = _one(result["date"], result["day_off"], result["loc_name"], result["loc_coords"],
                 result["verdict"], result["moon_illum"], is_weekend_best)
- 
+
     alternatives = []
     for row in top3[1:3]:
         d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend = row
         alternatives.append(_one(d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend))
- 
+
     return {"found": True, "best": best, "alternatives": alternatives}
- 
- 
+
+
 def tool_scan_best_weekend(region: str = "kanto") -> dict:
     """Tìm địa điểm và ngày chụp ảnh sao TỐT NHẤT trong 7 ngày tới, ưu tiên cuối tuần
     (Thứ 6/7/Chủ Nhật). Dùng khi user hỏi mơ hồ về thời gian: 'cuối tuần này',
     'tuần này', 'vài ngày tới', hoặc không nói rõ đêm nào.
- 
+
     Args:
         region: vùng địa lý Nhật Bản cần quét. Phải là một trong:
             'hokkaido', 'tohoku', 'kanto', 'chubu', 'kansai', 'chugoku',
             'shikoku', 'kyushu', 'okinawa', 'japan' (japan = toàn quốc, chậm hơn).
             Mặc định 'kanto' nếu user không nói rõ vùng nào.
- 
+
     Returns:
         dict: {"found": true, "best": {...}, "alternatives": [...]}
         hoặc {"found": false, "reason": "..."} nếu không có đêm nào đủ đẹp.
     """
     return _serialize_scan_result(_run_best_scan(region=region))
- 
- 
+
+
 def tool_scan_tonight(region: str = "kanto") -> dict:
     """Kiểm tra điều kiện chụp ảnh sao ĐÊM NAY (chỉ đêm nay, không phải ngày khác)
     cho 1 vùng địa lý. Dùng khi user hỏi cụ thể 'tối nay', 'đêm nay'.
- 
+
     Args:
         region: vùng địa lý, cùng danh sách như tool_scan_best_weekend. Mặc định 'kanto'.
- 
+
     Returns:
         dict cùng cấu trúc như tool_scan_best_weekend, nhưng chỉ xét đêm nay.
     """
     return _serialize_scan_result(_run_tonight_scan(region=region))
- 
- 
+
+
 def tool_check_location_darkness(location_name: str) -> dict:
     """Tra cứu độ tối bầu trời (thang Bortle 1-9, 1 = tối nhất/đẹp nhất) của MỘT
     địa điểm cụ thể đã có trong database, theo tên hoặc từ khoá gần đúng.
-    CHỈ dùng khi user hỏi về 1 địa điểm cụ thể đã biết tên — KHÔNG dùng để tìm
-    địa điểm mới (dùng tool_scan_best_weekend hoặc tool_scan_tonight cho việc đó).
- 
+    CHỈ dùng khi user hỏi về 1 địa điểm cụ thể đã biết tên VÀ chỉ hỏi về mức
+    ô nhiễm ánh sáng — KHÔNG dùng cho câu hỏi liên quan thời tiết đêm nay (dùng
+    tool_check_location_tonight cho việc đó), cũng KHÔNG dùng để tìm địa điểm mới.
+
     Args:
         location_name: tên hoặc từ khoá gần đúng, ví dụ 'Jogashima', 'Kamikochi'.
- 
+
     Returns:
         dict: {"found": true, "matched_name", "lat", "lon", "bortle_class", "sqm"}
         hoặc {"found": false, "reason": "..."} nếu không khớp địa điểm nào.
@@ -2278,33 +2277,124 @@ def tool_check_location_darkness(location_name: str) -> dict:
     bortle, sqm = calculate_accurate_bortle(lat, lon)
     return {"found": True, "matched_name": name, "lat": lat, "lon": lon,
             "bortle_class": bortle, "sqm": sqm}
- 
- 
+
+
+def _infer_region_from_loc_name(loc_name: str) -> str:
+    """Suy ra region key (kanto, kansai, ...) từ tên địa điểm, dựa theo tỉnh
+    (phần sau dấu phẩy cuối cùng trong tên, vd '..., Kanagawa' -> kanto)."""
+    pref = loc_name.rsplit(",", 1)[-1].strip()
+    for rk, prefs in _REGIONS.items():
+        if pref in prefs:
+            return rk
+    return "kanto"  # fallback an toàn nếu không khớp tỉnh nào
+
+
+def _night_verdict_for_single_loc(lat, lon, day_off=0):
+    """Tính verdict thời tiết đêm cho 1 toạ độ cụ thể (không quét cả vùng).
+    day_off=0 -> tối nay. Trả về None nếu lỗi tải thời tiết."""
+    d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+    moon_illum, _ = get_moon_phase_percent(d)
+    slots = _make_slots_for_offset(_night_base_jst, day_off)
+    try:
+        hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
+    except Exception:
+        return None
+    if not hourly:
+        return None
+    frozen = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in hourly.items())
+    try:
+        table, _, _, sun_alts, *_ = _build_night_data(
+            lat, lon, slots, frozen, st.session_state.weather_source, utc_off / 3600.0)
+    except Exception:
+        return None
+    verdict = _build_night_verdict(table, sun_alts, moon_illum)
+    if not verdict:
+        return None
+    return {"verdict": verdict, "moon_illum": moon_illum}
+
+
+def tool_check_location_tonight(location_name: str) -> dict:
+    """Kiểm tra điều kiện chụp ảnh sao ĐÊM NAY tại MỘT địa điểm cụ thể theo tên
+    (không phải quét cả vùng). Dùng khi user hỏi về 1 địa điểm cụ thể cho tối nay,
+    ví dụ 'Jogashima tối nay thế nào', 'Kamikochi có sao không'.
+
+    QUAN TRỌNG: nếu kết quả trả về is_good=false (thời tiết/mây không tốt tại
+    địa điểm này), hãy GỌI THÊM tool_scan_tonight với region=giá trị "region"
+    trong kết quả này, để tìm địa điểm thay thế tốt hơn trong cùng khu vực,
+    rồi đề xuất tên các địa điểm đó cho user thay vì chỉ báo "không tốt".
+
+    Args:
+        location_name: tên hoặc từ khoá gần đúng của địa điểm, vd 'Jogashima'.
+
+    Returns:
+        dict: {"found": true, "matched_name", "lat", "lon", "region",
+               "sky_tier", "stars", "detail", "clear_hours",
+               "moon_illumination_pct", "is_good": bool}
+        hoặc {"found": false, "reason": "..."} nếu không khớp địa điểm/lỗi thời tiết.
+    """
+    needle = location_name.strip().lower()
+    match = next(((n, c) for n, c in LOCATION_DATABASE.items() if needle in n.lower()), None)
+    if not match:
+        return {"found": False, "reason": f"Không tìm thấy địa điểm khớp '{location_name}' trong database."}
+    name, (lat, lon) = match
+    region = _infer_region_from_loc_name(name)
+    result = _night_verdict_for_single_loc(lat, lon, day_off=0)
+    if not result:
+        return {"found": False, "reason": f"Không lấy được dữ liệu thời tiết cho {name}."}
+    verdict = result["verdict"]
+    tier_rank = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}.get(verdict["tier"], 0)
+    return {
+        "found": True,
+        "matched_name": name,
+        "lat": lat, "lon": lon,
+        "region": region,
+        "sky_tier": verdict.get("tier"),
+        "stars": verdict.get("stars"),
+        "detail": verdict.get("sub"),
+        "clear_hours": verdict.get("good_hours"),
+        "moon_illumination_pct": round(result["moon_illum"], 1) if result["moon_illum"] is not None else None,
+        "is_good": tier_rank >= 1,
+    }
+
+
 def ask_astro_ai(user_question: str):
     """Gửi câu hỏi tự nhiên của user tới Gemini kèm bộ tool ở trên (Gemini tự quyết
     định gọi tool nào — automatic function calling của SDK google-genai).
- 
+
     Trả về tuple (answer_text: str, fly_to: dict|None).
-    fly_to = {"lat":.., "lon":.., "name":..} của địa điểm AI đề xuất chính (nếu có)
-    — dùng để tự động bay map tới đó, HOẶC None nếu AI không gọi tool nào tìm ra
-    địa điểm cụ thể (vd chỉ trả lời câu hỏi chung chung).
+    fly_to = {"lat":.., "lon":.., "name":..} của địa điểm AI đề xuất CUỐI CÙNG
+    (có thể là địa điểm thay thế, không phải địa điểm user hỏi ban đầu nếu chỗ
+    đó thời tiết xấu) — dùng để tự động bay map tới đó.
     """
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     system_prompt = (
         f"Hôm nay là {now_jst.strftime('%A, %Y-%m-%d')} (giờ Nhật Bản, JST). "
         "Bạn là trợ lý tư vấn địa điểm/thời điểm chụp ảnh thiên văn (sao, Milky Way) "
-        "ở Nhật Bản, gắn liền với 1 bản đồ Bortle + dự báo thời tiết đã có sẵn. "
-        "Khi user hỏi mơ hồ về thời gian ('cuối tuần này', 'tối nay', 'vài ngày tới'), "
-        "hãy tự suy luận ra tool phù hợp và gọi nó — LUÔN gọi ít nhất 1 tool trước khi "
-        "trả lời, không được tự bịa thời tiết/địa điểm/toạ độ. "
-        "Trả lời ngắn gọn (3-5 câu), thân thiện, bằng tiếng Việt, nêu rõ: tên địa điểm, "
-        "ngày, và lý do (mây bao nhiêu %, trăng sáng bao nhiêu %, Bortle mấy)."
+        "ở Nhật Bản, gắn liền với 1 bản đồ Bortle + dự báo thời tiết đã có sẵn.\n\n"
+        "QUY TẮC CHỌN TOOL:\n"
+        "- Nếu user hỏi về 1 địa điểm CỤ THỂ cho tối nay (vd 'Jogashima tối nay thế "
+        "nào') -> gọi tool_check_location_tonight trước. Nếu is_good=false, gọi "
+        "THÊM tool_scan_tonight(region=<region trả về>) để tìm chỗ tốt hơn, rồi đề "
+        "xuất tên các chỗ đó thay vì điểm ban đầu.\n"
+        "- Nếu user hỏi mơ hồ về thời gian ('cuối tuần này', 'vài ngày tới') không "
+        "gắn với 1 địa điểm cụ thể -> gọi tool_scan_best_weekend.\n"
+        "- Nếu user hỏi 'tối nay'/'đêm nay' chung chung không gắn địa điểm cụ thể "
+        "-> gọi tool_scan_tonight.\n"
+        "- Nếu chỉ hỏi độ tối bầu trời (Bortle) của 1 nơi, không liên quan thời tiết "
+        "-> gọi tool_check_location_darkness.\n"
+        "- LUÔN gọi ít nhất 1 tool trước khi trả lời, không được tự bịa thời tiết/"
+        "địa điểm/toạ độ.\n\n"
+        "Trả lời ngắn gọn (3-5 câu), thân thiện, bằng tiếng Việt. Nếu địa điểm ban "
+        "đầu xấu và bạn đề xuất chỗ khác, nói rõ kiểu: 'Jogashima thời tiết không "
+        "tốt, các địa điểm có thời tiết tốt hơn là Kamikochi, JAXA...' kèm lý do "
+        "(mây %, trăng %, Bortle)."
     )
- 
-    # Bọc từng tool để "chộp" lại kết quả tool cuối cùng thành công — dùng để
-    # tự động bay map tới đó sau khi AI trả lời xong.
+
+    # Bọc từng tool để "chộp" lại kết quả tool CUỐI CÙNG thành công — nhờ đó nếu
+    # AI gọi tool_check_location_tonight (xấu) rồi gọi tiếp tool_scan_tonight (tốt
+    # hơn), map sẽ tự bay tới địa điểm THAY THẾ chứ không phải điểm bị hỏi ban đầu.
     last_result = {"data": None, "tool": None}
- 
+
     def _wrap(fn):
         @functools.wraps(fn)
         def wrapped(*args, **kwargs):
@@ -2314,11 +2404,12 @@ def ask_astro_ai(user_question: str):
                 last_result["tool"] = fn.__name__
             return out
         return wrapped
- 
+
     wrapped_tools = [_wrap(tool_scan_best_weekend),
                       _wrap(tool_scan_tonight),
-                      _wrap(tool_check_location_darkness)]
- 
+                      _wrap(tool_check_location_darkness),
+                      _wrap(tool_check_location_tonight)]
+
     answer_text = None
     last_err = None
     for model in ASTRO_AI_MODEL_CANDIDATES:
@@ -2336,19 +2427,20 @@ def ask_astro_ai(user_question: str):
         except Exception as e:
             last_err = e
             continue
- 
+
     if answer_text is None:
         return f"⚠️ Lỗi gọi AI (đã thử {len(ASTRO_AI_MODEL_CANDIDATES)} model): {last_err}", None
- 
+
     fly_to = None
     data = last_result["data"]
     if data:
-        # tool_check_location_darkness trả lat/lon ở top-level; 2 tool scan trả trong "best"
+        # tool_check_location_darkness/tonight trả lat/lon ở top-level;
+        # 2 tool scan trả trong "best"
         loc = data if "lat" in data else data.get("best")
         if loc and "lat" in loc:
             fly_to = {"lat": loc["lat"], "lon": loc["lon"],
                       "name": loc.get("matched_name") or loc.get("location_name")}
- 
+
     return answer_text, fly_to
 # ------------------------------------------------------------------------------ (hết KHỐI B)
 # ── MKW SCAN — top-50 personal favourite locations ──────────────────────
