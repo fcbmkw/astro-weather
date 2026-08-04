@@ -2644,7 +2644,7 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS CÂN CHỈNH ĐỐI XỨNG TUYỆT ĐỐI CẢ TRÊN VÀ DƯỚI ---
+    # --- CSS CÂN CHỈNH GIAO DIỆN & TỰ ĐINHS PHÔNG CHỮ PLACEHOLDER (GREYOUT) ---
     st.markdown(
         """
         <style>
@@ -2666,15 +2666,18 @@ with _ai_panel:
             line-height: 30px !important;
             padding: 0 !important;
         }
+        /* Style màu chữ xám mờ (greyout) cho placeholder */
+        div[data-testid="stTextInput"] input::placeholder {
+            color: #888888 !important;
+            opacity: 0.8 !important;
+        }
 
-        /* 2. KHUNG KẾT QUẢ: CÂN BẰNG TRÊN - DƯỚI (14px đối xứng) */
+        /* 2. KHUNG KẾT QUẢ ĐỐI XỨNG */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
-            padding: 14px 16px !important; /* Trên & Dưới đều đúng 14px */
+            padding: 14px 16px !important;
         }
-        
-        /* Font & khoảng cách dòng đồng nhất */
         div[class*="st-key-astro_ai_answer_box"] p,
         div[class*="st-key-astro_ai_answer_box"] li,
         div[class*="st-key-astro_ai_answer_box"] span,
@@ -2684,15 +2687,12 @@ with _ai_panel:
             margin-top: 0 !important;
             margin-bottom: 0.4rem !important;
         }
-        
         div[class*="st-key-astro_ai_answer_box"] ol,
         div[class*="st-key-astro_ai_answer_box"] ul {
             padding-left: 1.2rem !important;
             margin-top: 0.3rem !important;
             margin-bottom: 0.4rem !important;
         }
-
-        /* 💥 TRIỆT TIỆU MARGIN CỦA DÒNG CUỐI CÙNG ĐỂ KHÔNG BỊ ĐẨY KHUNG */
         div[class*="st-key-astro_ai_answer_box"] *:last-child {
             margin-bottom: 0 !important;
         }
@@ -2701,12 +2701,17 @@ with _ai_panel:
         unsafe_allow_html=True,
     )
 
-    _default_q = st.session_state.get("astro_last_question", "")
+    # Lấy câu hỏi vừa xử lý trước đó để làm Placeholder mờ (nếu chưa có thì dùng chữ mặc định)
+    _placeholder_text = st.session_state.get(
+        "astro_last_question", 
+        "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao..."
+    )
 
+    # Thiết lập ô nhập liệu: value="" để trống sẵn, chữ cũ chuyển thành placeholder mờ
     _ai_question = st.text_input(
         label="Hỏi AI",
-        value=_default_q,
-        placeholder="Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
+        value="",
+        placeholder=_placeholder_text,
         key="astro_ai_input",
         label_visibility="collapsed",
     )
@@ -2717,10 +2722,10 @@ with _ai_panel:
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
 
-# --- LOGIC XỬ LÝ (GIỮ NGUYÊN) ---
-if _ai_question and _ai_question.strip() and _ai_question.strip() != st.session_state.get("astro_last_processed_q"):
+# --- LOGIC XỬ LÝ KHI NGƯỜI DÙNG GÕ CÂU HỎI MỚI ---
+if _ai_question and _ai_question.strip():
+    # Lưu câu hỏi mới để vòng rerun sau nó sẽ chuyển thành Placeholder mờ
     st.session_state.astro_last_question = _ai_question.strip()
-    st.session_state.astro_last_processed_q = _ai_question.strip()
 
     with _answer_slot:
         st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
