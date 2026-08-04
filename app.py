@@ -30,7 +30,12 @@ ASTRO_AI_MODEL_CANDIDATES = [
 ]
 # ------------------------------------------------------------------------------ (hết KHỐI A)
 # --- CƠ SỞ DỮ LIỆU ĐỊA ĐIỂM ---
-LOCATION_DATABASE = {
+# LƯU Ý: LOCATION_DATABASE_JP (269 điểm) và LOCATION_DATABASE_VN (10 điểm) được
+# tách riêng để giới hạn tính năng SEARCH (ô tìm kiếm trên bản đồ + AI tra cứu
+# theo tên) chỉ trong phạm vi 1 nước theo user. LOCATION_DATABASE (gộp cả 2)
+# vẫn được dùng để VẼ TOÀN BỘ marker trên bản đồ cho mọi user xem — chỉ có
+# search/AI lookup là bị giới hạn theo nước, không phải hiển thị.
+LOCATION_DATABASE_JP = {
     "1. Jogashima 馬の背, Kanagawa": [35.1313, 139.6179],
     "2. Tateyama ゴルフ場, Chiba": [34.9517, 139.8103],
     "3. Shirahama 白浜の屏風岩, Chiba": [34.9088, 139.8294],
@@ -309,7 +314,9 @@ LOCATION_DATABASE = {
     "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7384, 139.3800],
     "268. Oshima Habu Port 波浮港, Tokyo": [34.6873, 139.4363],
     "269. Minami-Daito Island 南大東島, Okinawa": [25.8470, 131.2330],
-    # Vietnam
+}
+
+LOCATION_DATABASE_VN = {
     "270. Long Coc Tea Hill Đồi chè Long Cốc, Phu Tho": [21.2181, 105.1528],
     "271. Bac Son Valley Thung lũng Bắc Sơn, Lang Son": [21.9056, 106.3312],
     "272. Mu Cang Chai (La Pan Tan) Mù Cang Chải, Yen Bai": [21.8485, 104.1082],
@@ -321,6 +328,9 @@ LOCATION_DATABASE = {
     "278. Thang Hen Lake Hồ Thăng Hen, Cao Bang": [22.7533, 106.3005],
     "279. Quan Lan Island Đảo Quan Lạn, Quang Ninh": [20.9065, 107.5452],
 }
+
+# LOCATION_DATABASE = bản gộp đầy đủ, dùng để VẼ marker trên bản đồ cho mọi user.
+LOCATION_DATABASE = {**LOCATION_DATABASE_JP, **LOCATION_DATABASE_VN}
 
 st.set_page_config(page_title="Astro Map Pro", page_icon="🌌", layout="wide", initial_sidebar_state="collapsed")
 
@@ -387,17 +397,36 @@ if "_geo_cc" not in st.session_state:
         st.session_state["_geo_cc"] = _qp_cc.upper()
     else:
         st.write("🌍 Đang xác định vị trí...")
+        # An toàn: setTimeout 4s luôn tự fallback về 'XX' (=> mặc định JP) dù
+        # fetch bị chặn/timeout/không phản hồi — trang KHÔNG BAO GIỜ treo vô hạn
+        # nữa như bản cũ (bản cũ chỉ redirect khi fetch resolve, nếu fetch bị
+        # firewall/adblock chặn hoàn toàn mà không throw thì trang kẹt mãi).
+        # Đồng thời thử window.parent trước (khi nhúng bình thường qua
+        # components.html), nếu bị lỗi cross-origin thì rơi về window.location
+        # của chính iframe thay vì im lặng bỏ cuộc như bản cũ.
         components.html(
             """
             <script>
             (function() {
+                var done = false;
                 function goWithCC(cc) {
+                    if (done) return;
+                    done = true;
                     try {
-                        var url = new URL(window.parent.location.href);
+                        if (window.parent && window.parent !== window) {
+                            try {
+                                var purl = new URL(window.parent.location.href);
+                                purl.searchParams.set('cc', cc);
+                                window.parent.location.replace(purl.toString());
+                                return;
+                            } catch (e) { /* cross-origin: rơi xuống dòng dưới */ }
+                        }
+                        var url = new URL(window.location.href);
                         url.searchParams.set('cc', cc);
-                        window.parent.location.replace(url.toString());
-                    } catch (e) {}
+                        window.location.replace(url.toString());
+                    } catch (e) { /* JS bị chặn hoàn toàn: dùng link tay bên dưới */ }
                 }
+                setTimeout(function() { goWithCC('XX'); }, 4000);
                 fetch('https://ipapi.co/json/')
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
@@ -409,10 +438,37 @@ if "_geo_cc" not in st.session_state:
             """,
             height=0,
         )
+        # Fallback tay bằng HTML thuần (không phụ thuộc JS) — hiện phòng khi
+        # trình duyệt chặn JS/fetch hoàn toàn.
+        st.markdown(
+            "Nếu trang không tự chuyển sau vài giây, chọn quốc gia: "
+            "[🇯🇵 Japan](?cc=JP) &nbsp;|&nbsp; [🇻🇳 Việt Nam](?cc=VN)",
+            unsafe_allow_html=True,
+        )
         st.stop()  # dừng lần render này, chờ JS reload trang kèm ?cc=
 
 _geo_cc = st.session_state.get("_geo_cc")
+
+# ── Cho phép user tự đổi nước thủ công (phòng khi IP-geolocation đoán sai,
+# ví dụ dùng VPN) — đổi ở đây sẽ áp dụng ngay, không cần reload trang. ──────
+with st.sidebar:
+    _cc_choice = st.selectbox(
+        "🌏 Quốc gia / Country",
+        options=["JP", "VN"],
+        index=0 if _geo_cc != "VN" else 1,
+        format_func=lambda c: "🇯🇵 Japan" if c == "JP" else "🇻🇳 Việt Nam",
+        key="_cc_manual_select",
+    )
+if _cc_choice != _geo_cc:
+    _geo_cc = _cc_choice
+    st.session_state["_geo_cc"] = _geo_cc
+
 _default_loc = _DEFAULT_LOC_BY_COUNTRY.get(_geo_cc, _FALLBACK_LOC)
+
+# ── Bộ dữ liệu địa điểm dùng cho SEARCH / AI lookup — chỉ trong phạm vi nước
+# hiện tại của user. LOCATION_DATABASE (đầy đủ cả 2 nước) vẫn dùng để vẽ toàn
+# bộ marker trên bản đồ cho mọi user xem, không bị ảnh hưởng bởi biến này.
+HOME_LOCATION_DATABASE = LOCATION_DATABASE_VN if _geo_cc == "VN" else LOCATION_DATABASE_JP
 
 # ── SESSION STATE ────────────────────────────────────────────────────────────
 for k, v in [("lat", _default_loc["lat"]), ("lon", _default_loc["lon"]),
