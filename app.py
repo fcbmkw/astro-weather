@@ -2642,95 +2642,51 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # - Trạng thái "đang kiểm tra..." hiện greyout NGAY TRONG khung kết quả
 #   (st.caption, không dùng st.spinner rời rạc nữa).
 # ------------------------------------------------------------------------------
-# --- 1. HÀM XỬ LÝ LOGIC (CHẠY KHI BẤM ENTER HOẶC CLICK NÚT MŨI TÊN) ---
-def _process_astro_ai():
-    user_q = st.session_state.astro_ai_input.strip()
-    if user_q:
-        # Lưu câu hỏi để hiển thị làm placeholder mờ ở lần sau
-        st.session_state.astro_last_question = user_q
-        st.session_state.astro_ai_loading = True
-        
-        # Gọi AI
-        answer, fly_to = ask_astro_ai(user_q)
-        
-        st.session_state.astro_ai_answer = answer
-        if fly_to:
-            st.session_state.lat = fly_to["lat"]
-            st.session_state.lon = fly_to["lon"]
-            st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
-            st.session_state.zoom = 9
-            
-        st.session_state.astro_ai_loading = False
-        # Reset ô nhập liệu về rỗng
-        st.session_state.astro_ai_input = ""
-
-
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS HIỆN ĐẠI: ĐẶT NÚT MŨI TÊN NẰM TRONG KHUNG TEXT_INPUT ---
+    # --- CSS CHUẨN DÀNH CHO ST.CHAT_INPUT: KHÔNG PHÌNH KHUNG + CĂN GIỮA MŨI TÊN ---
     st.markdown(
         """
         <style>
-        /* Khung chứa cả Input và Nút Mũi Tên */
-        div[data-testid="stForm"] {
-            border: none !important;
+        /* 1. ÉP CỐ ĐỊNH CHIỀU CAO KHUNG CHAT_INPUT (CÓ SẴN NÚT MŨI TÊN TRÒN) */
+        div[data-testid="stChatInput"] {
             padding: 0 !important;
+            min-height: unset !important;
         }
-        
-        /* Cấu hình khung Text Input */
-        div[data-testid="stTextInput"] {
-            margin-bottom: 0px !important;
-        }
-        div[data-testid="stTextInput"] > div > div {
+        div[data-testid="stChatInput"] > div {
             min-height: 36px !important;
             height: 36px !important;
-            padding: 0 40px 0 10px !important; /* Dành khoảng trống 40px ở bên phải cho nút mũi tên */
-            border-radius: 8px !important;
+            padding: 0 8px !important;
             display: flex !important;
-            align-items: center !important;
+            align-items: center !important; /* Căn giữa nút mũi tên & khung chữ */
         }
-        div[data-testid="stTextInput"] input {
-            font-size: 13px !important;
-            height: 32px !important;
-            line-height: 32px !important;
+        /* Ép Textarea cố định, triệt tiêu hoàn toàn lỗi tự phình to khi gõ chữ */
+        div[data-testid="stChatInput"] textarea {
+            min-height: 24px !important;
+            height: 24px !important;
+            max-height: 24px !important;
             padding: 0 !important;
+            margin: 0 !important;
+            font-size: 13px !important;
+            line-height: 24px !important;
+            resize: none !important;
+            overflow: hidden !important;
         }
-        div[data-testid="stTextInput"] input::placeholder {
+        /* Style chữ xám mờ (greyout) cho placeholder */
+        div[data-testid="stChatInput"] textarea::placeholder {
             color: #888888 !important;
             opacity: 0.8 !important;
         }
-
-        /* Định vị nút Mũi Tên Hướng Lên chèn vào góc phải của Input */
-        .astro-send-btn-container {
-            position: relative;
-            margin-top: -36px;
-            height: 36px;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            padding-right: 6px;
-            pointer-events: none; /* Tránh che mất vùng click input */
-        }
-        .astro-send-btn-container button {
-            pointer-events: auto;
+        /* Căn nút mũi tên tròn đúng giữa chiều dọc */
+        div[data-testid="stChatInput"] button {
             height: 26px !important;
             width: 26px !important;
-            min-height: 26px !important;
             padding: 0 !important;
-            border-radius: 50% !important;
-            background-color: #31333F !important;
-            color: #FFFFFF !important;
-            border: none !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        .astro-send-btn-container button:hover {
-            background-color: #FF4B4B !important; /* Đổi màu khi hover */
-            color: white !important;
+            margin: 0 !important;
+            align-self: center !important;
         }
 
-        /* 2. KHUNG KẾT QUẢ CÂN BẰNG */
+        /* 2. KHUNG HIỂN THỊ KẾT QUẢ ĐỐI XỨNG TRÊN - DƯỚI */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
@@ -2760,33 +2716,41 @@ with _ai_panel:
         unsafe_allow_html=True,
     )
 
+    # Lấy câu hỏi vừa xử lý trước đó làm Placeholder xám mờ
     _placeholder_text = st.session_state.get(
         "astro_last_question", 
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao..."
     )
 
-    # Ô nhập liệu văn bản (nhấn Enter để gửi)
-    st.text_input(
-        label="Hỏi AI",
+    # Sử dụng st.chat_input gốc (có sẵn nút mũi tên đỏ/trắng tích hợp bên trong)
+    _ai_question = st.chat_input(
         placeholder=_placeholder_text,
         key="astro_ai_input",
-        on_change=_process_astro_ai,
-        label_visibility="collapsed",
     )
 
-    # Nút bấm Mũi Tên Hướng Lên (Click chuột để gửi)
-    st.markdown('<div class="astro-send-btn-container">', unsafe_allow_html=True)
-    if st.button("↑", key="astro_ai_send_btn", help="Gửi câu hỏi"):
-        _process_astro_ai()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Khung hiển thị kết quả
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
-        if st.session_state.get("astro_ai_loading"):
-            st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
-        elif st.session_state.get("astro_ai_answer"):
-            st.markdown(st.session_state.astro_ai_answer)
+        _answer_slot = st.empty()
+        if st.session_state.get("astro_ai_answer"):
+            _answer_slot.markdown(st.session_state.astro_ai_answer)
+
+# --- LOGIC XỬ LÝ NGUYÊN BẢN (CHỈ CHẠY KHI BẤM ENTER HOẶC CLICK MŨI TÊN CÓ NỘI DUNG MỚI) ---
+if _ai_question and _ai_question.strip():
+    # Lưu lại câu hỏi mới để làm placeholder xám mờ ở vòng lặp rerun sau
+    st.session_state.astro_last_question = _ai_question.strip()
+
+    with _answer_slot:
+        st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
+
+    answer, fly_to = ask_astro_ai(_ai_question.strip())
+    st.session_state.astro_ai_answer = answer
+
+    if fly_to:
+        st.session_state.lat = fly_to["lat"]
+        st.session_state.lon = fly_to["lon"]
+        st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
+        st.session_state.zoom = 9
+    st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v5)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
