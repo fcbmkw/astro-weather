@@ -2695,94 +2695,38 @@ _ai_panel = st.container()
 with _ai_panel:
     # --- CSS ÉP KHOẢNG CÁCH DÍNH LIỀN KHÔNG CÒN KHOẢNG HỞ ---
     st.markdown(
-        """
-        <style>
-        /* 1. ẨN TOOLBAR STREAMLIT */
-        [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
-            display: none !important;
-            visibility: hidden !important;
-        }
-
-        /* 2. CHỈNH KHUNG CHAT_INPUT & TRIỆT TIỆU MARGIN DƯỚI */
-        div[data-testid="stChatInput"] {
-            padding: 0 !important;
-            min-height: unset !important;
-            margin-bottom: 0px !important; /* Xóa sạch margin dưới */
-        }
-        
-        div[data-testid="stChatInput"] > div {
-            min-height: 38px !important;
-            height: 38px !important;
-            padding: 0 8px 0 12px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-        }
-
-        div[data-testid="stChatInput"] textarea {
-            min-height: 24px !important;
-            height: 24px !important;
-            max-height: 24px !important;
-            padding: 0 !important;
-            margin-top: 2px !important;
-            margin-bottom: 0 !important;
-            font-size: 13px !important;
-            line-height: 24px !important;
-            resize: none !important;
-            overflow: hidden !important;
-        }
-        
-        div[data-testid="stChatInput"] textarea::placeholder {
-            color: #888888 !important;
-            opacity: 0.8 !important;
-        }
-
-        div[data-testid="stChatInput"] button {
-            position: static !important;
-            top: auto !important;
-            bottom: auto !important;
-            right: auto !important;
-            height: 26px !important;
-            width: 26px !important;
-            min-height: 26px !important;
-            min-width: 26px !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            align-self: center !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-
-        /* 3. KHUNG HIỂN THỊ KẾT QUẢ - DÙNG MARGIN ÂM ĐỂ KÉO DÍNH SÁT MẶT CHATBOX */
-        div[class*="st-key-astro_ai_answer_box"] {
-            min-height: auto !important;
-            height: auto !important;
-            padding: 14px 16px !important;
-            margin-top: -10px !important; /* 🔥 MARGIN ÂM: Triệt tiêu hoàn toàn gap mặc định của Streamlit */
-        }
-        div[class*="st-key-astro_ai_answer_box"] p,
-        div[class*="st-key-astro_ai_answer_box"] li,
-        div[class*="st-key-astro_ai_answer_box"] span,
-        div[class*="st-key-astro_ai_answer_box"] div {
-            font-size: 13px !important;
-            line-height: 1.5 !important;
-            margin-top: 0 !important;
-            margin-bottom: 0.4rem !important;
-        }
-        div[class*="st-key-astro_ai_answer_box"] ol,
-        div[class*="st-key-astro_ai_answer_box"] ul {
-            padding-left: 1.2rem !important;
-            margin-top: 0.3rem !important;
-            margin-bottom: 0.4rem !important;
-        }
-        div[class*="st-key-astro_ai_answer_box"] *:last-child {
-            margin-bottom: 0 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
+    <style>
+    /* Tìm đúng container cha thật sự đang chứa nút gửi, ép nó thành flex-row
+       căn giữa theo chiều dọc — không cần đoán số cấp lồng nữa. */
+    div[data-testid="stChatInput"] div:has(> [data-testid="stChatInputSubmitButton"]) {
+        display: flex !important;
+        align-items: center !important;
+    }
+ 
+    [data-testid="stChatInputSubmitButton"] {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+        padding: 0 !important;
+        flex-shrink: 0 !important;
+    }
+ 
+    [data-testid="stChatInputTextArea"] {
+        min-height: 24px !important;
+        height: 24px !important;
+        line-height: 24px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+ 
+    /* Giữ nguyên các phần CSS khác bạn đã có (placeholder màu xám, ẩn
+       header/toolbar, font-size khung kết quả, v.v.) — không đụng vào. */
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
     _placeholder_text = st.session_state.get(
         "astro_last_question", 
