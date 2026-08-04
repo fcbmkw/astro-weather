@@ -2539,7 +2539,34 @@ _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 
 if st.session_state.map_tile not in ("satellite", "street", "windy"):
     st.session_state.map_tile = "windy"
-
+# ------------------------------------------------------------------------------
+# KHỐI C — DÁN NGAY TRƯỚC DÒNG 2356 ("m = folium.Map(") — khung chat AI nhỏ,
+# hiện phía trên bản đồ. Dùng lại đúng pattern set session_state.lat/lon/
+# map_center đã có sẵn ở dòng 2287-2290 / 2328-2330 để "bay map" tới kết quả.
+# ------------------------------------------------------------------------------
+ 
+with st.expander("🔭 Hỏi AI: tìm điểm & thời điểm chụp ảnh sao", expanded=False):
+    if "astro_ai_answer" not in st.session_state:
+        st.session_state.astro_ai_answer = None
+ 
+    ai_question = st.text_input(
+        "Ví dụ: 'Cuối tuần này đi chụp được không? Ở đâu?' / 'Tối nay Kamikochi có sao không?'",
+        key="astro_ai_input",
+    )
+    if st.button("Hỏi", key="astro_ai_ask_btn") and ai_question.strip():
+        with st.spinner("AI đang kiểm tra thời tiết & địa điểm..."):
+            answer, fly_to = ask_astro_ai(ai_question.strip())
+        st.session_state.astro_ai_answer = answer
+        if fly_to:
+            st.session_state.lat = fly_to["lat"]
+            st.session_state.lon = fly_to["lon"]
+            st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
+            st.session_state.zoom = 9
+            st.rerun()  # bay map tới điểm AI vừa chọn + hiện marker "đang chọn" có sẵn
+ 
+    if st.session_state.astro_ai_answer:
+        st.info(st.session_state.astro_ai_answer)
+# ------------------------------------------------------------------------------ (hết KHỐI C)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
 # Điều này là chìa khoá giúp pan/zoom mượt: Streamlit không can thiệp vào
