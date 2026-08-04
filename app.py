@@ -2644,7 +2644,7 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS FIX TRIỆT ĐỂ NÚT MŨI TÊN & CHỮ GÕ BỊ LỆCH ---
+    # --- CSS NÂNG CHIỀU CAO CHATBOX & DỜI VỊ TRÍ CHUẨN TRỌNG TÂM ---
     st.markdown(
         """
         <style>
@@ -2654,34 +2654,36 @@ with _ai_panel:
             visibility: hidden !important;
         }
 
-        /* 2. CHỈNH KHUNG CHAT_INPUT CHUẨN ĐỐI XỨNG */
+        /* 2. KHUNG CHAT_INPUT TĂNG NẸ CHIỀU CAO LÊN 42PX */
         div[data-testid="stChatInput"] {
             padding: 0 !important;
             min-height: unset !important;
         }
         
-        /* Container chứa cả textarea và nút bấm */
+        /* Container ngoài cùng của ChatInput */
         div[data-testid="stChatInput"] > div {
-            min-height: 38px !important;
-            height: 38px !important;
-            padding: 0 8px 0 12px !important;
+            min-height: 42px !important;
+            height: 42px !important;
+            padding: 0 8px 0 14px !important;
             display: flex !important;
-            align-items: center !important; /* Căn giữa mọi phần tử con theo chiều dọc */
+            align-items: center !important;
             justify-content: space-between !important;
+            border-radius: 8px !important;
         }
 
-        /* Ô nhập văn bản - Căn chữ nằm chính giữa */
+        /* Ô nhập văn bản - Căn chữ chuẩn tuyệt đối */
         div[data-testid="stChatInput"] textarea {
-            min-height: 24px !important;
-            height: 24px !important;
-            max-height: 24px !important;
+            min-height: 26px !important;
+            height: 26px !important;
+            max-height: 26px !important;
             padding: 0 !important;
-            margin-top: 2px !important; /* Đẩy chữ xuống nhẹ 2px để nằm chuẩn giữa viền */
-            margin-bottom: 0 !important;
-            font-size: 13px !important;
-            line-height: 24px !important;
+            margin: 0 !important;
+            font-size: 13.5px !important;
+            line-height: 26px !important;
             resize: none !important;
             overflow: hidden !important;
+            /* Đẩy nhẹ chữ xuống trung tâm theo trục Y */
+            transform: translateY(1px) !important;
         }
         
         div[data-testid="stChatInput"] textarea::placeholder {
@@ -2689,25 +2691,27 @@ with _ai_panel:
             opacity: 0.8 !important;
         }
 
-        /* 💥 TRIỆT TIỆU VỊ TRÍ TUYỆT ĐỐI CỦA NÚT MŨI TÊN ĐỎ DÙNG ALIGN-ITEMS CĂN GIỮA */
+        /* Nút mũi tên - Ép hạ thấp xuống đúng khoảng giữa viền */
         div[data-testid="stChatInput"] button {
-            position: static !important; /* Bỏ position absolute mặc định của Streamlit */
-            top: auto !important;
-            bottom: auto !important;
-            right: auto !important;
-            height: 26px !important;
-            width: 26px !important;
-            min-height: 26px !important;
-            min-width: 26px !important;
+            position: relative !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            height: 28px !important;
+            width: 28px !important;
+            min-height: 28px !important;
+            min-width: 28px !important;
             padding: 0 !important;
             margin: 0 !important;
-            align-self: center !important; /* Buộc nút nằm chính giữa theo chiều dọc */
+            /* Đẩy nút bấm xuống chính giữa viền */
+            transform: translateY(0px) !important;
+            align-self: center !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
 
-        /* 3. KHUNG HIỂN THỊ KẾT QUẢ */
+        /* 3. KHUNG HIỂN THỊ KẾT QUẢ ĐỐI XỨNG */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
