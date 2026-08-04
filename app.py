@@ -2644,52 +2644,46 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
+    # --- CSS tinh chỉnh giao diện ---
     st.markdown(
         """
         <style>
-        /* 1. KHUNG CHAT INPUT: THU HẸP + CĂN GIỮA CHỮ */
-        [data-testid="stChatInput"] {
-            padding: 0 !important;
+        /* 1. THU HẸP KHUNG CHAT INPUT & CĂN GIỮA TEXT PLACEHOLDER */
+        div[data-testid="stChatInput"] {
             min-height: unset !important;
+            padding: 0 !important;
         }
-        /* Khung viền chứa input & nút gửi */
-        [data-testid="stChatInput"] > div {
-            padding: 0 10px !important;
+        div[data-testid="stChatInput"] > div {
             min-height: 32px !important;
             height: 32px !important;
-            display: flex !important;
-            align-items: center !important; /* Căn giữa chiều dọc cho tất cả phần tử bên trong */
-        }
-        /* Ô gõ chữ / Placeholder */
-        [data-testid="stChatInput"] textarea {
-            min-height: 20px !important;
-            height: 20px !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            font-size: 13px !important;
-            line-height: 20px !important; /* Đảm bảo chữ nằm chính giữa dòng */
+            padding: 0 10px !important;
             display: flex !important;
             align-items: center !important;
         }
-        /* Nút mũi tên gửi */
-        [data-testid="stChatInput"] button {
+        div[data-testid="stChatInput"] textarea {
+            min-height: 24px !important;
+            height: 24px !important;
+            padding: 0 !important;
+            font-size: 13px !important;
+            line-height: 24px !important; /* Căn giữa chữ theo chiều dọc */
+        }
+        div[data-testid="stChatInput"] button {
             height: 22px !important;
             width: 22px !important;
             padding: 0 !important;
-            margin: 0 !important;
         }
 
-        /* 2. KHUNG KẾT QUẢ: TĂNG KHOẢNG CÁCH ĐÁY (PADDING-BOTTOM) */
-        [class*="st-key-astro_ai_answer_box"] {
-            padding: 10px 14px 16px 14px !important; /* Padding dưới 16px cho dòng cuối thoáng hẳn */
+        /* 2. KHUNG KẾT QUẢ: TỰ ĐỘNG CO GIÃN & CHỐNG SÁT MÉP DƯỚI */
+        div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
-            height: auto !important;
+            height: auto !important; /* Đổi từ 40px cố định sang auto để không che chữ */
+            padding: 10px 14px 18px 14px !important; /* 18px ở đáy giúp dòng cuối thoáng hẳn */
         }
-        [class*="st-key-astro_ai_answer_box"] p {
+        div[class*="st-key-astro_ai_answer_box"] p {
             font-size: 13px !important;
             line-height: 1.5 !important;
             margin-top: 0 !important;
-            margin-bottom: 0 !important; /* Xóa margin ẩn triệt để */
+            margin-bottom: 0 !important;
         }
         </style>
         """,
@@ -2697,15 +2691,29 @@ with _ai_panel:
     )
 
     _ai_question = st.chat_input(
-        "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
+        "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao...",
         key="astro_ai_input",
     )
-
+    
+    # Bỏ height=40 cố định để container tự co giãn theo nội dung chữ
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
+
+# --- LOGIC XỬ LÝ NGUYÊN BẢN CỦA BẠN (GIỮ NGUYÊN 100%) ---
+if _ai_question and _ai_question.strip():
+    with _answer_slot:
+        st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
+    answer, fly_to = ask_astro_ai(_ai_question.strip())
+    st.session_state.astro_ai_answer = answer
+    if fly_to:
+        st.session_state.lat = fly_to["lat"]
+        st.session_state.lon = fly_to["lon"]
+        st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
+        st.session_state.zoom = 9
+    st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v5)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
