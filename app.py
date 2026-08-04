@@ -2644,67 +2644,66 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS KHỦNG TỰ CHỈNH DẠNG COMPACT DÀNH CHO ST.TEXT_INPUT / CHAT ---
+    # --- CSS CÂN CHỈNH GIAO DIỆN & ĐỒNG BỘ FONT CHỮ ---
     st.markdown(
         """
         <style>
-        /* 1. KHUNG NHẬP CỐ ĐỊNH CHIỀU CAO - KHÔNG PHÌNH TO KHI GÕ */
-        div[data-testid="stChatInput"] {
-            min-height: 34px !important;
-            height: 34px !important;
-            padding: 0 !important;
+        /* 1. KHUNG NHẬP TEXT_INPUT GIỮ NGUYÊN NỘI DUNG, CĂN GIỮA ĐẸP MẮT */
+        div[data-testid="stTextInput"] {
+            margin-bottom: 0px !important;
         }
-        div[data-testid="stChatInput"] > div {
+        div[data-testid="stTextInput"] > div > div {
             min-height: 34px !important;
             height: 34px !important;
-            padding: 0 8px !important;
+            padding: 0 10px !important;
+            border-radius: 8px !important;
             display: flex !important;
-            align-items: center !important; /* Căn giữa tất cả theo chiều dọc */
-            justify-content: space-between !important;
+            align-items: center !important;
         }
-        /* Ép textarea giữ nguyên 22px, không cho JS của Streamlit tự tăng height */
-        div[data-testid="stChatInput"] textarea {
-            min-height: 22px !important;
-            height: 22px !important;
-            max-height: 22px !important;
-            padding: 0 !important;
-            margin: 0 !important;
+        div[data-testid="stTextInput"] input {
             font-size: 13px !important;
-            line-height: 22px !important; /* Căn chữ thẳng hàng ngang giữa viền */
-            resize: none !important;
-            overflow: hidden !important;
-        }
-        /* Căn giữa nút mũi tên gửi */
-        div[data-testid="stChatInput"] button {
-            height: 24px !important;
-            width: 24px !important;
+            height: 30px !important;
+            line-height: 30px !important;
             padding: 0 !important;
-            margin: 0 !important;
-            align-self: center !important; /* Giữ nút nằm chính giữa chiều dọc */
         }
 
-        /* 2. KHUNG HIỂN THỊ KẾT QUẢ THOÁNG ĐÃNG */
+        /* 2. ĐỒNG BỘ FONT CHỮ TOÀN BỘ KHUNG KẾT QUẢ (P, LIST, OL, UL, LI) */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
-            padding: 10px 14px 18px 14px !important;
+            padding: 12px 16px 18px 16px !important;
         }
-        div[class*="st-key-astro_ai_answer_box"] p {
+        /* Áp dụng đồng nhất cho tất cả văn bản và danh sách */
+        div[class*="st-key-astro_ai_answer_box"] p,
+        div[class*="st-key-astro_ai_answer_box"] li,
+        div[class*="st-key-astro_ai_answer_box"] span,
+        div[class*="st-key-astro_ai_answer_box"] div {
             font-size: 13px !important;
             line-height: 1.5 !important;
-            margin: 0 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0.3rem !important;
+        }
+        div[class*="st-key-astro_ai_answer_box"] ol,
+        div[class*="st-key-astro_ai_answer_box"] ul {
+            padding-left: 1.2rem !important;
+            margin-top: 0.3rem !important;
+            margin-bottom: 0.3rem !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Đọc lại câu hỏi cũ đã lưu (nếu có) để giữ nguyên trên thanh chatbox
-    default_question = st.session_state.get("astro_last_question", "")
+    # Lấy lại câu hỏi vừa nhập trước đó (nếu chưa có thì để rỗng)
+    _default_q = st.session_state.get("astro_last_question", "")
 
-    _ai_question = st.chat_input(
-        "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao...",
+    # Sử dụng st.text_input để giữ nguyên chữ trên thanh nhập
+    _ai_question = st.text_input(
+        label="Hỏi AI",
+        value=_default_q,
+        placeholder="Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
         key="astro_ai_input",
+        label_visibility="collapsed",
     )
 
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
@@ -2713,17 +2712,18 @@ with _ai_panel:
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
 
-# --- LOGIC XỬ LÝ & GIỮ NGUYÊN CÂU HỎI ---
-if _ai_question and _ai_question.strip():
-    # Lưu câu hỏi vào session_state
+# --- LOGIC XỬ LÝ (CHỈ CHẠY KHI NGƯỜI DÙNG BẤM ENTER VÀ CÂU HỎI MỚI KHÁC CÂU HỎI CŨ) ---
+if _ai_question and _ai_question.strip() and _ai_question.strip() != st.session_state.get("astro_last_processed_q"):
+    # Lưu câu hỏi hiện tại
     st.session_state.astro_last_question = _ai_question.strip()
-    
+    st.session_state.astro_last_processed_q = _ai_question.strip()
+
     with _answer_slot:
         st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
-    
+
     answer, fly_to = ask_astro_ai(_ai_question.strip())
     st.session_state.astro_ai_answer = answer
-    
+
     if fly_to:
         st.session_state.lat = fly_to["lat"]
         st.session_state.lon = fly_to["lon"]
