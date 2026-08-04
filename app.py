@@ -2647,43 +2647,49 @@ with _ai_panel:
     st.markdown(
         """
         <style>
-        /* 1. THU HẸP KHUNG CHAT INPUT (Gấp đôi phiên bản cũ) */
+        /* 1. KHUNG CHAT INPUT: THU HẸP + CĂN GIỮA CHỮ */
         [data-testid="stChatInput"] {
             padding: 0 !important;
             min-height: unset !important;
         }
-        /* Target chính xác khung viền đỏ bao quanh input & nút gửi */
+        /* Khung viền chứa input & nút gửi */
         [data-testid="stChatInput"] > div {
-            padding: 2px 8px !important;
-            min-height: 38px !important;
-            height: 38px !important;
+            padding: 0 10px !important;
+            min-height: 32px !important;
+            height: 32px !important;
+            display: flex !important;
+            align-items: center !important; /* Căn giữa chiều dọc cho tất cả phần tử bên trong */
+        }
+        /* Ô gõ chữ / Placeholder */
+        [data-testid="stChatInput"] textarea {
+            min-height: 20px !important;
+            height: 20px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 13px !important;
+            line-height: 20px !important; /* Đảm bảo chữ nằm chính giữa dòng */
+            display: flex !important;
             align-items: center !important;
         }
-        /* Thu gọn ô gõ văn bản */
-        [data-testid="stChatInput"] textarea {
-            min-height: 24px !important;
-            height: 24px !important;
-            padding: 2px 0 !important;
-            font-size: 13px !important;
-            line-height: 1.3 !important;
-        }
-        /* Thu nhỏ nút gửi (mũi tên) cho vừa khung mới */
+        /* Nút mũi tên gửi */
         [data-testid="stChatInput"] button {
-            height: 26px !important;
-            width: 26px !important;
+            height: 22px !important;
+            width: 22px !important;
             padding: 0 !important;
+            margin: 0 !important;
         }
 
-        /* 2. SỬA LỖI ĐÈ DÒNG Ở KHUNG KẾT QUẢ */
+        /* 2. KHUNG KẾT QUẢ: TĂNG KHOẢNG CÁCH ĐÁY (PADDING-BOTTOM) */
         [class*="st-key-astro_ai_answer_box"] {
-            padding: 10px 14px 12px 14px !important; /* Thêm padding dưới để không chèn viền */
+            padding: 10px 14px 16px 14px !important; /* Padding dưới 16px cho dòng cuối thoáng hẳn */
             min-height: auto !important;
             height: auto !important;
         }
         [class*="st-key-astro_ai_answer_box"] p {
             font-size: 13px !important;
-            line-height: 1.5 !important; /* Tăng từ 1.0 lên 1.5 để các dòng thoáng, không đè lên nhau */
-            margin-bottom: 0 !important;
+            line-height: 1.5 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important; /* Xóa margin ẩn triệt để */
         }
         </style>
         """,
