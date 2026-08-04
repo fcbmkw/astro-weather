@@ -2672,49 +2672,71 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # bản dưới đây — gộp đủ 3 việc: (a) giữ đúng canh giữa nút gửi, (b) ép chiều
 # cao chatbox nhỏ lại như cũ, (c) ép font khung kết quả nhỏ lại như cũ.
 # ==============================================================================
+# ==============================================================================
+# THAY THẾ TOÀN BỘ KHỐI CSS trong KHỐI C (cả phần fix lệch nút lần trước) bằng
+# bản dưới đây — gộp đủ 3 việc: (a) giữ đúng canh giữa nút gửi, (b) ép chiều
+# cao chatbox nhỏ lại như cũ, (c) ép font khung kết quả nhỏ lại như cũ.
+# ==============================================================================
 
 st.markdown(
-    """
-    <style>
-    /* Tìm đúng container cha thật sự đang chứa nút gửi, ép nó thành flex-row
-       căn giữa theo chiều dọc — không cần đoán số cấp lồng nữa. */
-    div[data-testid="stChatInput"] div:has(> [data-testid="stChatInputSubmitButton"]) {
-        display: flex !important;
-        align-items: center !important;
-    }
- 
-    [data-testid="stChatInputSubmitButton"] {
-        width: 28px !important;
-        height: 28px !important;
-        min-width: 28px !important;
-        min-height: 28px !important;
-        padding: 0 !important;
-        flex-shrink: 0 !important;
-    }
- 
-    [data-testid="stChatInputTextArea"] {
-        min-height: 24px !important;
-        height: 24px !important;
-        line-height: 24px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
- 
-    /* Giữ nguyên các phần CSS khác bạn đã có (placeholder màu xám, ẩn
-       header/toolbar, font-size khung kết quả, v.v.) — không đụng vào. */
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-    _placeholder_text = st.session_state.get(
-        "astro_last_question", 
-        "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway..."
-    )
-
-    _ai_question = st.chat_input(
-        placeholder=_placeholder_text,
-        key="astro_ai_input",
+        """
+        <style>
+        /* (a) Tìm đúng container cha thật sự chứa nút gửi (bất kể lồng sâu bao
+        nhiêu cấp), ép flex-row + canh giữa dọc + ép luôn chiều cao thấp lại
+        ngay tại đây. */
+        div[data-testid="stChatInput"] div:has(> [data-testid="stChatInputSubmitButton"]) {
+            display: flex !important;
+            align-items: center !important;
+            min-height: 38px !important;
+            height: 38px !important;
+            padding: 0 8px 0 12px !important;
+        }
+        [data-testid="stChatInputSubmitButton"] {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            min-height: 28px !important;
+            padding: 0 !important;
+            flex-shrink: 0 !important;
+        }
+        [data-testid="stChatInputTextArea"] {
+            min-height: 24px !important;
+            height: 24px !important;
+            line-height: 24px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 13px !important;
+        }
+        [data-testid="stChatInputTextArea"]::placeholder {
+            color: #888888 !important;
+            opacity: 0.8 !important;
+        }
+        /* (c) Font khung kết quả — ép lại 13px như bản trước. */
+        div[class*="st-key-astro_ai_answer_box"] p,
+        div[class*="st-key-astro_ai_answer_box"] li,
+        div[class*="st-key-astro_ai_answer_box"] span,
+        div[class*="st-key-astro_ai_answer_box"] div {
+            font-size: 13px !important;
+            line-height: 1.4 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0.3rem !important;
+        }
+        div[class*="st-key-astro_ai_answer_box"] ol,
+        div[class*="st-key-astro_ai_answer_box"] ul {
+            padding-left: 1.2rem !important;
+            margin-top: 0.2rem !important;
+            margin-bottom: 0.3rem !important;
+        }
+        /* Ẩn toolbar/menu/footer của app Streamlit (KHÔNG ẩn được thanh
+        Share/Star/Edit/GitHub của Streamlit Community Cloud — thanh đó nằm
+        ngoài DOM app, phải thêm ?embed=true vào URL khi truy cập). */
+        [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
