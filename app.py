@@ -2802,20 +2802,26 @@ with _ai_panel:
 
 # --- LOGIC XỬ LÝ (GIỮ NGUYÊN) ---
 if _ai_question and _ai_question.strip():
-    st.session_state.astro_last_question = _ai_question.strip()
+    user_query = _ai_question.strip()
 
-    with _answer_slot:
-        st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
+    # Chỉ gọi API nếu câu hỏi này KHÁC câu hỏi vừa xử lý xong (an toàn thêm,
+    # phòng trường hợp Streamlit rerun script nhiều lần trong 1 tương tác).
+    if user_query != st.session_state.get("astro_last_processed_query"):
+        st.session_state.astro_last_processed_query = user_query
+        st.session_state.astro_last_question = user_query
 
-    answer, fly_to = ask_astro_ai(_ai_question.strip())
-    st.session_state.astro_ai_answer = answer
+        with _answer_slot:
+            st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
 
-    if fly_to:
-        st.session_state.lat = fly_to["lat"]
-        st.session_state.lon = fly_to["lon"]
-        st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
-        st.session_state.zoom = 9
-    st.rerun()
+        answer, fly_to = ask_astro_ai(user_query)
+        st.session_state.astro_ai_answer = answer
+
+        if fly_to:
+            st.session_state.lat = fly_to["lat"]
+            st.session_state.lon = fly_to["lon"]
+            st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
+            st.session_state.zoom = 9
+        st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v5)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
