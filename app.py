@@ -2642,9 +2642,37 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # - Trạng thái "đang kiểm tra..." hiện greyout NGAY TRONG khung kết quả
 #   (st.caption, không dùng st.spinner rời rạc nữa).
 # ------------------------------------------------------------------------------
+# --- 1. HÀM CALLBACK XỬ LÝ AI KHI BẤM ENTER ---
+def _on_astro_ai_submit():
+    user_q = st.session_state.astro_ai_input.strip()
+    if user_q:
+        # Lưu câu hỏi để hiển thị làm placeholder mờ ở vòng lặp sau
+        st.session_state.astro_last_question = user_q
+        
+        # Đánh dấu trạng thái đang xử lý để hiển thị loading
+        st.session_state.astro_ai_loading = True
+        
+        # Gọi hàm AI
+        answer, fly_to = ask_astro_ai(user_q)
+        
+        # Lưu kết quả
+        st.session_state.astro_ai_answer = answer
+        if fly_to:
+            st.session_state.lat = fly_to["lat"]
+            st.session_state.lon = fly_to["lon"]
+            st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
+            st.session_state.zoom = 9
+            
+        # Tắt trạng thái loading
+        st.session_state.astro_ai_loading = False
+
+        # Reset ô nhập liệu về rỗng
+        st.session_state.astro_ai_input = ""
+
+
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS CÂN CHỈNH GIAO DIỆN & TỰ ĐINHS PHÔNG CHỮ PLACEHOLDER (GREYOUT) ---
+    # --- CSS GIAO DIỆN & PADDING ĐỐI XỨNG ---
     st.markdown(
         """
         <style>
@@ -2666,13 +2694,12 @@ with _ai_panel:
             line-height: 30px !important;
             padding: 0 !important;
         }
-        /* Style màu chữ xám mờ (greyout) cho placeholder */
         div[data-testid="stTextInput"] input::placeholder {
             color: #888888 !important;
             opacity: 0.8 !important;
         }
 
-        /* 2. KHUNG KẾT QUẢ ĐỐI XỨNG */
+        /* 2. KHUNG KẾT QUẢ */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
@@ -2701,44 +2728,28 @@ with _ai_panel:
         unsafe_allow_html=True,
     )
 
-    # Lấy câu hỏi vừa xử lý trước đó để làm Placeholder mờ (nếu chưa có thì dùng chữ mặc định)
+    # Lấy câu hỏi cũ làm placeholder mờ
     _placeholder_text = st.session_state.get(
         "astro_last_question", 
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao..."
     )
 
-    # Thiết lập ô nhập liệu: value="" để trống sẵn, chữ cũ chuyển thành placeholder mờ
-    _ai_question = st.text_input(
+    # Ô nhập liệu gọi callback on_change
+    st.text_input(
         label="Hỏi AI",
-        value="",
         placeholder=_placeholder_text,
         key="astro_ai_input",
+        on_change=_on_astro_ai_submit,
         label_visibility="collapsed",
     )
 
+    # Khung hiển thị kết quả
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
-        _answer_slot = st.empty()
-        if st.session_state.get("astro_ai_answer"):
-            _answer_slot.markdown(st.session_state.astro_ai_answer)
-
-# --- LOGIC XỬ LÝ KHI NGƯỜI DÙNG GÕ CÂU HỎI MỚI ---
-if _ai_question and _ai_question.strip():
-    # Lưu câu hỏi mới để vòng rerun sau nó sẽ chuyển thành Placeholder mờ
-    st.session_state.astro_last_question = _ai_question.strip()
-
-    with _answer_slot:
-        st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
-
-    answer, fly_to = ask_astro_ai(_ai_question.strip())
-    st.session_state.astro_ai_answer = answer
-
-    if fly_to:
-        st.session_state.lat = fly_to["lat"]
-        st.session_state.lon = fly_to["lon"]
-        st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
-        st.session_state.zoom = 9
-    st.rerun()
+        if st.session_state.get("astro_ai_loading"):
+            st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
+        elif st.session_state.get("astro_ai_answer"):
+            st.markdown(st.session_state.astro_ai_answer)
 # ------------------------------------------------------------------------------ (hết KHỐI C v5)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
