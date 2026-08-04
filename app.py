@@ -2358,19 +2358,21 @@ def tool_check_location_tonight(location_name: str) -> dict:
 
 
 def ask_astro_ai(user_question: str):
-    """Gửi câu hỏi tự nhiên của user tới Gemini kèm bộ tool ở trên (Gemini tự quyết
-    định gọi tool nào — automatic function calling của SDK google-genai).
+    """Gửi câu hỏi tới Gemini KÈM LỊCH SỬ hội thoại (st.session_state.astro_ai_history)
+    để AI nhớ ngữ cảnh câu trước (vd hỏi tiếp 'thế cuối tuần thì sao' sau khi đã hỏi
+    về Hokkaido). Lịch sử chỉ lưu text câu hỏi + câu trả lời cuối, không lưu các
+    bước gọi tool trung gian (để tránh phình payload không cần thiết).
 
     Trả về tuple (answer_text: str, fly_to: dict|None).
-    fly_to = {"lat":.., "lon":.., "name":..} của địa điểm AI đề xuất CUỐI CÙNG
-    (có thể là địa điểm thay thế, không phải địa điểm user hỏi ban đầu nếu chỗ
-    đó thời tiết xấu) — dùng để tự động bay map tới đó.
     """
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     system_prompt = (
         f"Hôm nay là {now_jst.strftime('%A, %Y-%m-%d')} (giờ Nhật Bản, JST). "
         "Bạn là trợ lý tư vấn địa điểm/thời điểm chụp ảnh thiên văn (sao, Milky Way) "
-        "ở Nhật Bản, gắn liền với 1 bản đồ Bortle + dự báo thời tiết đã có sẵn.\n\n"
+        "ở Nhật Bản, gắn liền với 1 bản đồ Bortle + dự báo thời tiết đã có sẵn. Đây "
+        "là 1 cuộc hội thoại nhiều lượt — nếu câu hỏi hiện tại thiếu chi tiết (vd "
+        "'thế cuối tuần thì sao' không nói lại vùng/địa điểm), hãy DÙNG LẠI vùng/địa "
+        "điểm đã nhắc ở các lượt hỏi trước trong hội thoại này.\n\n"
         "QUY TẮC CHỌN TOOL:\n"
         "- Nếu user hỏi về 1 địa điểm CỤ THỂ cho tối nay (vd 'Jogashima tối nay thế "
         "nào') -> gọi tool_check_location_tonight trước. Nếu is_good=false, gọi "
@@ -2390,9 +2392,9 @@ def ask_astro_ai(user_question: str):
         "(mây %, trăng %, Bortle)."
     )
 
-    # Bọc từng tool để "chộp" lại kết quả tool CUỐI CÙNG thành công — nhờ đó nếu
-    # AI gọi tool_check_location_tonight (xấu) rồi gọi tiếp tool_scan_tonight (tốt
-    # hơn), map sẽ tự bay tới địa điểm THAY THẾ chứ không phải điểm bị hỏi ban đầu.
+    history = st.session_state.get("astro_ai_history", [])
+    contents = history + [{"role": "user", "parts": [{"text": user_question}]}]
+
     last_result = {"data": None, "tool": None}
 
     def _wrap(fn):
@@ -2416,7 +2418,7 @@ def ask_astro_ai(user_question: str):
         try:
             response = _astro_ai_client.models.generate_content(
                 model=model,
-                contents=user_question,
+                contents=contents,
                 config=genai_types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     tools=wrapped_tools,
@@ -2431,11 +2433,14 @@ def ask_astro_ai(user_question: str):
     if answer_text is None:
         return f"⚠️ Lỗi gọi AI (đã thử {len(ASTRO_AI_MODEL_CANDIDATES)} model): {last_err}", None
 
+    # Lưu lịch sử cho lượt hỏi sau (chỉ text, không lưu tool-call nội bộ)
+    st.session_state.astro_ai_history = contents + [
+        {"role": "model", "parts": [{"text": answer_text}]}
+    ]
+
     fly_to = None
     data = last_result["data"]
     if data:
-        # tool_check_location_darkness/tonight trả lat/lon ở top-level;
-        # 2 tool scan trả trong "best"
         loc = data if "lat" in data else data.get("best")
         if loc and "lat" in loc:
             fly_to = {"lat": loc["lat"], "lon": loc["lon"],
