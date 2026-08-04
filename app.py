@@ -2647,15 +2647,15 @@ with _ai_panel:
     _ai_question = st.chat_input(
         "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
         key="astro_ai_input",
-        height=1,   # mức tối thiểu Streamlit hỗ trợ chính thức cho 1 dòng
+        height=28,   # mức tối thiểu Streamlit hỗ trợ chính thức cho 1 dòng
     )
     st.markdown(
         """
         <style>
         [class*="st-key-astro_ai_answer_box"] p {
             font-size: 13px !important;
-            line-height: 1.0 !important;
-            margin-bottom: 0.2rem !important;
+            line-height: 0.2 !important;
+            margin-bottom: 0.1rem !important;
         }
         </style>
         """,
