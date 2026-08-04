@@ -2667,43 +2667,27 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 # --- NÚT NEW CHAT — góc trên-phải màn hình, cùng kỹ thuật position:fixed
 # như .st-key-newchat_btn_main bên app_ai.py, để không bị lệch dù resize. ---
+# ==============================================================================
+# THAY THẾ TOÀN BỘ KHỐI CSS trong KHỐI C (cả phần fix lệch nút lần trước) bằng
+# bản dưới đây — gộp đủ 3 việc: (a) giữ đúng canh giữa nút gửi, (b) ép chiều
+# cao chatbox nhỏ lại như cũ, (c) ép font khung kết quả nhỏ lại như cũ.
+# ==============================================================================
+
 st.markdown(
     """
     <style>
-    .st-key-astro_newchat_btn {
-        position: fixed !important;
-        top: 0.85rem !important;
-        right: 0.9rem !important;
-        z-index: 999999 !important;
-        width: 40px !important;
-    }
-    .st-key-astro_newchat_btn button {
-        width: 40px !important;
-        height: 40px !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-with st.container(key="astro_newchat_btn"):
-    if st.button("", key="astro_new_chat", icon=":material/edit_square:", help="New chat", use_container_width=True):
-        st.session_state.astro_ai_history = []
-        st.session_state.astro_ai_answer = None
-        st.session_state.astro_last_question = "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway..."
-        st.rerun()
-_ai_panel = st.container()
-with _ai_panel:
-    # --- CSS ÉP KHOẢNG CÁCH DÍNH LIỀN KHÔNG CÒN KHOẢNG HỞ ---
-    st.markdown(
-    """
-    <style>
-    /* Tìm đúng container cha thật sự đang chứa nút gửi, ép nó thành flex-row
-       căn giữa theo chiều dọc — không cần đoán số cấp lồng nữa. */
+    /* (a) Tìm đúng container cha thật sự chứa nút gửi (bất kể lồng sâu bao
+    nhiêu cấp), ép flex-row + canh giữa dọc + ép luôn chiều cao thấp lại
+    ngay tại đây — đây chính là chỗ trước đó dùng "> div" cũ nhưng sai cấp
+    nên set height không có tác dụng. */
     div[data-testid="stChatInput"] div:has(> [data-testid="stChatInputSubmitButton"]) {
         display: flex !important;
         align-items: center !important;
+        min-height: 38px !important;
+        height: 38px !important;
+        padding: 0 8px 0 12px !important;
     }
- 
+
     [data-testid="stChatInputSubmitButton"] {
         width: 28px !important;
         height: 28px !important;
@@ -2712,17 +2696,46 @@ with _ai_panel:
         padding: 0 !important;
         flex-shrink: 0 !important;
     }
- 
+
     [data-testid="stChatInputTextArea"] {
         min-height: 24px !important;
         height: 24px !important;
         line-height: 24px !important;
         padding: 0 !important;
         margin: 0 !important;
+        font-size: 13px !important;
     }
- 
-    /* Giữ nguyên các phần CSS khác bạn đã có (placeholder màu xám, ẩn
-       header/toolbar, font-size khung kết quả, v.v.) — không đụng vào. */
+
+    [data-testid="stChatInputTextArea"]::placeholder {
+        color: #888888 !important;
+        opacity: 0.8 !important;
+    }
+
+    /* (c) Font khung kết quả — ép lại 13px như bản trước. Dùng cả 2 dạng
+    selector (class* và trực tiếp) để chắc chắn khớp dù cấu trúc thay đổi. */
+    div[class*="st-key-astro_ai_answer_box"] p,
+    div[class*="st-key-astro_ai_answer_box"] li,
+    div[class*="st-key-astro_ai_answer_box"] span,
+    div[class*="st-key-astro_ai_answer_box"] div {
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0.3rem !important;
+    }
+    div[class*="st-key-astro_ai_answer_box"] ol,
+    div[class*="st-key-astro_ai_answer_box"] ul {
+        padding-left: 1.2rem !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 0.3rem !important;
+    }
+
+    /* Ẩn toolbar/menu/footer thuộc chính app Streamlit (KHÔNG ẩn được thanh
+    Share/Star/Edit/GitHub của Streamlit Community Cloud — thanh đó nằm
+    ngoài DOM app, phải thêm ?embed=true vào URL khi truy cập). */
+    [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
+        display: none !important;
+        visibility: hidden !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
