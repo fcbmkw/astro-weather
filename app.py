@@ -2644,23 +2644,37 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS CHUẨN DÀNH CHO ST.CHAT_INPUT: KHÔNG PHÌNH KHUNG + CĂN GIỮA MŨI TÊN ---
+    # --- CSS CĂN CHỈNH CHATBOX CÂN ĐỐI & ẨN TOOLBAR STREAMLIT ---
     st.markdown(
         """
         <style>
-        /* 1. ÉP CỐ ĐỊNH CHIỀU CAO KHUNG CHAT_INPUT (CÓ SẴN NÚT MŨI TÊN TRÒN) */
+        /* 1. ẨN TOÀN BỘ TOOLBAR & HEADER CỦA STREAMLIT (Share, GitHub, Menu...) */
+        [data-testid="stHeader"] {
+            display: none !important;
+        }
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        #MainMenu {
+            visibility: hidden !important;
+        }
+        footer {
+            visibility: hidden !important;
+        }
+
+        /* 2. CHỈNH KHUNG CHAT_INPUT CÂN BẰNG TỪNG PIXEL */
         div[data-testid="stChatInput"] {
             padding: 0 !important;
             min-height: unset !important;
         }
         div[data-testid="stChatInput"] > div {
-            min-height: 36px !important;
-            height: 36px !important;
-            padding: 0 8px !important;
+            min-height: 38px !important;
+            height: 38px !important;
+            padding: 0 10px !important;
             display: flex !important;
-            align-items: center !important; /* Căn giữa nút mũi tên & khung chữ */
+            align-items: center !important; /* Căn giữa tất cả theo chiều dọc */
         }
-        /* Ép Textarea cố định, triệt tiêu hoàn toàn lỗi tự phình to khi gõ chữ */
+        /* Căn chỉnh chính xác chữ gõ vào nằm chính giữa khung */
         div[data-testid="stChatInput"] textarea {
             min-height: 24px !important;
             height: 24px !important;
@@ -2668,16 +2682,18 @@ with _ai_panel:
             padding: 0 !important;
             margin: 0 !important;
             font-size: 13px !important;
-            line-height: 24px !important;
+            line-height: 24px !important; /* Trùng với height để chữ nằm đúng trung tâm */
             resize: none !important;
             overflow: hidden !important;
+            display: flex !important;
+            align-items: center !important;
         }
-        /* Style chữ xám mờ (greyout) cho placeholder */
+        /* Style chữ xám mờ cho placeholder */
         div[data-testid="stChatInput"] textarea::placeholder {
             color: #888888 !important;
             opacity: 0.8 !important;
         }
-        /* Căn nút mũi tên tròn đúng giữa chiều dọc */
+        /* Căn giữa nút mũi tên đỏ nằm đối xứng */
         div[data-testid="stChatInput"] button {
             height: 26px !important;
             width: 26px !important;
@@ -2686,7 +2702,7 @@ with _ai_panel:
             align-self: center !important;
         }
 
-        /* 2. KHUNG HIỂN THỊ KẾT QUẢ ĐỐI XỨNG TRÊN - DƯỚI */
+        /* 3. KHUNG HIỂN THỊ KẾT QUẢ ĐỐI XỨNG */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
@@ -2716,13 +2732,11 @@ with _ai_panel:
         unsafe_allow_html=True,
     )
 
-    # Lấy câu hỏi vừa xử lý trước đó làm Placeholder xám mờ
     _placeholder_text = st.session_state.get(
         "astro_last_question", 
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao..."
     )
 
-    # Sử dụng st.chat_input gốc (có sẵn nút mũi tên đỏ/trắng tích hợp bên trong)
     _ai_question = st.chat_input(
         placeholder=_placeholder_text,
         key="astro_ai_input",
@@ -2734,9 +2748,8 @@ with _ai_panel:
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
 
-# --- LOGIC XỬ LÝ NGUYÊN BẢN (CHỈ CHẠY KHI BẤM ENTER HOẶC CLICK MŨI TÊN CÓ NỘI DUNG MỚI) ---
+# --- LOGIC XỬ LÝ (GIỮ NGUYÊN) ---
 if _ai_question and _ai_question.strip():
-    # Lưu lại câu hỏi mới để làm placeholder xám mờ ở vòng lặp rerun sau
     st.session_state.astro_last_question = _ai_question.strip()
 
     with _answer_slot:
