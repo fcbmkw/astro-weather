@@ -8,6 +8,8 @@ import altair as alt
 import math
 from collections import Counter
 import ephem
+import re
+import time
 #------------------------------------------------------------------------------
 # KHỐI A — DÁN NGAY DƯỚI DÒNG "import ephem" (dòng 9, đầu file)
 # ------------------------------------------------------------------------------
