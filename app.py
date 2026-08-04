@@ -2644,30 +2644,45 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # 💥 Inject CSS để thu hẹp padding & min-height của cả chat_input lẫn khung trả lời
     st.markdown(
         """
         <style>
-        /* 1. Thu gọn chiều cao khung st.chat_input */
+        /* 1. THU HẸP KHUNG CHAT INPUT (Gấp đôi phiên bản cũ) */
         [data-testid="stChatInput"] {
-            min-height: auto !important;
             padding: 0 !important;
+            min-height: unset !important;
         }
-        [data-testid="stChatInput"] textarea {
+        /* Target chính xác khung viền đỏ bao quanh input & nút gửi */
+        [data-testid="stChatInput"] > div {
+            padding: 2px 8px !important;
             min-height: 38px !important;
             height: 38px !important;
-            padding-top: 8px !important;
-            padding-bottom: 8px !important;
+            align-items: center !important;
+        }
+        /* Thu gọn ô gõ văn bản */
+        [data-testid="stChatInput"] textarea {
+            min-height: 24px !important;
+            height: 24px !important;
+            padding: 2px 0 !important;
+            font-size: 13px !important;
+            line-height: 1.3 !important;
+        }
+        /* Thu nhỏ nút gửi (mũi tên) cho vừa khung mới */
+        [data-testid="stChatInput"] button {
+            height: 26px !important;
+            width: 26px !important;
+            padding: 0 !important;
         }
 
-        /* 2. Style cho khung chứa kết quả trả lời */
+        /* 2. SỬA LỖI ĐÈ DÒNG Ở KHUNG KẾT QUẢ */
         [class*="st-key-astro_ai_answer_box"] {
-            padding: 8px 12px !important;
-            min-height: unset !important;
+            padding: 10px 14px 12px 14px !important; /* Thêm padding dưới để không chèn viền */
+            min-height: auto !important;
+            height: auto !important;
         }
         [class*="st-key-astro_ai_answer_box"] p {
             font-size: 13px !important;
-            line-height: 1.3 !important;
+            line-height: 1.5 !important; /* Tăng từ 1.0 lên 1.5 để các dòng thoáng, không đè lên nhau */
             margin-bottom: 0 !important;
         }
         </style>
@@ -2680,24 +2695,11 @@ with _ai_panel:
         key="astro_ai_input",
     )
 
-    # 💥 Bỏ height=85 cố định, để height="auto" (mặc định) giúp khung tự co theo dung lượng chữ
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
-
-if _ai_question and _ai_question.strip():
-    with _answer_slot:
-        st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
-    answer, fly_to = ask_astro_ai(_ai_question.strip())
-    st.session_state.astro_ai_answer = answer
-    if fly_to:
-        st.session_state.lat = fly_to["lat"]
-        st.session_state.lon = fly_to["lon"]
-        st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
-        st.session_state.zoom = 9
-    st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v5)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
