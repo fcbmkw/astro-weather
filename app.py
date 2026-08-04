@@ -2644,7 +2644,7 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS FIX TRIỆT ĐỂ NÚT MŨI TÊN & CHỮ GÕ BỊ LỆCH ---
+    # --- CSS FIX TRIỆT ĐỂ NÚT MŨI TÊN & CHỮ GÕ BỊ LỆCH + SÁT KHOẢNG CÁCH ---
     st.markdown(
         """
         <style>
@@ -2654,10 +2654,11 @@ with _ai_panel:
             visibility: hidden !important;
         }
 
-        /* 2. CHỈNH KHUNG CHAT_INPUT CHUẨN ĐỐI XỨNG */
+        /* 2. CHỈNH KHUNG CHAT_INPUT CHUẨN ĐỐI XỨNG & ÉP KHOẢNG CÁCH DƯỚI SÁT LẠI */
         div[data-testid="stChatInput"] {
             padding: 0 !important;
             min-height: unset !important;
+            margin-bottom: 2px !important; /* Triệt tiêu khoảng trống phía dưới ChatInput */
         }
         
         /* Container chứa cả textarea và nút bấm */
@@ -2707,12 +2708,12 @@ with _ai_panel:
             justify-content: center !important;
         }
 
-        /* 3. KHUNG HIỂN THỊ KẾT QUẢ */
+        /* 3. KHUNG HIỂN THỊ KẾT QUẢ - KÉO SÁT LÊN TRÊN */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
             padding: 14px 16px !important;
-            margin-top: 8px !important;
+            margin-top: 2px !important; /* Giảm margin-top xuống 2px để sát ngay dưới Chatbox */
         }
         div[class*="st-key-astro_ai_answer_box"] p,
         div[class*="st-key-astro_ai_answer_box"] li,
