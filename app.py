@@ -2644,11 +2644,11 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS CÂN CHỈNH GIAO DIỆN & ĐỒNG BỘ FONT CHỮ ---
+    # --- CSS CÂN CHỈNH ĐỐI XỨNG TUYỆT ĐỐI CẢ TRÊN VÀ DƯỚI ---
     st.markdown(
         """
         <style>
-        /* 1. KHUNG NHẬP TEXT_INPUT GIỮ NGUYÊN NỘI DUNG, CĂN GIỮA ĐẸP MẮT */
+        /* 1. KHUNG NHẬP TEXT_INPUT */
         div[data-testid="stTextInput"] {
             margin-bottom: 0px !important;
         }
@@ -2667,13 +2667,14 @@ with _ai_panel:
             padding: 0 !important;
         }
 
-        /* 2. ĐỒNG BỘ FONT CHỮ TOÀN BỘ KHUNG KẾT QUẢ (P, LIST, OL, UL, LI) */
+        /* 2. KHUNG KẾT QUẢ: CÂN BẰNG TRÊN - DƯỚI (14px đối xứng) */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
-            padding: 12px 16px 18px 16px !important;
+            padding: 14px 16px !important; /* Trên & Dưới đều đúng 14px */
         }
-        /* Áp dụng đồng nhất cho tất cả văn bản và danh sách */
+        
+        /* Font & khoảng cách dòng đồng nhất */
         div[class*="st-key-astro_ai_answer_box"] p,
         div[class*="st-key-astro_ai_answer_box"] li,
         div[class*="st-key-astro_ai_answer_box"] span,
@@ -2681,23 +2682,27 @@ with _ai_panel:
             font-size: 13px !important;
             line-height: 1.5 !important;
             margin-top: 0 !important;
-            margin-bottom: 0.3rem !important;
+            margin-bottom: 0.4rem !important;
         }
+        
         div[class*="st-key-astro_ai_answer_box"] ol,
         div[class*="st-key-astro_ai_answer_box"] ul {
             padding-left: 1.2rem !important;
             margin-top: 0.3rem !important;
-            margin-bottom: 0.3rem !important;
+            margin-bottom: 0.4rem !important;
+        }
+
+        /* 💥 TRIỆT TIỆU MARGIN CỦA DÒNG CUỐI CÙNG ĐỂ KHÔNG BỊ ĐẨY KHUNG */
+        div[class*="st-key-astro_ai_answer_box"] *:last-child {
+            margin-bottom: 0 !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Lấy lại câu hỏi vừa nhập trước đó (nếu chưa có thì để rỗng)
     _default_q = st.session_state.get("astro_last_question", "")
 
-    # Sử dụng st.text_input để giữ nguyên chữ trên thanh nhập
     _ai_question = st.text_input(
         label="Hỏi AI",
         value=_default_q,
@@ -2712,9 +2717,8 @@ with _ai_panel:
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
 
-# --- LOGIC XỬ LÝ (CHỈ CHẠY KHI NGƯỜI DÙNG BẤM ENTER VÀ CÂU HỎI MỚI KHÁC CÂU HỎI CŨ) ---
+# --- LOGIC XỬ LÝ (GIỮ NGUYÊN) ---
 if _ai_question and _ai_question.strip() and _ai_question.strip() != st.session_state.get("astro_last_processed_q"):
-    # Lưu câu hỏi hiện tại
     st.session_state.astro_last_question = _ai_question.strip()
     st.session_state.astro_last_processed_q = _ai_question.strip()
 
