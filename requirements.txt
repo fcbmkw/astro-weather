@@ -7,3 +7,4 @@ streamlit-folium
 ephem
 jinja2
 plotly
+google-genai --break-system-packages
