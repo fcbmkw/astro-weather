@@ -2644,7 +2644,7 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS NÂNG CHIỀU CAO CHATBOX & DỜI VỊ TRÍ CHUẨN TRỌNG TÂM ---
+    # --- CSS FIX TRIỆT ĐỂ NÚT MŨI TÊN & CHỮ GÕ BỊ LỆCH ---
     st.markdown(
         """
         <style>
@@ -2654,36 +2654,34 @@ with _ai_panel:
             visibility: hidden !important;
         }
 
-        /* 2. KHUNG CHAT_INPUT TĂNG NẸ CHIỀU CAO LÊN 42PX */
+        /* 2. CHỈNH KHUNG CHAT_INPUT CHUẨN ĐỐI XỨNG */
         div[data-testid="stChatInput"] {
             padding: 0 !important;
             min-height: unset !important;
         }
         
-        /* Container ngoài cùng của ChatInput */
+        /* Container chứa cả textarea và nút bấm */
         div[data-testid="stChatInput"] > div {
-            min-height: 42px !important;
-            height: 42px !important;
-            padding: 0 8px 0 14px !important;
+            min-height: 38px !important;
+            height: 38px !important;
+            padding: 0 8px 0 12px !important;
             display: flex !important;
-            align-items: center !important;
+            align-items: center !important; /* Căn giữa mọi phần tử con theo chiều dọc */
             justify-content: space-between !important;
-            border-radius: 8px !important;
         }
 
-        /* Ô nhập văn bản - Căn chữ chuẩn tuyệt đối */
+        /* Ô nhập văn bản - Căn chữ nằm chính giữa */
         div[data-testid="stChatInput"] textarea {
-            min-height: 26px !important;
-            height: 26px !important;
-            max-height: 26px !important;
+            min-height: 24px !important;
+            height: 24px !important;
+            max-height: 24px !important;
             padding: 0 !important;
-            margin: 0 !important;
-            font-size: 13.5px !important;
-            line-height: 26px !important;
+            margin-top: 2px !important; /* Đẩy chữ xuống nhẹ 2px để nằm chuẩn giữa viền */
+            margin-bottom: 0 !important;
+            font-size: 13px !important;
+            line-height: 24px !important;
             resize: none !important;
             overflow: hidden !important;
-            /* Đẩy nhẹ chữ xuống trung tâm theo trục Y */
-            transform: translateY(1px) !important;
         }
         
         div[data-testid="stChatInput"] textarea::placeholder {
@@ -2691,27 +2689,25 @@ with _ai_panel:
             opacity: 0.8 !important;
         }
 
-        /* Nút mũi tên - Ép hạ thấp xuống đúng khoảng giữa viền */
+        /* 💥 TRIỆT TIỆU VỊ TRÍ TUYỆT ĐỐI CỦA NÚT MŨI TÊN ĐỎ DÙNG ALIGN-ITEMS CĂN GIỮA */
         div[data-testid="stChatInput"] button {
-            position: relative !important;
-            top: 0 !important;
-            bottom: 0 !important;
-            right: 0 !important;
-            height: 28px !important;
-            width: 28px !important;
-            min-height: 28px !important;
-            min-width: 28px !important;
+            position: static !important; /* Bỏ position absolute mặc định của Streamlit */
+            top: auto !important;
+            bottom: auto !important;
+            right: auto !important;
+            height: 26px !important;
+            width: 26px !important;
+            min-height: 26px !important;
+            min-width: 26px !important;
             padding: 0 !important;
             margin: 0 !important;
-            /* Đẩy nút bấm xuống chính giữa viền */
-            transform: translateY(0px) !important;
-            align-self: center !important;
+            align-self: center !important; /* Buộc nút nằm chính giữa theo chiều dọc */
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
 
-        /* 3. KHUNG HIỂN THỊ KẾT QUẢ ĐỐI XỨNG */
+        /* 3. KHUNG HIỂN THỊ KẾT QUẢ */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
@@ -2743,7 +2739,7 @@ with _ai_panel:
 
     _placeholder_text = st.session_state.get(
         "astro_last_question", 
-        "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao..."
+        "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway..."
     )
 
     _ai_question = st.chat_input(
