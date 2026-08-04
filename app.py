@@ -308,6 +308,17 @@ LOCATION_DATABASE = {
     "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7384, 139.3800],
     "268. Oshima Habu Port 波浮港, Tokyo": [34.6873, 139.4363],
     "269. Minami-Daito Island 南大東島, Okinawa": [25.8470, 131.2330],
+    # Vietnam
+    "270. Long Coc Tea Hill Đồi chè Long Cốc, Phu Tho": [21.2181, 105.1528],
+    "271. Bac Son Valley Thung lũng Bắc Sơn, Lang Son": [21.9056, 106.3312],
+    "272. Mu Cang Chai (La Pan Tan) Mù Cang Chải, Yen Bai": [21.8485, 104.1082],
+    "273. Khau Pha Pass Đèo Khau Phạ, Yen Bai": [21.7619, 104.2867],
+    "274. Lung Cu Flag Tower Cột cờ Lũng Cú, Ha Giang": [23.3592, 105.3156],
+    "275. Ma Pi Leng Pass Đèo Mã Pí Lèng, Ha Giang": [23.2386, 105.3853],
+    "276. Y Ty Y Tý, Lao Cai": [22.6288, 103.6069],
+    "277. Ta Xua Peak Đỉnh Tà Xùa, Son La": [21.2588, 104.4647],
+    "278. Thang Hen Lake Hồ Thăng Hen, Cao Bang": [22.7533, 106.3005],
+    "279. Quan Lan Island Đảo Quan Lạn, Quang Ninh": [20.9065, 107.5452],
 }
 
 st.set_page_config(page_title="Astro Map Pro", page_icon="🌌", layout="wide", initial_sidebar_state="collapsed")
@@ -826,6 +837,18 @@ def calculate_accurate_bortle(lat, lon):
         (34.7384, 139.3800): (2.0, 22.00), # 267 Oshima Mihara-yama summit
         (34.6873, 139.4363): (2.0, 21.95), # 268 Oshima Habu Port
         (25.8470, 131.2330): (1.5, 22.05), # 269 Minami-Daito Island, Okinawa
+
+        # ── 270-279: Vietnam ──────────────────────────────────────────────────
+        (21.2181, 105.1528): (3.0, 21.70), # 270 Long Coc Tea Hill, Phu Tho
+        (21.9056, 106.3312): (3.0, 21.75), # 271 Bac Son Valley, Lang Son
+        (21.8485, 104.1082): (2.5, 21.85), # 272 Mu Cang Chai, Yen Bai
+        (21.7619, 104.2867): (2.0, 21.90), # 273 Khau Pha Pass, Yen Bai
+        (23.3592, 105.3156): (2.0, 21.92), # 274 Lung Cu Flag Tower, Ha Giang
+        (23.2386, 105.3853): (2.0, 21.95), # 275 Ma Pi Leng Pass, Ha Giang
+        (22.6288, 103.6069): (2.0, 21.90), # 276 Y Ty, Lao Cai
+        (21.2588, 104.4647): (2.5, 21.80), # 277 Ta Xua Peak, Son La
+        (22.7533, 106.3005): (2.0, 21.90), # 278 Thang Hen Lake, Cao Bang
+        (20.9065, 107.5452): (3.0, 21.65), # 279 Quan Lan Island, Quang Ninh
     }
 
     def _km(la1, lo1, la2, lo2):
@@ -1264,6 +1287,16 @@ def calculate_accurate_bortle(lat, lon):
         (36.8500, 138.2500, "Myoko",            20.60),
         (36.7500, 137.0000, "Takaoka-C",        19.70),
         (34.6900, 135.1900, "Akashi-C",         18.80),
+
+        # ── Vietnam ───────────────────────────────────────────────────────────
+        (21.3167, 105.4000, "PhuTho-C",         19.80), # Gần 270 Đồi chè Long Cốc
+        (21.8525, 106.7592, "LangSon-C",        19.20), # Gần 271 Bắc Sơn
+        (21.7050, 104.8731, "YenBai-C",         19.40), # Gần 272 Mù Cang Chải & 273 Khau Phạ
+        (22.8233, 104.9836, "HaGiang-C",        19.90), # Gần 274 Lũng Cú & 275 Mã Pí Lèng
+        (22.4856, 103.9707, "LaoCai-C",         19.10), # Gần 276 Y Tý
+        (21.3272, 103.9142, "SonLa-C",          19.50), # Gần 277 Tà Xùa
+        (22.6667, 106.2500, "CaoBang-C",        19.60), # Gần 278 Hồ Thăng Hen
+        (21.0100, 107.2900, "CamPha-C",         18.90), # Gần 279 Đảo Quan Lạn
     ]
 
     sqm_est = 22.30  # start pristine, find most polluted influence
