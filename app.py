@@ -10,6 +10,7 @@ from collections import Counter
 import ephem
 import re
 import time
+import streamlit.components.v1 as components
 #------------------------------------------------------------------------------
 # KHỐI A — DÁN NGAY DƯỚI DÒNG "import ephem" (dòng 9, đầu file)
 # ------------------------------------------------------------------------------
@@ -367,10 +368,56 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── AUTO-DETECT VỊ TRÍ MẶC ĐỊNH (Tokyo / Hanoi) THEO IP CỦA NGƯỜI DÙNG ───────
+# Streamlit chạy phía server nên requests.get() ở Python sẽ chỉ thấy IP của
+# server, không phải IP thật của browser. Vì vậy ta cho JS chạy TRONG BROWSER
+# của người dùng để tự tra IP qua ipapi.co (miễn phí, hỗ trợ CORS), rồi gắn
+# country_code vào query param (?cc=VN / ?cc=JP / ...) và reload 1 lần.
+# Nếu người dùng dùng VPN/proxy thì kết quả sẽ theo IP của VPN đó — đây là
+# hạn chế cố hữu của IP-geolocation, không có cách nào tránh 100%.
+_DEFAULT_LOC_BY_COUNTRY = {
+    "VN": {"lat": 21.0285, "lon": 105.8542, "name": "Hanoi, Vietnam", "zoom": 6},
+    "JP": {"lat": 35.6895, "lon": 139.6917, "name": "Tokyo, Japan",   "zoom": 7},
+}
+_FALLBACK_LOC = _DEFAULT_LOC_BY_COUNTRY["JP"]  # giữ hành vi cũ nếu không xác định được / lỗi mạng
+
+if "_geo_cc" not in st.session_state:
+    _qp_cc = st.query_params.get("cc")
+    if _qp_cc:
+        st.session_state["_geo_cc"] = _qp_cc.upper()
+    else:
+        st.write("🌍 Đang xác định vị trí...")
+        components.html(
+            """
+            <script>
+            (function() {
+                function goWithCC(cc) {
+                    try {
+                        var url = new URL(window.parent.location.href);
+                        url.searchParams.set('cc', cc);
+                        window.parent.location.replace(url.toString());
+                    } catch (e) {}
+                }
+                fetch('https://ipapi.co/json/')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        goWithCC((data && data.country_code) ? data.country_code : 'XX');
+                    })
+                    .catch(function() { goWithCC('XX'); });
+            })();
+            </script>
+            """,
+            height=0,
+        )
+        st.stop()  # dừng lần render này, chờ JS reload trang kèm ?cc=
+
+_geo_cc = st.session_state.get("_geo_cc")
+_default_loc = _DEFAULT_LOC_BY_COUNTRY.get(_geo_cc, _FALLBACK_LOC)
+
 # ── SESSION STATE ────────────────────────────────────────────────────────────
-for k, v in [("lat", 35.6895), ("lon", 139.6917),
-             ("map_center", [35.6895, 139.6917]), ("zoom", 7),
-             ("day_offset", 0), ("location_name", "Tokyo, Japan"),
+for k, v in [("lat", _default_loc["lat"]), ("lon", _default_loc["lon"]),
+             ("map_center", [_default_loc["lat"], _default_loc["lon"]]), ("zoom", _default_loc["zoom"]),
+             ("day_offset", 0), ("location_name", _default_loc["name"]),
              ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
