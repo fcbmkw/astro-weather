@@ -2632,30 +2632,35 @@ _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/
 if st.session_state.map_tile not in ("satellite", "street", "windy"):
     st.session_state.map_tile = "windy"
 # ------------------------------------------------------------------------------
-# KHỐI C (v4) — chatbox thấp, chỉ cao hơn searchbox trên map 1 chút; font nhỏ
-# lại để chứa nhiều thông tin hơn; trạng thái "đang kiểm tra..." hiện greyout
-# ngay trong khung, thay cho st.spinner.
+# KHỐI C (v5) — DÁN THAY THẾ TOÀN BỘ KHỐI C CŨ, ngay trước dòng "m = folium.Map(".
+#
+# - Ô nhập chat (st.chat_input) CỐ ĐỊNH TRÊN, height=68 (mức tối thiểu chính
+#   thức Streamlit hỗ trợ cho 1 dòng + nút gửi — xuống thấp hơn dễ vỡ layout
+#   nút gửi vì không có API chính thức để ép nhỏ hơn).
+# - Khung kết quả bên dưới: height=40 (chỉ nhỉnh hơn 1 chút so với searchbox
+#   ~28px trên map), font 13px (tăng 1 cỡ so với bản trước 11px).
+# - Trạng thái "đang kiểm tra..." hiện greyout NGAY TRONG khung kết quả
+#   (st.caption, không dùng st.spinner rời rạc nữa).
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
     _ai_question = st.chat_input(
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao...",
         key="astro_ai_input",
+        height=68,   # mức tối thiểu Streamlit hỗ trợ chính thức cho 1 dòng
     )
     st.markdown(
         """
         <style>
         [class*="st-key-astro_ai_answer_box"] p {
-            font-size: 11px !important;
-            line-height: 1.35 !important;
+            font-size: 13px !important;
+            line-height: 1.4 !important;
             margin-bottom: 0.2rem !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    # height=40: chỉ nhỉnh hơn 1 chút so với searchbox ~28px trên map — nội dung
-    # dài sẽ tự cuộn bên trong khung, không đẩy layout xung quanh.
     _astro_chat_box = st.container(height=40, border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
@@ -2673,7 +2678,7 @@ if _ai_question and _ai_question.strip():
         st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
         st.session_state.zoom = 9
     st.rerun()
-# ------------------------------------------------------------------------------ (hết KHỐI C v4)
+# ------------------------------------------------------------------------------ (hết KHỐI C v5)
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
 # Điều này là chìa khoá giúp pan/zoom mượt: Streamlit không can thiệp vào
