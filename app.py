@@ -2416,23 +2416,39 @@ def ask_astro_ai(user_question: str):
 
     answer_text = None
     last_err = None
+ 
     for model in ASTRO_AI_MODEL_CANDIDATES:
-        try:
-            response = _astro_ai_client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    tools=wrapped_tools,
-                ),
-            )
-            answer_text = response.text or "(AI không trả lời được, thử lại câu hỏi khác nhé.)"
+        for attempt in range(2):  # tối đa 1 lần thử lại cho mỗi model nếu dính 429
+            try:
+                response = _astro_ai_client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        tools=wrapped_tools,
+                    ),
+                )
+                answer_text = response.text or "(AI không trả lời được, thử lại câu hỏi khác nhé.)"
+                break
+            except Exception as e:
+                last_err = e
+                msg = str(e)
+                is_quota_err = "429" in msg or "RESOURCE_EXHAUSTED" in msg
+                if is_quota_err and attempt == 0:
+                    # Đọc đúng số giây Google yêu cầu chờ (vd "retry in 32.1s")
+                    m = re.search(r"retry in ([\d.]+)s", msg)
+                    wait_s = float(m.group(1)) + 1 if m else 5.0
+                    if wait_s <= 15:  # chờ được thì chờ, tránh treo UI quá lâu
+                        time.sleep(wait_s)
+                        continue  # thử lại đúng model này 1 lần nữa
+                break  # lỗi khác 429, hoặc đã retry rồi -> chuyển sang model kế tiếp
+        if answer_text is not None:
             break
-        except Exception as e:
-            last_err = e
-            continue
-
+ 
     if answer_text is None:
+        if last_err and ("429" in str(last_err) or "RESOURCE_EXHAUSTED" in str(last_err)):
+            return ("⏳ AI đang bị giới hạn tần suất (free tier Gemini chỉ 5-15 "
+                     "request/phút). Đợi khoảng 30 giây rồi hỏi lại nhé."), None
         return f"⚠️ Lỗi gọi AI (đã thử {len(ASTRO_AI_MODEL_CANDIDATES)} model): {last_err}", None
 
     # Lưu lịch sử cho lượt hỏi sau (chỉ text, không lưu tool-call nội bộ)
