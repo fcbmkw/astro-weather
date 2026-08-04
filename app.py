@@ -2644,7 +2644,7 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # ------------------------------------------------------------------------------
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS FIX TRIỆT ĐỂ NÚT MŨI TÊN & CHỮ GÕ BỊ LỆCH + SÁT KHOẢNG CÁCH ---
+    # --- CSS ÉP KHOẢNG CÁCH DÍNH LIỀN KHÔNG CÒN KHOẢNG HỞ ---
     st.markdown(
         """
         <style>
@@ -2654,30 +2654,28 @@ with _ai_panel:
             visibility: hidden !important;
         }
 
-        /* 2. CHỈNH KHUNG CHAT_INPUT CHUẨN ĐỐI XỨNG & ÉP KHOẢNG CÁCH DƯỚI SÁT LẠI */
+        /* 2. CHỈNH KHUNG CHAT_INPUT & TRIỆT TIỆU MARGIN DƯỚI */
         div[data-testid="stChatInput"] {
             padding: 0 !important;
             min-height: unset !important;
-            margin-bottom: 2px !important; /* Triệt tiêu khoảng trống phía dưới ChatInput */
+            margin-bottom: 0px !important; /* Xóa sạch margin dưới */
         }
         
-        /* Container chứa cả textarea và nút bấm */
         div[data-testid="stChatInput"] > div {
             min-height: 38px !important;
             height: 38px !important;
             padding: 0 8px 0 12px !important;
             display: flex !important;
-            align-items: center !important; /* Căn giữa mọi phần tử con theo chiều dọc */
+            align-items: center !important;
             justify-content: space-between !important;
         }
 
-        /* Ô nhập văn bản - Căn chữ nằm chính giữa */
         div[data-testid="stChatInput"] textarea {
             min-height: 24px !important;
             height: 24px !important;
             max-height: 24px !important;
             padding: 0 !important;
-            margin-top: 2px !important; /* Đẩy chữ xuống nhẹ 2px để nằm chuẩn giữa viền */
+            margin-top: 2px !important;
             margin-bottom: 0 !important;
             font-size: 13px !important;
             line-height: 24px !important;
@@ -2690,9 +2688,8 @@ with _ai_panel:
             opacity: 0.8 !important;
         }
 
-        /* 💥 TRIỆT TIỆU VỊ TRÍ TUYỆT ĐỐI CỦA NÚT MŨI TÊN ĐỎ DÙNG ALIGN-ITEMS CĂN GIỮA */
         div[data-testid="stChatInput"] button {
-            position: static !important; /* Bỏ position absolute mặc định của Streamlit */
+            position: static !important;
             top: auto !important;
             bottom: auto !important;
             right: auto !important;
@@ -2702,18 +2699,18 @@ with _ai_panel:
             min-width: 26px !important;
             padding: 0 !important;
             margin: 0 !important;
-            align-self: center !important; /* Buộc nút nằm chính giữa theo chiều dọc */
+            align-self: center !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
 
-        /* 3. KHUNG HIỂN THỊ KẾT QUẢ - KÉO SÁT LÊN TRÊN */
+        /* 3. KHUNG HIỂN THỊ KẾT QUẢ - DÙNG MARGIN ÂM ĐỂ KÉO DÍNH SÁT MẶT CHATBOX */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
             padding: 14px 16px !important;
-            margin-top: 2px !important; /* Giảm margin-top xuống 2px để sát ngay dưới Chatbox */
+            margin-top: -10px !important; /* 🔥 MARGIN ÂM: Triệt tiêu hoàn toàn gap mặc định của Streamlit */
         }
         div[class*="st-key-astro_ai_answer_box"] p,
         div[class*="st-key-astro_ai_answer_box"] li,
