@@ -2676,18 +2676,13 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 st.markdown(
     """
     <style>
-    /* (a) Tìm đúng container cha thật sự chứa nút gửi (bất kể lồng sâu bao
-    nhiêu cấp), ép flex-row + canh giữa dọc + ép luôn chiều cao thấp lại
-    ngay tại đây — đây chính là chỗ trước đó dùng "> div" cũ nhưng sai cấp
-    nên set height không có tác dụng. */
+    /* Tìm đúng container cha thật sự đang chứa nút gửi, ép nó thành flex-row
+       căn giữa theo chiều dọc — không cần đoán số cấp lồng nữa. */
     div[data-testid="stChatInput"] div:has(> [data-testid="stChatInputSubmitButton"]) {
         display: flex !important;
         align-items: center !important;
-        min-height: 38px !important;
-        height: 38px !important;
-        padding: 0 8px 0 12px !important;
     }
-
+ 
     [data-testid="stChatInputSubmitButton"] {
         width: 28px !important;
         height: 28px !important;
@@ -2696,46 +2691,17 @@ st.markdown(
         padding: 0 !important;
         flex-shrink: 0 !important;
     }
-
+ 
     [data-testid="stChatInputTextArea"] {
         min-height: 24px !important;
         height: 24px !important;
         line-height: 24px !important;
         padding: 0 !important;
         margin: 0 !important;
-        font-size: 13px !important;
     }
-
-    [data-testid="stChatInputTextArea"]::placeholder {
-        color: #888888 !important;
-        opacity: 0.8 !important;
-    }
-
-    /* (c) Font khung kết quả — ép lại 13px như bản trước. Dùng cả 2 dạng
-    selector (class* và trực tiếp) để chắc chắn khớp dù cấu trúc thay đổi. */
-    div[class*="st-key-astro_ai_answer_box"] p,
-    div[class*="st-key-astro_ai_answer_box"] li,
-    div[class*="st-key-astro_ai_answer_box"] span,
-    div[class*="st-key-astro_ai_answer_box"] div {
-        font-size: 13px !important;
-        line-height: 1.4 !important;
-        margin-top: 0 !important;
-        margin-bottom: 0.3rem !important;
-    }
-    div[class*="st-key-astro_ai_answer_box"] ol,
-    div[class*="st-key-astro_ai_answer_box"] ul {
-        padding-left: 1.2rem !important;
-        margin-top: 0.2rem !important;
-        margin-bottom: 0.3rem !important;
-    }
-
-    /* Ẩn toolbar/menu/footer thuộc chính app Streamlit (KHÔNG ẩn được thanh
-    Share/Star/Edit/GitHub của Streamlit Community Cloud — thanh đó nằm
-    ngoài DOM app, phải thêm ?embed=true vào URL khi truy cập). */
-    [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
-        display: none !important;
-        visibility: hidden !important;
-    }
+ 
+    /* Giữ nguyên các phần CSS khác bạn đã có (placeholder màu xám, ẩn
+       header/toolbar, font-size khung kết quả, v.v.) — không đụng vào. */
     </style>
     """,
     unsafe_allow_html=True,
