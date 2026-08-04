@@ -2755,7 +2755,7 @@ with _ai_panel:
         key="astro_ai_input",
     )
 
-    _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
+    _astro_chat_box = st.container(height=45, border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
