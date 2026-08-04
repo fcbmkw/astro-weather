@@ -2647,7 +2647,7 @@ with _ai_panel:
     _ai_question = st.chat_input(
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao...",
         key="astro_ai_input",
-        height=68,   # mức tối thiểu Streamlit hỗ trợ chính thức cho 1 dòng
+        height=28,   # mức tối thiểu Streamlit hỗ trợ chính thức cho 1 dòng
     )
     st.markdown(
         """
