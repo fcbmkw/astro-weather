@@ -2737,6 +2737,9 @@ st.markdown(
         display: none !important;
         visibility: hidden !important;
     }
+    div[class*="st-key-astro_ai_answer_box"] {
+    padding: 2px 8px !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
