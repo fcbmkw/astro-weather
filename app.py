@@ -2645,7 +2645,7 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 _ai_panel = st.container()
 with _ai_panel:
     _ai_question = st.chat_input(
-        "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao...",
+        "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
         key="astro_ai_input",
         height=8,   # mức tối thiểu Streamlit hỗ trợ chính thức cho 1 dòng
     )
@@ -2654,14 +2654,14 @@ with _ai_panel:
         <style>
         [class*="st-key-astro_ai_answer_box"] p {
             font-size: 13px !important;
-            line-height: 1.4 !important;
+            line-height: 1.0 !important;
             margin-bottom: 0.2rem !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    _astro_chat_box = st.container(height=10, border=True, key="astro_ai_answer_box")
+    _astro_chat_box = st.container(height=60, border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
