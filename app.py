@@ -2642,20 +2642,17 @@ if st.session_state.map_tile not in ("satellite", "street", "windy"):
 # - Trạng thái "đang kiểm tra..." hiện greyout NGAY TRONG khung kết quả
 #   (st.caption, không dùng st.spinner rời rạc nữa).
 # ------------------------------------------------------------------------------
-# --- 1. HÀM CALLBACK XỬ LÝ AI KHI BẤM ENTER ---
-def _on_astro_ai_submit():
+# --- 1. HÀM XỬ LÝ LOGIC (CHẠY KHI BẤM ENTER HOẶC CLICK NÚT MŨI TÊN) ---
+def _process_astro_ai():
     user_q = st.session_state.astro_ai_input.strip()
     if user_q:
-        # Lưu câu hỏi để hiển thị làm placeholder mờ ở vòng lặp sau
+        # Lưu câu hỏi để hiển thị làm placeholder mờ ở lần sau
         st.session_state.astro_last_question = user_q
-        
-        # Đánh dấu trạng thái đang xử lý để hiển thị loading
         st.session_state.astro_ai_loading = True
         
-        # Gọi hàm AI
+        # Gọi AI
         answer, fly_to = ask_astro_ai(user_q)
         
-        # Lưu kết quả
         st.session_state.astro_ai_answer = answer
         if fly_to:
             st.session_state.lat = fly_to["lat"]
@@ -2663,35 +2660,39 @@ def _on_astro_ai_submit():
             st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
             st.session_state.zoom = 9
             
-        # Tắt trạng thái loading
         st.session_state.astro_ai_loading = False
-
         # Reset ô nhập liệu về rỗng
         st.session_state.astro_ai_input = ""
 
 
 _ai_panel = st.container()
 with _ai_panel:
-    # --- CSS GIAO DIỆN & PADDING ĐỐI XỨNG ---
+    # --- CSS HIỆN ĐẠI: ĐẶT NÚT MŨI TÊN NẰM TRONG KHUNG TEXT_INPUT ---
     st.markdown(
         """
         <style>
-        /* 1. KHUNG NHẬP TEXT_INPUT */
+        /* Khung chứa cả Input và Nút Mũi Tên */
+        div[data-testid="stForm"] {
+            border: none !important;
+            padding: 0 !important;
+        }
+        
+        /* Cấu hình khung Text Input */
         div[data-testid="stTextInput"] {
             margin-bottom: 0px !important;
         }
         div[data-testid="stTextInput"] > div > div {
-            min-height: 34px !important;
-            height: 34px !important;
-            padding: 0 10px !important;
+            min-height: 36px !important;
+            height: 36px !important;
+            padding: 0 40px 0 10px !important; /* Dành khoảng trống 40px ở bên phải cho nút mũi tên */
             border-radius: 8px !important;
             display: flex !important;
             align-items: center !important;
         }
         div[data-testid="stTextInput"] input {
             font-size: 13px !important;
-            height: 30px !important;
-            line-height: 30px !important;
+            height: 32px !important;
+            line-height: 32px !important;
             padding: 0 !important;
         }
         div[data-testid="stTextInput"] input::placeholder {
@@ -2699,11 +2700,42 @@ with _ai_panel:
             opacity: 0.8 !important;
         }
 
-        /* 2. KHUNG KẾT QUẢ */
+        /* Định vị nút Mũi Tên Hướng Lên chèn vào góc phải của Input */
+        .astro-send-btn-container {
+            position: relative;
+            margin-top: -36px;
+            height: 36px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding-right: 6px;
+            pointer-events: none; /* Tránh che mất vùng click input */
+        }
+        .astro-send-btn-container button {
+            pointer-events: auto;
+            height: 26px !important;
+            width: 26px !important;
+            min-height: 26px !important;
+            padding: 0 !important;
+            border-radius: 50% !important;
+            background-color: #31333F !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .astro-send-btn-container button:hover {
+            background-color: #FF4B4B !important; /* Đổi màu khi hover */
+            color: white !important;
+        }
+
+        /* 2. KHUNG KẾT QUẢ CÂN BẰNG */
         div[class*="st-key-astro_ai_answer_box"] {
             min-height: auto !important;
             height: auto !important;
             padding: 14px 16px !important;
+            margin-top: 8px !important;
         }
         div[class*="st-key-astro_ai_answer_box"] p,
         div[class*="st-key-astro_ai_answer_box"] li,
@@ -2728,20 +2760,25 @@ with _ai_panel:
         unsafe_allow_html=True,
     )
 
-    # Lấy câu hỏi cũ làm placeholder mờ
     _placeholder_text = st.session_state.get(
         "astro_last_question", 
         "Hỏi AI: tìm điểm & thời điểm chụp ảnh sao..."
     )
 
-    # Ô nhập liệu gọi callback on_change
+    # Ô nhập liệu văn bản (nhấn Enter để gửi)
     st.text_input(
         label="Hỏi AI",
         placeholder=_placeholder_text,
         key="astro_ai_input",
-        on_change=_on_astro_ai_submit,
+        on_change=_process_astro_ai,
         label_visibility="collapsed",
     )
+
+    # Nút bấm Mũi Tên Hướng Lên (Click chuột để gửi)
+    st.markdown('<div class="astro-send-btn-container">', unsafe_allow_html=True)
+    if st.button("↑", key="astro_ai_send_btn", help="Gửi câu hỏi"):
+        _process_astro_ai()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Khung hiển thị kết quả
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
