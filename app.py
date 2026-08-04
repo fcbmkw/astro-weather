@@ -2737,7 +2737,7 @@ st.markdown(
         </style>
         """,
         unsafe_allow_html=True,
-    )
+)
 
     _astro_chat_box = st.container(border=True, key="astro_ai_answer_box")
     with _astro_chat_box:
