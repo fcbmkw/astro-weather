@@ -1887,9 +1887,28 @@ _REGION_CITY_NAME = {
     "japan":    "Japan",
 }
 
+# Các đảo xa thuộc Tokyo (quần đảo Izu + Ogasawara) — KHÔNG có đường bộ/ô tô từ
+# trung tâm Tokyo, phải đi tàu/máy bay riêng. Loại các đảo này khỏi danh sách quét
+# mặc định của vùng "kanto" (AI sẽ chỉ đề xuất địa điểm đất liền đi ô tô được).
+# User vẫn có thể hỏi trực tiếp tên đảo (vd "Hachijojima tối nay thế nào") — các
+# tool tra cứu theo tên (tool_check_location_darkness/tonight) tìm trên toàn bộ
+# LOCATION_DATABASE, không bị ảnh hưởng bởi danh sách loại trừ này.
+_KANTO_REMOTE_ISLANDS = {
+    "38. Kozushima Maehama 前浜海岸, Tokyo",
+    "39. Mikurajima Observatory 御蔵島展望地, Tokyo",
+    "40. Hachijojima Nambara 南原千畳岩海岸, Tokyo",
+    "83. Aogashima Observatory 青ヶ島展望公園, Tokyo",
+    "84. Niijima Habushiura 羽伏浦海岸, Tokyo",
+    "85. Shikinejima Tomari Beach 泊海岸, Tokyo",
+    "86. Ogasawara Weather Station 小笠原, Tokyo",
+    "267. Oshima Mihara-yama 三原山頂上, Tokyo",
+    "268. Oshima Habu Port 波浮港, Tokyo",
+}
+
 _FAV_RAW_BY_REGION = {
     rk: [(n, c) for n, c in LOCATION_DATABASE.items()
-         if n.rsplit(",", 1)[-1].strip() in prefs]
+         if n.rsplit(",", 1)[-1].strip() in prefs
+         and not (rk == "kanto" and n in _KANTO_REMOTE_ISLANDS)]
     for rk, prefs in _REGIONS.items()
 }
 
@@ -2387,11 +2406,28 @@ def ask_astro_ai(user_question: str):
         "- Nếu chỉ hỏi độ tối bầu trời (Bortle) của 1 nơi, không liên quan thời tiết "
         "-> gọi tool_check_location_darkness.\n"
         "- LUÔN gọi ít nhất 1 tool trước khi trả lời, không được tự bịa thời tiết/"
-        "địa điểm/toạ độ.\n\n"
+        "địa điểm/toạ độ.\n"
+        "- Vùng 'kanto' đã TỰ ĐỘNG loại bỏ các đảo xa không đi ô tô được (Ogasawara, "
+        "Aogashima, Hachijojima, Kozushima, Mikurajima, Niijima, Shikinejima, Oshima) "
+        "— bạn không cần tự lọc lại, các địa điểm tool trả về cho 'kanto' đều là đất "
+        "liền/đi ô tô được. Nếu user hỏi riêng về 1 đảo xa cụ thể theo tên, cứ gọi "
+        "tool_check_location_darkness/tool_check_location_tonight với đúng tên đảo đó.\n\n"
         "Trả lời ngắn gọn (3-5 câu), thân thiện, bằng tiếng Việt. Nếu địa điểm ban "
         "đầu xấu và bạn đề xuất chỗ khác, nói rõ kiểu: 'Jogashima thời tiết không "
         "tốt, các địa điểm có thời tiết tốt hơn là Kamikochi, JAXA...' kèm lý do "
-        "(mây %, trăng %, Bortle)."
+        "(mây %, trăng %, Bortle).\n\n"
+        "QUAN TRỌNG — ĐỒNG BỘ BẢN ĐỒ/LỊCH: khi bạn dùng tool trả về "
+        "{\"found\": true, \"best\": {...}, \"alternatives\": [...]} (hoặc 1 địa điểm "
+        "đơn từ tool_check_location_*), hãy trình bày địa điểm '1.' trong câu trả lời "
+        "CHÍNH LÀ object 'best' (không tự đảo thứ tự theo cảm tính riêng). Danh sách "
+        "'2.', '3.' (nếu có) lấy theo đúng thứ tự 'alternatives'. Sau khi trả lời "
+        "xong, LUÔN thêm 1 dòng cuối cùng riêng biệt theo đúng định dạng "
+        "'[[PICK:N]]' trong đó N là chỉ số của địa điểm bạn vừa nêu là lựa chọn số 1 "
+        "(0 = best, 1 = alternatives[0], 2 = alternatives[1]; dùng 0 nếu tool chỉ trả "
+        "về 1 địa điểm đơn; dùng -1 nếu không có địa điểm nào để ghim bản đồ, vd chỉ "
+        "trả lời chung chung không dựa trên tool). Dòng '[[PICK:N]]' này sẽ bị ẩn "
+        "khỏi người dùng, chỉ dùng để hệ thống tự cập nhật bản đồ + lịch, nên đừng "
+        "giải thích gì thêm về nó."
     )
 
     history = st.session_state.get("astro_ai_history", [])
@@ -2451,6 +2487,18 @@ def ask_astro_ai(user_question: str):
                      "request/phút). Đợi khoảng 30 giây rồi hỏi lại nhé."), None
         return f"⚠️ Lỗi gọi AI (đã thử {len(ASTRO_AI_MODEL_CANDIDATES)} model): {last_err}", None
 
+    # Tách dòng "[[PICK:N]]" ở cuối câu trả lời — đây là chỉ số (ẩn, không hiển thị
+    # cho user) cho biết AI đã chọn CANDIDATE NÀO (trong best/alternatives do tool
+    # trả về) làm đề xuất số 1 trong câu trả lời. Nhờ vậy bản đồ/lịch sẽ đồng bộ
+    # ĐÚNG với địa điểm + đêm mà AI thực sự nêu là ưu tiên, thay vì luôn mặc định
+    # lấy "best" theo thuật toán (có thể khác với lựa chọn AI trình bày, ví dụ khi
+    # AI cân nhắc thêm các tiêu chí user vừa nêu như "chỉ tính đất liền").
+    pick_idx = None
+    _pick_match = re.search(r"\[\[PICK:(-?\d+)\]\]\s*$", answer_text.strip())
+    if _pick_match:
+        pick_idx = int(_pick_match.group(1))
+        answer_text = answer_text[:_pick_match.start()].rstrip()
+
     # Lưu lịch sử cho lượt hỏi sau (chỉ text, không lưu tool-call nội bộ)
     st.session_state.astro_ai_history = contents + [
         {"role": "model", "parts": [{"text": answer_text}]}
@@ -2459,10 +2507,28 @@ def ask_astro_ai(user_question: str):
     fly_to = None
     data = last_result["data"]
     if data:
-        loc = data if "lat" in data else data.get("best")
+        if "lat" in data:
+            # Kết quả tool tra cứu 1 địa điểm đơn (check_location_darkness/tonight).
+            loc = data
+        else:
+            # Kết quả scan (best + alternatives, tối đa 3 candidate). Chọn ĐÚNG
+            # candidate mà AI đã nêu là "1." trong câu trả lời (theo pick_idx),
+            # KHÔNG mặc định lấy "best" nếu AI đã ưu tiên 1 alternative khác.
+            candidates = [c for c in [data.get("best")] + list(data.get("alternatives", [])) if c]
+            if pick_idx is not None and pick_idx >= 0 and pick_idx < len(candidates):
+                loc = candidates[pick_idx]
+            elif pick_idx == -1:
+                loc = None  # AI chủ động báo không có địa điểm nào để ghim
+            else:
+                loc = candidates[0] if candidates else None  # fallback nếu thiếu tag
+
         if loc and "lat" in loc:
-            fly_to = {"lat": loc["lat"], "lon": loc["lon"],
-                      "name": loc.get("matched_name") or loc.get("location_name")}
+            day_off = loc.get("days_from_today", 0) or 0
+            fly_to = {
+                "lat": loc["lat"], "lon": loc["lon"],
+                "name": loc.get("matched_name") or loc.get("location_name"),
+                "day_off": max(0, min(6, int(day_off))),
+            }
 
     return answer_text, fly_to
 # ------------------------------------------------------------------------------ (hết KHỐI B)
@@ -2821,10 +2887,25 @@ if _ai_question and _ai_question.strip():
         st.session_state.astro_ai_answer = answer
 
         if fly_to:
-            st.session_state.lat = fly_to["lat"]
-            st.session_state.lon = fly_to["lon"]
-            st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
-            st.session_state.zoom = 9
+            # Giống hệt pattern "Priority 1 (click sao)" / nút Scan: set đầy đủ
+            # lat/lon/location_name/day_offset/sel_date + cờ _need_fly để bản đồ
+            # THỰC SỰ bay tới đúng địa điểm và lịch (calendar) nhảy đúng đêm mà AI
+            # vừa đề xuất là ưu tiên số 1. Trước đây chỉ set lat/lon/map_center/zoom
+            # nên day_offset (lịch) không đổi, và thiếu _need_fly nên bản đồ có khi
+            # không bay tới nơi mới.
+            _ai_day_off = fly_to.get("day_off", 0)
+            st.session_state.lat             = fly_to["lat"]
+            st.session_state.lon             = fly_to["lon"]
+            st.session_state.map_center      = [fly_to["lat"], fly_to["lon"]]
+            st.session_state.zoom            = 9
+            if fly_to.get("name"):
+                st.session_state.location_name = fly_to["name"]
+            st.session_state.is_custom_point = False
+            st.session_state.day_offset      = _ai_day_off
+            st.session_state.sel_date        = date_options[_ai_day_off]
+            st.session_state._need_fly       = True
+            st.session_state._last_tip       = None
+            st.session_state._skip_prefetch  = True
         st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v7)
 
