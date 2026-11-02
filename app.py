@@ -5758,6 +5758,125 @@ def _lc_resolve():
             return ("pref", pref)
     return ("japan", None)
 
+# ── helpers: lấy danh sách camera của tỉnh, ảnh mới nhất, toạ độ khu vực ──────────
+import html as _lc_html_mod
+_LC_UA = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"),
+          "Accept-Language": "ja,en;q=0.8"}
+_LC_PREF_PREFIX = re.compile(r"^(東京都|北海道|(?:京都|大阪)府|[^\s市区町村]{2,3}県)")
+
+def _lc_pref_full(pref_en):
+    jp = _LC_PREF[pref_en][1]
+    return {"Tokyo": "東京都", "Hokkaido": "北海道", "Osaka": "大阪府", "Kyoto": "京都府"}.get(pref_en, jp + "県")
+
+def _lc_muni(name):
+    """'八王子市別所' -> '八王子市'; '港区港南' -> '港区'; '東京タワー' -> None."""
+    n = _LC_PREF_PREFIX.sub("", name.strip())
+    m = re.match(r"^(.+?[市区町村])", n)
+    return m.group(1) if m else None
+
+@st.cache_data(ttl=21600, show_spinner=False)
+def _lc_pref_cameras(path):
+    """[(camera_id, name, page_path)] đọc từ trang camera của 1 tỉnh. Lỗi -> []."""
+    try:
+        r = requests.get(_LC_BASE + path, headers=_LC_UA, timeout=10)
+        r.raise_for_status()
+        txt = r.text
+    except Exception:
+        return []
+    out, seen = [], set()
+    for m in re.finditer(
+            r'href="(?:https://weathernews\.jp)?(/onebox/livecam/[a-z]+/[a-z]+/((?=[^/"]*\d)[0-9A-Za-z]{9,12}))/?"[^>]*>(.*?)</a>',
+            txt, re.S):
+        cid = m.group(2)
+        if cid in seen:
+            continue
+        name = re.sub(r"<[^>]+>", " ", m.group(3))
+        name = _lc_html_mod.unescape(re.sub(r"\s+", " ", name)).strip()
+        name = re.sub(r"\s*\d{1,2}/\d{1,2}\s+\d{1,2}:\d{2}$", "", name)
+        if not name:
+            continue
+        seen.add(cid)
+        out.append((cid, name, m.group(1) + "/"))
+    return out
+
+@st.cache_data(ttl=2592000, show_spinner=False)
+def _lc_geocode_munis(pref_full, munis):
+    """{市区町村: (lat, lon)} qua API geocoder công khai của GSI (Viện Địa lý Nhật). Chạy song song
+    bằng requests thuần (không đụng st.* trong thread), kết quả cache 30 ngày."""
+    from concurrent.futures import ThreadPoolExecutor
+    def one(mn):
+        try:
+            r = requests.get("https://msearch.gsi.go.jp/address-search/AddressSearch",
+                             params={"q": pref_full + mn}, timeout=8)
+            j = r.json()
+            if j:
+                lo, la = j[0]["geometry"]["coordinates"]
+                return mn, (float(la), float(lo))
+        except Exception:
+            pass
+        return mn, None
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return {k: v for k, v in ex.map(one, munis) if v}
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _lc_latest_image(page_path):
+    """(url ảnh 640px mới nhất, 'yyyymmddhhmmss' UTC) từ trang camera. Lỗi -> (None, None)."""
+    try:
+        r = requests.get("https://weathernews.jp" + page_path, headers=_LC_UA, timeout=10)
+        r.raise_for_status()
+        txt = r.text.replace("\\/", "/")
+        m = re.search(r"https://gvs\.weathernews\.jp/livecam/[0-9A-Za-z]+/640/(\d{14})\.(?:jpg|webp)", txt)
+        if m:
+            return m.group(0), m.group(1)
+    except Exception:
+        pass
+    return None, None
+
+def _lc_pick_nearest(pref, lat, lon):
+    """-> (camera, km|None, khu vực|None) hoặc None nếu tỉnh không có danh sách camera đọc được."""
+    cams = _lc_pref_cameras(_LC_PREF[pref][0])
+    if not cams:
+        return None
+    by_muni = {}
+    for c in cams:
+        mn = _lc_muni(c[1])
+        if mn:
+            by_muni.setdefault(mn, []).append(c)
+    coords = _lc_geocode_munis(_lc_pref_full(pref), tuple(sorted(by_muni))) if by_muni else {}
+    best = None
+    for mn, (la, lo) in coords.items():
+        d = _haversine_km(lat, lon, la, lo)
+        if best is None or d < best[0]:
+            best = (d, mn)
+    if best:
+        return by_muni[best[1]][0], best[0], best[1]
+    return cams[0], None, None
+
+def _lc_ts_label(ts):
+    try:
+        return (datetime.strptime(ts, "%Y%m%d%H%M%S") + timedelta(hours=9)).strftime("%m/%d %H:%M JST")
+    except Exception:
+        return ""
+
+def _lc_card_html(cam_name, page_path, sub, img_url, ts):
+    link = "https://weathernews.jp" + page_path
+    shot = ""
+    if img_url:
+        shot = (f'<a href="{link}" target="_blank" rel="noopener">'
+                f'<img src="{img_url}" referrerpolicy="no-referrer" '
+                f'alt="Camera image unavailable — open on Weathernews" '
+                f'style="width:100%;max-width:640px;border-radius:10px;display:block;'
+                f'margin-bottom:10px;background:#1e293b;"></a>')
+    stamp = f" · {_lc_ts_label(ts)}" if ts else ""
+    return (f'<div style="{_lc_card}">{shot}'
+            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:4px;">{sub}</div>'
+            f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;">'
+            f'{_lc_html_mod.escape(cam_name)}<span style="color:#64748b;font-weight:500;'
+            f'font-size:12px;">{stamp}</span></div>'
+            f'<a href="{link}" target="_blank" rel="noopener" style="{_lc_btn}">'
+            f'Open on Weathernews ↗</a></div>')
+
 st.markdown("---")
 st.markdown("### 📹 Live Sky Camera")
 _lc_kind, _lc_pref = _lc_resolve()
@@ -5765,41 +5884,46 @@ _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padd
             "font-family:sans-serif;")
 _lc_btn = ("display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;"
            "font-weight:700;font-size:13px;padding:7px 14px;border-radius:8px;")
-if _lc_kind == "tokyo_center":
-    if "_lc_tokyo_pick" not in st.session_state:
-        st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
-    _pick = next((c for c in _LC_TOKYO_CENTER if c[0] == st.session_state._lc_tokyo_pick),
-                 _LC_TOKYO_CENTER[0])
-    _others = "".join(
-        f'<a href="{_LC_BASE}kanto/tokyo/{cid}/" target="_blank" rel="noopener" '
-        f'style="color:#93c5fd;font-size:12px;margin-right:12px;text-decoration:none;">{cn}</a>'
-        for cid, cn in _LC_TOKYO_CENTER if cid != _pick[0])
-    _lc_html = (
-        f'<div style="{_lc_card}">'
-        f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">Central Tokyo · random camera</div>'
-        f'<div style="color:#e2e8f0;font-size:16px;font-weight:700;margin-bottom:10px;">{_pick[1]}</div>'
-        f'<a href="{_LC_BASE}kanto/tokyo/{_pick[0]}/" target="_blank" rel="noopener" style="{_lc_btn}">'
-        f'Open live camera ↗</a>'
-        f'<div style="margin-top:12px;">{_others}</div></div>')
-elif _lc_kind == "pref":
-    _path, _jp = _LC_PREF[_lc_pref]
-    _lc_html = (
-        f'<div style="{_lc_card}">'
-        f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">'
-        f'Near {_strip_loc_num(st.session_state.location_name)}</div>'
-        f'<div style="color:#e2e8f0;font-size:16px;font-weight:700;margin-bottom:10px;">'
-        f'{_lc_pref} ({_jp}) live cameras</div>'
-        f'<a href="{_LC_BASE}{_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
-        f'Open camera list ↗</a></div>')
-else:
-    _lc_html = (
-        f'<div style="{_lc_card}">'
-        f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">'
-        f'No camera area matched this point</div>'
-        f'<a href="{_LC_BASE}" target="_blank" rel="noopener" style="{_lc_btn}">'
-        f'Open all-Japan live cameras ↗</a></div>')
-st.markdown(_lc_html, unsafe_allow_html=True)
-st.caption("Live camera images by Weathernews (weathernews.jp) — opens in a new tab.")
+_lc_out = None
+try:
+    with st.spinner("Loading live camera..."):
+        if _lc_kind == "tokyo_center":
+            if "_lc_tokyo_pick" not in st.session_state:
+                st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
+            _pick = next((c for c in _LC_TOKYO_CENTER if c[0] == st.session_state._lc_tokyo_pick),
+                         _LC_TOKYO_CENTER[0])
+            _pp = f"/onebox/livecam/kanto/tokyo/{_pick[0]}/"
+            _iu, _ts = _lc_latest_image(_pp)
+            if _iu:
+                _lc_out = _lc_card_html(_pick[1], _pp, "Central Tokyo · random camera", _iu, _ts)
+        elif _lc_kind == "pref":
+            _near = _lc_pick_nearest(_lc_pref, st.session_state.lat, st.session_state.lon)
+            if _near:
+                _cam, _km, _area = _near
+                _iu, _ts = _lc_latest_image(_cam[2])
+                if _iu:
+                    _where = (f"Nearest camera area: {_area} (~{_km:.0f} km from "
+                              f"{_strip_loc_num(st.session_state.location_name)})") if _area else \
+                             f"{_lc_pref} · camera in the same prefecture"
+                    _lc_out = _lc_card_html(_cam[1], _cam[2], _where, _iu, _ts)
+except Exception:
+    _lc_out = None
+
+if _lc_out is None:   # không đọc được ảnh -> quay về thẻ link như trước
+    if _lc_kind == "tokyo_center":
+        _fb_path, _fb_txt = "kanto/tokyo/", "Tokyo live cameras"
+    elif _lc_kind == "pref":
+        _fb_path, _fb_txt = _LC_PREF[_lc_pref][0], f"{_lc_pref} ({_LC_PREF[_lc_pref][1]}) live cameras"
+    else:
+        _fb_path, _fb_txt = "", "All-Japan live cameras"
+    _lc_out = (f'<div style="{_lc_card}">'
+               f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">'
+               f'Could not load a camera image here — open it on Weathernews</div>'
+               f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">{_fb_txt}</div>'
+               f'<a href="{_LC_BASE}{_fb_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
+               f'Open ↗</a></div>')
+st.markdown(_lc_out, unsafe_allow_html=True)
+st.caption("Live camera images by Weathernews (weathernews.jp).")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
