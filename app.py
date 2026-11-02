@@ -378,6 +378,17 @@ def _strip_loc_num(name: str) -> str:
     import re
     return re.sub(r'^\d+\.\s*', '', name).strip()
 
+def _disp_name(name: str) -> str:
+    """Tên hiển thị gọn: bỏ số thứ tự đầu + chữ Nhật.
+    'Senjojiki Cirque 千畳敷カール, Nagano' -> 'Senjojiki Cirque, Nagano'. Chỉ dùng để HIỂN THỊ."""
+    import re
+    n = re.sub(r'^\d+\.\s*', '', name or '')
+    n = re.sub(r'[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]+', ' ', n)
+    n = re.sub(r'\(\s*\)|（\s*）', '', n)
+    n = re.sub(r'\s+,', ',', n)
+    n = re.sub(r'\s+', ' ', n).strip(' ,')
+    return n or re.sub(r'^\d+\.\s*', '', name or '').strip()
+
 @st.cache_data(ttl=3600, show_spinner=False)   # cache 1 giờ — tên địa điểm không đổi
 def fetch_location_name(lat, lon):
     url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
@@ -1306,8 +1317,40 @@ _ENDPOINTS = [
     ("gfs_only",f"&hourly={_FIELDS}&models=gfs_seamless&wind_speed_unit=ms&timezone=auto"),
 ]
 
+@st.cache_resource
+def _wx_prefetch_store():
+    """Kho dùng chung giữa các lần rerun: data = kết quả đã tải sẵn, at = thời điểm tải (epoch giây)."""
+    return {"data": {}, "at": {}}
+
+def _wx_prefetch(coords, workers=8):
+    """Tải song song thời tiết cho nhiều toạ độ (chỉ requests thuần, không đụng streamlit trong thread).
+    Kết quả để trong kho; _fetch_weather_raw (có cache) sẽ lấy ra dùng -> cache vẫn ghi ở thread chính."""
+    import time as _t
+    from concurrent.futures import ThreadPoolExecutor
+    store = _wx_prefetch_store()
+    now = _t.time()
+    todo = [c for c in dict.fromkeys(coords) if now - store["at"].get(c, 0) > 3300]
+    if not todo:
+        return
+    def one(c):
+        try:
+            return c, _fetch_weather_raw_impl(c[0], c[1])
+        except Exception:
+            return c, None
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for c, res in ex.map(one, todo):
+            if res and res[2] != "offline":      # lỗi thì để _fetch_weather_raw tự thử lại
+                store["data"][c] = res
+                store["at"][c] = now
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_weather_raw(lat, lon):
+    pre = _wx_prefetch_store()["data"].pop((lat, lon), None)
+    if pre is not None:
+        return pre
+    return _fetch_weather_raw_impl(lat, lon)
+
+def _fetch_weather_raw_impl(lat, lon):
     """Raw API fetch với retry + multi-endpoint fallback.
     Returns (hourly_dict, utc_offset_seconds, endpoint_used_label, last_error)"""
     import time as _time
@@ -5042,6 +5085,8 @@ with col_right:
         Chạy tuần tự (không thread) vì @st.cache_data không thread-safe khi write.
         Dùng danh sách dedupe 60km → ~75 địa điểm; weather fetch đã cache 1h."""
         out = {}
+        _wx_prefetch([(la, lo) for rk in _TH_REGIONS
+                      for _nm, (la, lo) in _locs_for_region(rk, for_best_or_tonight=True)])
         for rk in _TH_REGIONS:
             hits = []
             for nm, (la, lo) in _locs_for_region(rk, for_best_or_tonight=True):
@@ -5055,50 +5100,59 @@ with col_right:
             out[rk] = hits
         return out
 
-    with st.spinner("Today highlight..."):
+    def _th_html(_th_data):
+        _th_rows = ""
+        for _rk in _TH_REGIONS:
+            _hits = (_th_data or {}).get(_rk, [])
+            _lbl_col = "#e2e8f0" if _hits else "#64748b"
+            if _hits:
+                _chips = ""
+                for _sn, _fn, _tier in _hits[:_TH_MAX_SHOW]:
+                    _c = "#6ee7b7" if _tier == "PERFECT NIGHT" else "#93c5fd"
+                    _chips += (f'<span title="{_fn} — {_tier}" style="color:{_c};font-weight:600;'
+                               f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+                               f'min-width:0;flex:0 1 auto;">{_sn}</span>')
+                if len(_hits) > _TH_MAX_SHOW:
+                    _more = "&#10;".join(h[1] for h in _hits[_TH_MAX_SHOW:])
+                    _chips += (f'<span title="{_more}" style="color:#94a3b8;flex:0 0 auto;">'
+                               f'+{len(_hits) - _TH_MAX_SHOW}</span>')
+            elif _th_data is None:
+                _chips = '<span style="color:#64748b;">loading…</span>'
+            else:
+                _chips = '<span style="color:#64748b;font-weight:600;">None</span>'
+            _th_rows += (
+                f'<div style="display:flex;align-items:center;gap:6px;height:16px;'
+                f'background:rgba(255,255,255,0.04);border:1px solid #1e293b;border-radius:6px;'
+                f'padding:0 6px;font-size:10px;line-height:16px;">'
+                f'<span style="flex:0 0 52px;color:{_lbl_col};font-weight:700;">'
+                f'{_REGION_LABELS.get(_rk, _rk.title())}</span>'
+                f'<div style="display:flex;gap:6px;min-width:0;flex:1;overflow:hidden;">{_chips}</div>'
+                f'</div>'
+            )
+        _html = (
+            '<div style="margin-top:8px;">'
+            '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
+            '\U0001f31f TODAY HIGHLIGHT</div>'
+            f'<div style="display:flex;flex-direction:column;gap:2px;width:100%;">{_th_rows}</div>'
+            '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
+            '<span style="color:#6ee7b7;">&#9679;</span> Perfect &nbsp;'
+            '<span style="color:#93c5fd;">&#9679;</span> Good &nbsp;(tonight)</div>'
+            '</div>')
+        return _html
+
+    _th_ph = st.empty()   # giữ chỗ: hiện ngay (dữ liệu lần trước hoặc 'loading…'), tính xong ở cuối script
+
+    def _th_render():
+        _d = st.session_state.get("_th_last")
         try:
-            _th_data = _today_highlight_data(st.session_state.weather_source,
-                                             _night_base_jst.strftime("%Y-%m-%d"))
+            _d = _today_highlight_data(st.session_state.weather_source,
+                                       _night_base_jst.strftime("%Y-%m-%d"))
+            st.session_state._th_last = _d
         except Exception:
-            _th_data = {}
+            pass
+        _th_ph.markdown(_th_html(_d if _d is not None else {}), unsafe_allow_html=True)
 
-    _th_rows = ""
-    for _rk in _TH_REGIONS:
-        _hits = _th_data.get(_rk, [])
-        _lbl_col = "#e2e8f0" if _hits else "#64748b"
-        if _hits:
-            _chips = ""
-            for _sn, _fn, _tier in _hits[:_TH_MAX_SHOW]:
-                _c = "#6ee7b7" if _tier == "PERFECT NIGHT" else "#93c5fd"
-                _chips += (f'<span title="{_fn} — {_tier}" style="color:{_c};font-weight:600;'
-                           f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-                           f'min-width:0;flex:0 1 auto;">{_sn}</span>')
-            if len(_hits) > _TH_MAX_SHOW:
-                _more = "&#10;".join(h[1] for h in _hits[_TH_MAX_SHOW:])
-                _chips += (f'<span title="{_more}" style="color:#94a3b8;flex:0 0 auto;">'
-                           f'+{len(_hits) - _TH_MAX_SHOW}</span>')
-        else:
-            _chips = '<span style="color:#64748b;font-weight:600;">None</span>'
-        _th_rows += (
-            f'<div style="display:flex;align-items:center;gap:6px;height:16px;'
-            f'background:rgba(255,255,255,0.04);border:1px solid #1e293b;border-radius:6px;'
-            f'padding:0 6px;font-size:10px;line-height:16px;">'
-            f'<span style="flex:0 0 52px;color:{_lbl_col};font-weight:700;">'
-            f'{_REGION_LABELS.get(_rk, _rk.title())}</span>'
-            f'<div style="display:flex;gap:6px;min-width:0;flex:1;overflow:hidden;">{_chips}</div>'
-            f'</div>'
-        )
-    st.markdown(
-        '<div style="margin-top:8px;">'
-        '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
-        '\U0001f31f TODAY HIGHLIGHT</div>'
-        f'<div style="display:flex;flex-direction:column;gap:2px;width:100%;">{_th_rows}</div>'
-        '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
-        '<span style="color:#6ee7b7;">&#9679;</span> Perfect &nbsp;'
-        '<span style="color:#93c5fd;">&#9679;</span> Good &nbsp;(tonight)</div>'
-        '</div>',
-        unsafe_allow_html=True)
-
+    _th_ph.markdown(_th_html(st.session_state.get("_th_last")), unsafe_allow_html=True)
 
 
 with col_left:
@@ -5582,7 +5636,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     return "".join(p)
 
 st.markdown("---")
-st.markdown(f"### 🌌 Clear Sky Forecast \"{_strip_loc_num(st.session_state.location_name)}\" (3 days)")
+st.markdown(f"### 🌌 Clear Sky Forecast \"{_disp_name(st.session_state.location_name)}\" (3 days)")
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
 _csc_html = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
                             _loc_utc_offset, target_date, _csc_now_local)
@@ -5881,7 +5935,7 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
                           _lc_ts_label(ts) if ts else "", "Open on Weathernews ↗")
 
 st.markdown("---")
-st.markdown("### 📹 Live Sky Camera")
+st.markdown(f"### 📹 Live Sky Camera: near {_disp_name(st.session_state.location_name)}")
 _lc_kind, _lc_pref = _lc_resolve()
 _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
             "font-family:sans-serif;")
@@ -5925,7 +5979,7 @@ def _lc_build_sky():
                     _iu, _ts = _lc_latest_image(_cam[2])
                     if _iu:
                         _where = (f"Nearest camera area: {_area} (~{_km:.0f} km from "
-                                  f"{_strip_loc_num(st.session_state.location_name)})") if _area else \
+                                  f"{_disp_name(st.session_state.location_name)})") if _area else \
                                  f"{_lc_pref} · camera in the same prefecture"
                         _lc_out = _lc_card_html(_cam[1], _cam[2], _where, _iu, _ts)
     except Exception:
@@ -6116,7 +6170,7 @@ def _cam_render():
             _detail = _RD_DETAIL.format(cid=_cam[0])
             _src = f"data:{_mime};base64,{_rd_b64.b64encode(_b).decode()}"
             _sub = (f"Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from "
-                    f"{_lc_html_mod.escape(_strip_loc_num(st.session_state.location_name))})")
+                    f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
             _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
                       f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
             st.markdown(_cam_card_html(_src, _detail, _sub, _cam[1], _stamp, "Open on MLIT ↗", _extra),
@@ -6137,3 +6191,7 @@ st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT 
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
+
+# ── TODAY HIGHLIGHT: tính sau cùng để trang hiện ra trước ─────────────────────
+if "_th_render" in globals():
+    _th_render()
