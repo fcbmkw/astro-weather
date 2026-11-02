@@ -10,6 +10,7 @@ from collections import Counter
 import ephem
 import re
 import time
+import random
 #------------------------------------------------------------------------------
 # KHỐI A — DÁN NGAY DƯỚI DÒNG "import ephem" (dòng 9, đầu file)
 # ------------------------------------------------------------------------------
@@ -3102,7 +3103,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_MAXZ   = 6;
       var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
       var HIM_OPAC   = 1.0;    // max by default; adjustable with the slider
-      var HIM_CONT   = 1.6;    // cloud contrast (CSS contrast()); adjustable with the slider
+      var HIM_CONT   = 2.0;    // cloud contrast (CSS contrast()) = 50% along the 100-300% range; sliders are hidden
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
       var PLAY_HTML  = '&#9654;';
@@ -3139,15 +3140,15 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       himSlider.type = 'range'; himSlider.min = '15'; himSlider.max = '100';
       himSlider.value = String(Math.round(HIM_OPAC * 100));
       himSlider.title = 'IR cloud opacity (lower = see borders better)';
-      himSlider.style.cssText = 'width:70px;height:4px;cursor:pointer;';
+      himSlider.style.cssText = 'display:none;width:70px;height:4px;cursor:pointer;';   // hidden: fixed 100%
       var himContLbl = L.DomUtil.create('span', '', himRow);
       himContLbl.textContent = 'Contrast';
-      himContLbl.style.cssText = 'color:#94a3b8;font-size:10px;font-weight:600;';
+      himContLbl.style.cssText = 'display:none;color:#94a3b8;font-size:10px;font-weight:600;';
       var himCont = L.DomUtil.create('input', '', himRow);
       himCont.type = 'range'; himCont.min = '100'; himCont.max = '300';
       himCont.value = String(Math.round(HIM_CONT * 100));
       himCont.title = 'Cloud contrast (higher = whiter clouds, darker gaps)';
-      himCont.style.cssText = 'width:70px;height:4px;cursor:pointer;';
+      himCont.style.cssText = 'display:none;width:70px;height:4px;cursor:pointer;';   // hidden: fixed default
       function _himApplyFilter(f) {
         if (!f.layer) return;
         var el = f.layer.getContainer();
@@ -5576,13 +5577,12 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
              '<span><span style="color:#facc15;">|</span> now</span>'
              '<span><span style="color:#ef4444;">|</span> midnight</span>'
              '<span><span style="color:#fb923c;">&#9632;</span> selected night</span>'
-             '<span style="margin-left:auto;">1 block = 1 hour · hàng tối ngày được làm mờ · '
-             'Transparency/Seeing là ước tính từ mây, độ ẩm, gió</span></div>')
+             '</div>')
     p.append('</div></div>')
     return "".join(p)
 
 st.markdown("---")
-st.markdown("### 🌌 Clear Sky Forecast (3 days)")
+st.markdown(f"### 🌌 Clear Sky Forecast \"{_strip_loc_num(st.session_state.location_name)}\" (3 days)")
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
 _csc_html = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
                             _loc_utc_offset, target_date, _csc_now_local)
@@ -5693,6 +5693,113 @@ st.plotly_chart(fig, use_container_width=True)
 
 
 
+
+# ── LIVE SKY CAMERA (Weathernews) ─────────────────────────────────────────────
+# Tokyo mặc định → 1 camera ngẫu nhiên ở trung tâm Tokyo (giữ nguyên trong 1 phiên).
+# Chọn sao / điểm khác → camera của tỉnh chứa điểm đó (hoặc tỉnh của sao gần nhất ≤60km).
+# Tất cả URL lấy từ chính trang https://weathernews.jp/onebox/livecam/
+_LC_BASE = "https://weathernews.jp/onebox/livecam/"
+_LC_TOKYO_CENTER = [   # (camera id, tên) — đều nằm trong 23 quận trung tâm
+    ("410000116",    "東京タワー Tokyo Tower"),
+    ("410001395",    "新宿高層ビル群 Shinjuku"),
+    ("410000685",    "上野 Ueno"),
+    ("7CDDE906B8B7", "港区港南 Minato-Konan"),
+    ("7CDDE907BFAF", "千代田区外神田 Chiyoda-Sotokanda"),
+    ("7CDDE9089FF1", "港区南青山 Minato-Minamiaoyama"),
+    ("410001507",    "中央区箱崎 Chuo-Hakozaki"),
+]
+_LC_PREF = {   # tỉnh (đuôi tên địa điểm) → (đường dẫn trang camera, tên tiếng Nhật)
+    "Hokkaido": ("hokkaido/", "北海道"),
+    "Aomori": ("tohoku/aomori/", "青森"), "Iwate": ("tohoku/iwate/", "岩手"),
+    "Akita": ("tohoku/akita/", "秋田"), "Miyagi": ("tohoku/miyagi/", "宮城"),
+    "Yamagata": ("tohoku/yamagata/", "山形"), "Fukushima": ("tohoku/fukushima/", "福島"),
+    "Tokyo": ("kanto/tokyo/", "東京"), "Kanagawa": ("kanto/kanagawa/", "神奈川"),
+    "Saitama": ("kanto/saitama/", "埼玉"), "Chiba": ("kanto/chiba/", "千葉"),
+    "Ibaraki": ("kanto/ibaraki/", "茨城"), "Tochigi": ("kanto/tochigi/", "栃木"),
+    "Gunma": ("kanto/gunma/", "群馬"),
+    "Shizuoka": ("chubu/shizuoka/", "静岡"), "Aichi": ("chubu/aichi/", "愛知"),
+    "Gifu": ("chubu/gifu/", "岐阜"), "Yamanashi": ("chubu/yamanashi/", "山梨"),
+    "Nagano": ("chubu/nagano/", "長野"), "Niigata": ("chubu/niigata/", "新潟"),
+    "Toyama": ("chubu/toyama/", "富山"), "Ishikawa": ("chubu/ishikawa/", "石川"),
+    "Fukui": ("chubu/fukui/", "福井"),
+    "Osaka": ("kinki/osaka/", "大阪"), "Hyogo": ("kinki/hyogo/", "兵庫"),
+    "Kyoto": ("kinki/kyoto/", "京都"), "Shiga": ("kinki/shiga/", "滋賀"),
+    "Nara": ("kinki/nara/", "奈良"), "Wakayama": ("kinki/wakayama/", "和歌山"),
+    "Mie": ("kinki/mie/", "三重"),
+    "Hiroshima": ("chugoku/hiroshima/", "広島"), "Okayama": ("chugoku/okayama/", "岡山"),
+    "Yamaguchi": ("chugoku/yamaguchi/", "山口"), "Shimane": ("chugoku/shimane/", "島根"),
+    "Tottori": ("chugoku/tottori/", "鳥取"),
+    "Kagawa": ("shikoku/kagawa/", "香川"), "Tokushima": ("shikoku/tokushima/", "徳島"),
+    "Ehime": ("shikoku/ehime/", "愛媛"), "Kochi": ("shikoku/kouchi/", "高知"),
+    "Fukuoka": ("kyushu/fukuoka/", "福岡"), "Saga": ("kyushu/saga/", "佐賀"),
+    "Nagasaki": ("kyushu/nagasaki/", "長崎"), "Oita": ("kyushu/oita/", "大分"),
+    "Kumamoto": ("kyushu/kumamoto/", "熊本"), "Miyazaki": ("kyushu/miyazaki/", "宮崎"),
+    "Kagoshima": ("kyushu/kagoshima/", "鹿児島"),
+    "Okinawa": ("okinawa/", "沖縄"),
+}
+
+def _lc_resolve():
+    """Trả về ('tokyo_center', None) | ('pref', tên tỉnh) | ('japan', None)."""
+    lat, lon = st.session_state.lat, st.session_state.lon
+    nm = st.session_state.location_name
+    if nm in LOCATION_DATABASE:
+        pref = nm.rsplit(",", 1)[-1].strip()
+        return ("pref", pref) if pref in _LC_PREF else ("japan", None)
+    if _haversine_km(lat, lon, 35.6895, 139.6917) <= 25:
+        return ("tokyo_center", None)
+    best_n, best_d = None, 1e9
+    for n, (la, lo) in LOCATION_DATABASE.items():
+        d = _haversine_km(lat, lon, la, lo)
+        if d < best_d:
+            best_n, best_d = n, d
+    if best_n and best_d <= 60:
+        pref = best_n.rsplit(",", 1)[-1].strip()
+        if pref in _LC_PREF:
+            return ("pref", pref)
+    return ("japan", None)
+
+st.markdown("---")
+st.markdown("### 📹 Live Sky Camera")
+_lc_kind, _lc_pref = _lc_resolve()
+_lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
+            "font-family:sans-serif;")
+_lc_btn = ("display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;"
+           "font-weight:700;font-size:13px;padding:7px 14px;border-radius:8px;")
+if _lc_kind == "tokyo_center":
+    if "_lc_tokyo_pick" not in st.session_state:
+        st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
+    _pick = next((c for c in _LC_TOKYO_CENTER if c[0] == st.session_state._lc_tokyo_pick),
+                 _LC_TOKYO_CENTER[0])
+    _others = "".join(
+        f'<a href="{_LC_BASE}kanto/tokyo/{cid}/" target="_blank" rel="noopener" '
+        f'style="color:#93c5fd;font-size:12px;margin-right:12px;text-decoration:none;">{cn}</a>'
+        for cid, cn in _LC_TOKYO_CENTER if cid != _pick[0])
+    _lc_html = (
+        f'<div style="{_lc_card}">'
+        f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">Central Tokyo · random camera</div>'
+        f'<div style="color:#e2e8f0;font-size:16px;font-weight:700;margin-bottom:10px;">{_pick[1]}</div>'
+        f'<a href="{_LC_BASE}kanto/tokyo/{_pick[0]}/" target="_blank" rel="noopener" style="{_lc_btn}">'
+        f'Open live camera ↗</a>'
+        f'<div style="margin-top:12px;">{_others}</div></div>')
+elif _lc_kind == "pref":
+    _path, _jp = _LC_PREF[_lc_pref]
+    _lc_html = (
+        f'<div style="{_lc_card}">'
+        f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">'
+        f'Near {_strip_loc_num(st.session_state.location_name)}</div>'
+        f'<div style="color:#e2e8f0;font-size:16px;font-weight:700;margin-bottom:10px;">'
+        f'{_lc_pref} ({_jp}) live cameras</div>'
+        f'<a href="{_LC_BASE}{_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
+        f'Open camera list ↗</a></div>')
+else:
+    _lc_html = (
+        f'<div style="{_lc_card}">'
+        f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">'
+        f'No camera area matched this point</div>'
+        f'<a href="{_LC_BASE}" target="_blank" rel="noopener" style="{_lc_btn}">'
+        f'Open all-Japan live cameras ↗</a></div>')
+st.markdown(_lc_html, unsafe_allow_html=True)
+st.caption("Live camera images by Weathernews (weathernews.jp) — opens in a new tab.")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
