@@ -5922,8 +5922,28 @@ if _lc_out is None:   # không đọc được ảnh -> quay về thẻ link nh�
                f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">{_fb_txt}</div>'
                f'<a href="{_LC_BASE}{_fb_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
                f'Open ↗</a></div>')
-st.markdown(_lc_out, unsafe_allow_html=True)
-st.caption("Live camera images by Weathernews (weathernews.jp).")
+# ── Bên phải: camera đường bộ MLIT (道路情報提供システム, page=30 = lớp camera) ──────────
+# Bản đồ này là web app JS nên không lấy được ảnh trực tiếp → nhúng cả bản đồ, tâm = địa điểm
+# đang chọn (ido=vĩ độ, keido=kinh độ). Bấm vào ghim camera trong khung để xem ảnh.
+import streamlit.components.v1 as _lc_components
+_road_url = (f"https://www.road-info-prvs.mlit.go.jp/roadinfo/pc/"
+             f"?ido={st.session_state.lat:.5f}&keido={st.session_state.lon:.5f}&page=30&zoom=10")
+_lc_lbl = "font-family:sans-serif;font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px;"
+_lc_col_sky, _lc_col_road = st.columns(2)
+with _lc_col_sky:
+    st.markdown(f'<div style="{_lc_lbl}">☁️ SKY CAMERA · Weathernews</div>', unsafe_allow_html=True)
+    st.markdown(_lc_out, unsafe_allow_html=True)
+with _lc_col_road:
+    st.markdown(f'<div style="{_lc_lbl}">🛣️ ROAD CAMERA · MLIT 道路情報提供システム</div>',
+                unsafe_allow_html=True)
+    _lc_components.iframe(_road_url, height=380, scrolling=False)
+    st.markdown(
+        f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
+        f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
+        f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
+        unsafe_allow_html=True)
+st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT Japan "
+           "(each camera is operated by its road administrator).")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
