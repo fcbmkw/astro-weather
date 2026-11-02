@@ -5821,7 +5821,7 @@ def _lc_geocode_munis(pref_full, munis):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _lc_latest_image(page_path):
-    """(url ảnh 640px mới nhất, 'yyyymmddhhmmss' UTC) từ trang camera. Lỗi -> (None, None)."""
+    """(url ảnh 640px mới nhất, 'yyyymmddhhmmss' JST) từ trang camera. Lỗi -> (None, None)."""
     try:
         r = requests.get("https://weathernews.jp" + page_path, headers=_LC_UA, timeout=10)
         r.raise_for_status()
@@ -5854,8 +5854,9 @@ def _lc_pick_nearest(pref, lat, lon):
     return cams[0], None, None
 
 def _lc_ts_label(ts):
+    # Timestamp trong tên file ảnh của Weathernews đã là giờ JST -> KHÔNG cộng thêm 9h.
     try:
-        return (datetime.strptime(ts, "%Y%m%d%H%M%S") + timedelta(hours=9)).strftime("%m/%d %H:%M JST")
+        return datetime.strptime(ts, "%Y%m%d%H%M%S").strftime("%m/%d %H:%M JST")
     except Exception:
         return ""
 
@@ -5922,10 +5923,134 @@ if _lc_out is None:   # không đọc được ảnh -> quay về thẻ link nh�
                f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">{_fb_txt}</div>'
                f'<a href="{_LC_BASE}{_fb_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
                f'Open ↗</a></div>')
-# ── Bên phải: camera đường bộ MLIT (道路情報提供システム, page=30 = lớp camera) ──────────
-# Bản đồ này là web app JS nên không lấy được ảnh trực tiếp → nhúng cả bản đồ, tâm = địa điểm
-# đang chọn (ido=vĩ độ, keido=kinh độ). Bấm vào ghim camera trong khung để xem ảnh.
+# ── Bên phải: camera đường bộ MLIT (道路情報提供システム) — 1 camera gần nhất ──────────
+# Lấy từ trang danh sách tĩnh /roadinfo/sp/spImageList_<mã vùng>_1.html (HTML thường, không cần JS).
+# Mỗi camera có ảnh .../doro_gazo/pc/<yyyymmddhhmmss JST>/s_<id>.jpeg + tên (vd 札幌市小野幌).
+# Danh sách không có toạ độ -> lấy tên 市区町村 trong tên camera, geocode bằng GSI rồi chọn gần nhất.
+# MLIT ghi "各画像への直リンクはご遠慮ください" -> tải ảnh phía server (cache 5 phút), không hotlink.
 import streamlit.components.v1 as _lc_components
+import base64 as _rd_b64
+from urllib.parse import urljoin as _rd_urljoin
+
+_RD_BASE   = "https://www.road-info-prvs.mlit.go.jp/roadinfo/"
+_RD_LIST   = _RD_BASE + "sp/spImageList_{code}_1.html"
+_RD_DETAIL = _RD_BASE + "sp/spImageDetail_{cid}.html"
+# tỉnh -> các mã vùng cần đọc. CHỈ 81 (Hokkaido), 82 (Tohoku), 90 (Okinawa) đã xác nhận;
+# 83–89 là suy luận theo thứ tự các Cục — hãy mở thử spImageList_83_1.html... để kiểm tra.
+_RD_REGION = {}
+for _p in ("Hokkaido",):
+    _RD_REGION[_p] = ("81",)
+for _p in ("Aomori", "Iwate", "Akita", "Miyagi", "Yamagata", "Fukushima"):
+    _RD_REGION[_p] = ("82",)
+for _p in ("Tokyo", "Kanagawa", "Saitama", "Chiba", "Ibaraki", "Tochigi", "Gunma"):
+    _RD_REGION[_p] = ("83",)
+for _p in ("Niigata", "Toyama", "Ishikawa"):
+    _RD_REGION[_p] = ("84",)
+for _p in ("Shizuoka", "Aichi", "Gifu"):
+    _RD_REGION[_p] = ("85",)
+for _p in ("Osaka", "Hyogo", "Kyoto", "Shiga", "Nara", "Wakayama"):
+    _RD_REGION[_p] = ("86",)
+for _p in ("Hiroshima", "Okayama", "Yamaguchi", "Shimane", "Tottori"):
+    _RD_REGION[_p] = ("87",)
+for _p in ("Kagawa", "Tokushima", "Ehime", "Kochi"):
+    _RD_REGION[_p] = ("88",)
+for _p in ("Fukuoka", "Saga", "Nagasaki", "Oita", "Kumamoto", "Miyazaki", "Kagoshima"):
+    _RD_REGION[_p] = ("89",)
+_RD_REGION["Okinawa"] = ("90",)
+_RD_REGION.update({"Yamanashi": ("83", "85"), "Nagano": ("83", "84", "85"),
+                   "Fukui": ("84", "86"), "Mie": ("85", "86")})
+_RD_MAX_KM = 50   # xa hơn mức này thì coi như không có camera gần -> quay về bản đồ
+
+_RD_IMG_RE = re.compile(
+    r'<img[^>]+src="([^"]*?doro_gazo/pc/(\d{14})/s_([0-9A-Za-z]+)\.(?:jpe?g|png))"[^>]*>(.*?)(?=<img|\Z)',
+    re.S | re.I)
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _rd_list(code):
+    """[(camera_id, tên, url ảnh nhỏ, 'yyyymmddhhmmss' JST)] của 1 vùng. Lỗi -> []."""
+    url = _RD_LIST.format(code=code)
+    try:
+        r = requests.get(url, headers=_LC_UA, timeout=12)
+        r.raise_for_status()
+        txt = r.content.decode("utf-8", errors="replace")
+    except Exception:
+        return []
+    out, seen = [], set()
+    for m in _RD_IMG_RE.finditer(txt):
+        src, ts, cid, tail = m.groups()
+        if cid in seen:
+            continue
+        lines = [re.sub(r"\s+", " ", x).strip()
+                 for x in _lc_html_mod.unescape(re.sub(r"<[^>]+>", "\n", tail)).split("\n")]
+        lines = [x for x in lines if x]
+        if not lines or re.match(r"^\d{4}/", lines[0]):
+            continue
+        seen.add(cid)
+        out.append((cid, lines[0], _rd_urljoin(url, src), ts))
+    return out
+
+@st.cache_data(ttl=2592000, show_spinner=False)
+def _rd_geocode(munis):
+    """{市区町村: [(lat, lon), ...]} — giữ nhiều kết quả vì tên như '中央区' trùng nhiều tỉnh."""
+    from concurrent.futures import ThreadPoolExecutor
+    def one(mn):
+        try:
+            j = requests.get("https://msearch.gsi.go.jp/address-search/AddressSearch",
+                             params={"q": mn}, timeout=8).json()
+            pts = [(float(g["geometry"]["coordinates"][1]), float(g["geometry"]["coordinates"][0]))
+                   for g in j[:10]]
+            return mn, pts
+        except Exception:
+            return mn, []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return {k: v for k, v in ex.map(one, munis) if v}
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _rd_fetch_img(url):
+    """(bytes, mime) hoặc (None, None). Thử bản lớn (bỏ 's_') trước, rồi bản nhỏ."""
+    for u in (url.replace("/s_", "/", 1), url):
+        try:
+            r = requests.get(u, headers={**_LC_UA, "Referer": _RD_BASE}, timeout=12)
+            ct = r.headers.get("Content-Type", "").split(";")[0]
+            if r.status_code == 200 and ct.startswith("image"):
+                return r.content, ct
+        except Exception:
+            pass
+    return None, None
+
+def _rd_nearest(pref, lat, lon, top=5):
+    """Danh sách tối đa `top` camera gần nhất: [(km, (id, tên, url, ts), 市区町村)]."""
+    cams = []
+    for code in _RD_REGION.get(pref, ()):
+        cams += _rd_list(code)
+    if not cams:
+        return []
+    munis = tuple(sorted({mn for mn in (_lc_muni(c[1]) for c in cams) if mn}))
+    geo = _rd_geocode(munis) if munis else {}
+    ranked = []
+    for c in cams:
+        mn = _lc_muni(c[1])
+        pts = geo.get(mn) if mn else None
+        if pts:
+            ranked.append((min(_haversine_km(lat, lon, la, lo) for la, lo in pts), c, mn))
+    ranked.sort(key=lambda x: x[0])
+    return ranked[:top]
+
+_rd_pref = "Tokyo" if _lc_kind == "tokyo_center" else (_lc_pref if _lc_kind == "pref" else None)
+_rd = None   # (cam, km, muni, bytes, mime)
+try:
+    if _rd_pref:
+        with st.spinner("Loading road camera..."):
+            for _km, _cam, _mn in _rd_nearest(_rd_pref, st.session_state.lat, st.session_state.lon):
+                if _km > _RD_MAX_KM:
+                    break
+                _b, _mime = _rd_fetch_img(_cam[2])
+                if _b:
+                    _rd = (_cam, _km, _mn, _b, _mime)
+                    break
+except Exception:
+    _rd = None
+
 _road_url = (f"https://www.road-info-prvs.mlit.go.jp/roadinfo/pc/"
              f"?ido={st.session_state.lat:.5f}&keido={st.session_state.lon:.5f}&page=30&zoom=10")
 _lc_lbl = "font-family:sans-serif;font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px;"
@@ -5936,12 +6061,31 @@ with _lc_col_sky:
 with _lc_col_road:
     st.markdown(f'<div style="{_lc_lbl}">🛣️ ROAD CAMERA · MLIT 道路情報提供システム</div>',
                 unsafe_allow_html=True)
-    _lc_components.iframe(_road_url, height=380, scrolling=False)
-    st.markdown(
-        f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
-        f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
-        f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
-        unsafe_allow_html=True)
+    if _rd:
+        _cam, _km, _mn, _b, _mime = _rd
+        _stamp = f"{_cam[3][4:6]}/{_cam[3][6:8]} {_cam[3][8:10]}:{_cam[3][10:12]} JST"
+        _detail = _RD_DETAIL.format(cid=_cam[0])
+        st.image(_b, use_container_width=True)
+        st.markdown(
+            f'<div style="{_lc_card}">'
+            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:4px;">'
+            f'Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from '
+            f'{_lc_html_mod.escape(_strip_loc_num(st.session_state.location_name))})</div>'
+            f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;">'
+            f'{_lc_html_mod.escape(_cam[1])}<span style="color:#64748b;font-weight:500;'
+            f'font-size:12px;"> · {_stamp}</span></div>'
+            f'<a href="{_detail}" target="_blank" rel="noopener" style="{_lc_btn}">'
+            f'Open on MLIT ↗</a> '
+            f'<a href="{_road_url}" target="_blank" rel="noopener" '
+            f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>'
+            f'</div>', unsafe_allow_html=True)
+    else:   # không lấy được camera gần -> quay về bản đồ như cũ
+        _lc_components.iframe(_road_url, height=380, scrolling=False)
+        st.markdown(
+            f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
+            f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
+            f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
+            unsafe_allow_html=True)
 st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT Japan "
            "(each camera is operated by its road administrator).")
 
