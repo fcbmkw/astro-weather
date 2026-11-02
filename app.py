@@ -3091,7 +3091,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var ormLayer = null;   // OpenRailwayMap overlay, Satellite mode only
       var btns = {};
 
-      // ── Himawari (JMA) infrared: dark base + labels + 3-frame merged still ───
+      // ── Himawari (JMA) infrared: dark base + labels + short animation ────────
       // Tiles are plain <img> requests, so no CORS problem. The frame list comes
       // from targetTimes_jp.json (fetch); if that fetch is blocked we probe tiles
       // backwards in 10-min steps instead (basetime == validtime for satimg).
@@ -3100,11 +3100,14 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_ELEM   = 'B13/TBB';          // infrared (works day and night)
       var HIM_MINZ   = 3;                  // native tile zoom range (upscaled beyond)
       var HIM_MAXZ   = 6;
-      var HIM_FRAMES = 3;                  // latest 3 frames (10 min apart) merged into ONE image
-      var HIM_OPAC   = 1.0;    // max brightness by default; adjustable with the slider
+      var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
+      var HIM_OPAC   = 1.0;    // max by default; adjustable with the slider
+      var HIM_CONT   = 1.6;    // cloud contrast (CSS contrast()); adjustable with the slider
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
-      var himFrames = [], himTok = 0;
+      var PLAY_HTML  = '&#9654;';
+      var PAUSE_HTML = '&#10074;&#10074;';
+      var himFrames = [], himIdx = 0, himTimer = null, himTok = 0, himPlaying = false;
       var himLabelLayer = null;
       var himNote = '';
       var himBorderLayers = [], himBorderCache = {};
@@ -3123,6 +3126,13 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
         + 'border-radius:8px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.6);'
       );
+      var himPlay = L.DomUtil.create('button', '', himRow);
+      himPlay.innerHTML = PLAY_HTML;
+      himPlay.title = 'Play / pause the last ~70 min';
+      himPlay.style.cssText = (
+        'border:none;cursor:pointer;border-radius:5px;padding:2px 9px;'
+        + 'font-size:12px;font-weight:700;background:#3b82f6;color:#ffffff;'
+      );
       var himLbl = L.DomUtil.create('span', '', himRow);
       himLbl.style.cssText = 'color:#e2e8f0;font-size:11px;font-weight:600;white-space:nowrap;';
       var himSlider = L.DomUtil.create('input', '', himRow);
@@ -3130,10 +3140,27 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       himSlider.value = String(Math.round(HIM_OPAC * 100));
       himSlider.title = 'IR cloud opacity (lower = see borders better)';
       himSlider.style.cssText = 'width:70px;height:4px;cursor:pointer;';
+      var himContLbl = L.DomUtil.create('span', '', himRow);
+      himContLbl.textContent = 'Contrast';
+      himContLbl.style.cssText = 'color:#94a3b8;font-size:10px;font-weight:600;';
+      var himCont = L.DomUtil.create('input', '', himRow);
+      himCont.type = 'range'; himCont.min = '100'; himCont.max = '300';
+      himCont.value = String(Math.round(HIM_CONT * 100));
+      himCont.title = 'Cloud contrast (higher = whiter clouds, darker gaps)';
+      himCont.style.cssText = 'width:70px;height:4px;cursor:pointer;';
+      function _himApplyFilter(f) {
+        if (!f.layer) return;
+        var el = f.layer.getContainer();
+        if (el) el.style.filter = 'contrast(' + HIM_CONT + ')';
+      }
+      L.DomEvent.on(himCont, 'input', function() {
+        HIM_CONT = (+himCont.value) / 100;
+        himFrames.forEach(_himApplyFilter);
+      });
       L.DomEvent.disableClickPropagation(himRow);
       L.DomEvent.on(himSlider, 'input', function() {
         HIM_OPAC = (+himSlider.value) / 100;
-        himFrames.forEach(function(f) { if (f.layer) f.layer.setOpacity(HIM_OPAC); });
+        if (himFrames[himIdx] && himFrames[himIdx].layer) himFrames[himIdx].layer.setOpacity(HIM_OPAC);
       });
 
       function _p2(n) { return (n < 10 ? '0' : '') + n; }
@@ -3145,8 +3172,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         return _p2(d.getUTCMonth() + 1) + '/' + _p2(d.getUTCDate()) + ' '
           + _p2(d.getUTCHours()) + ':' + _p2(d.getUTCMinutes()) + ' JST';
       }
-      // 'yyyymmddhhmmss' (UTC) -> 'HH:mm' (JST)
-      function _himHM(v) { return _himFmt(v).slice(6, 11); }
       function _himUtcStamp(ms) {
         var d = new Date(ms);
         return d.getUTCFullYear() + _p2(d.getUTCMonth() + 1) + _p2(d.getUTCDate())
@@ -3208,9 +3233,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         } catch (e) { fallback(); }
       }
 
-      // 'lighten' blend = per-pixel max brightness of the 3 IR frames. On the IR
-      // product white = cold/high cloud, so the merged image is the UNION of the
-      // clouds seen in the last ~30 min (more cloud than a single frame).
       function _himEnsure(f) {
         if (f.layer) return;
         f.layer = L.tileLayer(_himUrl(f), {
@@ -3218,20 +3240,23 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           zIndex: 5, attribution: 'JMA'
         });
         f.layer.addTo(map);
-        var el = f.layer.getContainer();
-        if (el) el.style.mixBlendMode = 'lighten';
+        _himApplyFilter(f);
       }
-      function _himLabel() {
-        if (!himFrames.length) return;
-        var sh = himFrames.filter(function(f) { return f.shown; });
-        if (!sh.length) return;
-        var a = sh[0].v, b = sh[sh.length - 1].v;
-        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(b).slice(0, 5) + ' '
-          + (sh.length > 1 ? _himHM(a) + '\u2013' : '') + _himHM(b) + ' JST'
-          + (sh.length > 1 ? ' (' + sh.length + ' merged)' : '') + himNote;
+      function _himShow(i) {
+        himIdx = i;
+        himFrames.forEach(function(f, k) {
+          if (f.layer) f.layer.setOpacity(k === i ? HIM_OPAC : 0);
+        });
+        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v) + himNote;
+      }
+      function _himStop() {
+        himPlaying = false;
+        if (himTimer) { clearTimeout(himTimer); himTimer = null; }
+        himPlay.innerHTML = PLAY_HTML;
       }
       function _himCleanup() {
         himTok++;
+        _himStop();
         himFrames.forEach(function(f) { if (f.layer) { map.removeLayer(f.layer); } });
         himFrames = [];
         if (himLabelLayer) { map.removeLayer(himLabelLayer); himLabelLayer = null; }
@@ -3275,34 +3300,29 @@ _COMBINED_CTRL_TEMPLATE = Template("""
             }
             if (tok === himTok && doneCount === HIM_BORDERS.length && okCount === 0) {
               himNote = '  (no border data)';
-              if (himFrames.length) _himLabel();
+              if (himFrames[himIdx]) _himShow(himIdx);
             }
           });
         });
       }
 
-      // No waiting: the NEWEST frame is shown right away (full opacity). The older
-      // frames are added on top (lighten blend) as soon as each one has loaded, so
-      // the cloud amount grows to the 3-frame merge without ever blocking the map.
-      function _himMerge(tok) {
-        var n = himFrames.length;
-        var order = [];
-        for (var k = n - 1; k >= 0; k--) order.push(himFrames[k]);   // newest first
-        order.forEach(function(f, idx) {
-          _himEnsure(f);
-          if (idx === 0) {
-            f.layer.setOpacity(HIM_OPAC);          // newest frame: visible immediately
-            f.shown = true;
-            _himLabel();
-          } else {
-            f.layer.once('load', function() {
-              if (tok !== himTok) return;
-              f.layer.setOpacity(HIM_OPAC);
-              f.shown = true;
-              _himLabel();
-            });
-          }
-        });
+      // Auto-loop: 600 ms per frame, 1.8 s pause on the newest frame, then restart.
+      function _himStart(from) {
+        if (!himFrames.length) return;
+        himPlaying = true;
+        himPlay.innerHTML = PAUSE_HTML;
+        himFrames.forEach(function(f) { _himEnsure(f); });
+        var tok = himTok;
+        var i = from || 0;
+        var last = himFrames.length - 1;
+        _himShow(i);
+        function tick() {
+          if (!himPlaying || tok !== himTok) return;
+          i = (i + 1) % himFrames.length;
+          _himShow(i);
+          himTimer = setTimeout(tick, i === last ? 1800 : 600);
+        }
+        himTimer = setTimeout(tick, 1200);   // let the extra frames load their tiles first
       }
 
       function _himEnter() {
@@ -3316,9 +3336,15 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (tok !== himTok) return;
           if (!list.length) { himLbl.textContent = 'Himawari: no data'; return; }
           himFrames = list.map(function(t) { return { b: t.b, v: t.v, layer: null }; });
-          _himMerge(tok);
+          _himStart(0);
         });
       }
+
+      L.DomEvent.on(himPlay, 'click', function() {
+        if (!himFrames.length) return;
+        if (himPlaying) { _himStop(); return; }
+        _himStart(himIdx);
+      });
 
       function switchTile(mode) {
         var mapEl = map.getContainer();
