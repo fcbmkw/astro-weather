@@ -2718,7 +2718,7 @@ st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
 _TILE_SAT_URL  = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
 _TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 
-if st.session_state.map_tile not in ("satellite", "street", "windy"):
+if st.session_state.map_tile not in ("satellite", "street", "himawari", "windy"):
     st.session_state.map_tile = "windy"
  
 # ==============================================================================
@@ -3100,6 +3100,172 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var current = null;
       var btns = {};
 
+      // ── Himawari (JMA) infrared: dark base + labels + short animation ────────
+      // Tiles are plain <img> requests, so no CORS problem. The frame list comes
+      // from targetTimes_jp.json (fetch); if that fetch is blocked we probe tiles
+      // backwards in 10-min steps instead (basetime == validtime for satimg).
+      var HIM_BASE   = 'https://www.jma.go.jp/bosai/himawari/data/satimg/';
+      var HIM_AREA   = 'jp';
+      var HIM_ELEM   = 'B13/TBB';          // infrared (works day and night)
+      var HIM_MINZ   = 3;                  // native tile zoom range (upscaled beyond)
+      var HIM_MAXZ   = 6;
+      var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
+      var HIM_OPAC   = 0.85;
+      var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
+      var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
+      var PLAY_HTML  = '&#9654;';
+      var PAUSE_HTML = '&#10074;&#10074;';
+      var himFrames = [], himIdx = 0, himTimer = null, himTok = 0, himPlaying = false;
+      var himLabelLayer = null;
+
+      var himRow = L.DomUtil.create('div', '', col);
+      himRow.style.cssText = (
+        'display:none;align-items:center;gap:6px;'
+        + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
+        + 'border-radius:8px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.6);'
+      );
+      var himPlay = L.DomUtil.create('button', '', himRow);
+      himPlay.innerHTML = PLAY_HTML;
+      himPlay.title = 'Play / pause the last ~70 min';
+      himPlay.style.cssText = (
+        'border:none;cursor:pointer;border-radius:5px;padding:2px 9px;'
+        + 'font-size:12px;font-weight:700;background:#3b82f6;color:#ffffff;'
+      );
+      var himLbl = L.DomUtil.create('span', '', himRow);
+      himLbl.style.cssText = 'color:#e2e8f0;font-size:11px;font-weight:600;white-space:nowrap;';
+
+      function _p2(n) { return (n < 10 ? '0' : '') + n; }
+
+      // 'yyyymmddhhmmss' (UTC) -> 'MM/DD HH:mm JST'
+      function _himFmt(v) {
+        var d = new Date(Date.UTC(+v.slice(0, 4), +v.slice(4, 6) - 1, +v.slice(6, 8), +v.slice(8, 10), +v.slice(10, 12)));
+        d = new Date(d.getTime() + 9 * 3600 * 1000);
+        return _p2(d.getUTCMonth() + 1) + '/' + _p2(d.getUTCDate()) + ' '
+          + _p2(d.getUTCHours()) + ':' + _p2(d.getUTCMinutes()) + ' JST';
+      }
+      function _himUtcStamp(ms) {
+        var d = new Date(ms);
+        return d.getUTCFullYear() + _p2(d.getUTCMonth() + 1) + _p2(d.getUTCDate())
+          + _p2(d.getUTCHours()) + _p2(d.getUTCMinutes()) + '00';
+      }
+      function _himUrl(f) {
+        return HIM_BASE + f.b + '/' + HIM_AREA + '/' + f.v + '/' + HIM_ELEM + '/{z}/{x}/{y}.jpg';
+      }
+
+      function _himParse(j) {
+        var out = [];
+        if (!Array.isArray(j)) return out;
+        j.forEach(function(x) {
+          if (x && x.basetime && x.validtime) out.push({ b: String(x.basetime), v: String(x.validtime) });
+        });
+        out.sort(function(a, b) { return a.v < b.v ? -1 : (a.v > b.v ? 1 : 0); });
+        var ded = [];
+        out.forEach(function(x) {
+          if (ded.length && ded[ded.length - 1].v === x.v) { ded[ded.length - 1] = x; } else { ded.push(x); }
+        });
+        return ded.slice(-HIM_FRAMES);
+      }
+
+      // Fallback: find the newest frame by loading a Japan tile (z5 x28 y12), 10-min steps back.
+      function _himProbe(cb) {
+        var step = 10 * 60 * 1000;
+        var t = Math.floor((Date.now() - 10 * 60 * 1000) / step) * step;
+        var tries = 0;
+        function next() {
+          if (tries++ > 12) { cb([]); return; }
+          var v = _himUtcStamp(t);
+          var img = new Image();
+          img.onload = function() {
+            var out = [];
+            for (var k = HIM_FRAMES - 1; k >= 0; k--) {
+              var vv = _himUtcStamp(t - k * step);
+              out.push({ b: vv, v: vv });
+            }
+            cb(out);
+          };
+          img.onerror = function() { t -= step; next(); };
+          img.src = HIM_BASE + v + '/' + HIM_AREA + '/' + v + '/' + HIM_ELEM + '/5/28/12.jpg';
+        }
+        next();
+      }
+
+      function _himLoadTimes(cb) {
+        var finished = false;
+        function done(list) { if (finished) return; finished = true; cb(list); }
+        function fallback() { _himProbe(done); }
+        try {
+          fetch(HIM_BASE + 'targetTimes_' + HIM_AREA + '.json', { cache: 'no-store' })
+            .then(function(r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+            .then(function(j) {
+              var l = _himParse(j);
+              if (l.length) { done(l); } else { fallback(); }
+            })
+            .catch(fallback);
+        } catch (e) { fallback(); }
+      }
+
+      function _himEnsure(f) {
+        if (f.layer) return;
+        f.layer = L.tileLayer(_himUrl(f), {
+          opacity: 0, minNativeZoom: HIM_MINZ, maxNativeZoom: HIM_MAXZ, maxZoom: 19,
+          zIndex: 5, attribution: 'JMA'
+        });
+        f.layer.addTo(map);
+      }
+      function _himShow(i) {
+        himIdx = i;
+        himFrames.forEach(function(f, k) {
+          if (f.layer) f.layer.setOpacity(k === i ? HIM_OPAC : 0);
+        });
+        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v);
+      }
+      function _himStop() {
+        himPlaying = false;
+        if (himTimer) { clearInterval(himTimer); himTimer = null; }
+        himPlay.innerHTML = PLAY_HTML;
+      }
+      function _himCleanup() {
+        himTok++;
+        _himStop();
+        himFrames.forEach(function(f) { if (f.layer) { map.removeLayer(f.layer); } });
+        himFrames = [];
+        if (himLabelLayer) { map.removeLayer(himLabelLayer); himLabelLayer = null; }
+        himRow.style.display = 'none';
+      }
+      function _himEnter() {
+        himRow.style.display = 'flex';
+        himLbl.textContent = 'JMA Himawari IR  loading...';
+        himLabelLayer = L.tileLayer(HIM_LABELS, { maxZoom: 19, zIndex: 10, opacity: 0.9 });
+        himLabelLayer.addTo(map);
+        var tok = ++himTok;
+        _himLoadTimes(function(list) {
+          if (tok !== himTok) return;
+          if (!list.length) { himLbl.textContent = 'Himawari: no data'; return; }
+          himFrames = list.map(function(t) { return { b: t.b, v: t.v, layer: null }; });
+          var last = himFrames.length - 1;
+          _himEnsure(himFrames[last]);
+          _himShow(last);
+        });
+      }
+
+      L.DomEvent.on(himPlay, 'click', function() {
+        if (!himFrames.length) return;
+        if (himPlaying) { _himStop(); return; }
+        himPlaying = true;
+        himPlay.innerHTML = PAUSE_HTML;
+        himFrames.forEach(function(f) { _himEnsure(f); });
+        var tok = himTok;
+        var i = 0;
+        _himShow(0);
+        setTimeout(function() {   // let the extra frames load their tiles first
+          if (!himPlaying || tok !== himTok) return;
+          himTimer = setInterval(function() {
+            i = (i + 1) % himFrames.length;
+            _himShow(i);
+          }, 650);
+        }, 1000);
+      });
+
       function switchTile(mode) {
         var mapEl = map.getContainer();
         var prevMode = _lsGet(LS_TILE, null);
@@ -3110,6 +3276,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         var isWindy = (mode === 'windy');
         if (zoomIn)  { zoomIn.style.opacity  = isWindy ? '0.35' : '1'; zoomIn.style.pointerEvents  = isWindy ? 'none' : 'auto'; zoomIn.style.cursor  = isWindy ? 'not-allowed' : ''; }
         if (zoomOut) { zoomOut.style.opacity = isWindy ? '0.35' : '1'; zoomOut.style.pointerEvents = isWindy ? 'none' : 'auto'; zoomOut.style.cursor = isWindy ? 'not-allowed' : ''; }
+        _himCleanup();
         if (mode === 'windy') {
           var c = map.getCenter();
           var z = map.getZoom();
@@ -3117,6 +3284,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (needSync) { window.flyWindy(c.lat, c.lng, z); }
           if (current) { map.removeLayer(current); current = null; }
           _windyFrame.style.display = 'block';
+        } else if (mode === 'himawari') {
+          if (_windyFrame) _windyFrame.style.display = 'none';
+          if (current) { map.removeLayer(current); }
+          current = L.tileLayer(HIM_DARK, { attribution: 'CartoDB', maxZoom: 19, zIndex: 1 });
+          current.addTo(map);
+          _himEnter();
         } else {
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
@@ -3130,7 +3303,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
       }
 
-      ['windy','satellite','street'].forEach(function(mode){
+      ['windy','satellite','street','himawari'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', tileRow);
         btn.textContent = mode === 'windy' ? 'Windy'
                         : mode.charAt(0).toUpperCase() + mode.slice(1);
@@ -3143,7 +3316,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 
       map.whenReady(function(){
         var saved = _lsGet(LS_TILE, 'windy');
-        if (saved !== 'satellite' && saved !== 'street' && saved !== 'windy') saved = 'windy';
+        if (saved !== 'satellite' && saved !== 'street' && saved !== 'himawari' && saved !== 'windy') saved = 'windy';
         switchTile(saved);
       });
 
@@ -4763,107 +4936,6 @@ with col_right:
         st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
         st.rerun()
 
-    # 7-Day Forecast Table — replaces Random Overlap Assumption
-    def _cloud_status_icon(cloud_pct, precip=0.0):
-        """Return weather icon + label based on cloud cover and precipitation."""
-        if precip is not None and precip > 2.0:
-            if cloud_pct > 70:
-                return "\u26c8\ufe0f", "Storm"
-            return "\U0001f327\ufe0f", "Rainy"
-        if cloud_pct <= 20:
-            return "\u2600\ufe0f", "Sunny"
-        elif cloud_pct <= 45:
-            return "\u26c5", "Partly"
-        elif cloud_pct <= 70:
-            return "\U0001f325\ufe0f", "Cloudy"
-        else:
-            return "\u2601\ufe0f", "Overcast"
-
-    # Build 7-day daily summary from hourly_data
-    JST_now = datetime.now(JST)
-    _7day_rows = []
-    for _doff in range(7):
-        _d = (JST_now + timedelta(days=_doff)).replace(tzinfo=None)
-        _dpfx = _d.strftime("%Y-%m-%d")
-        _day_label = _d.strftime("%a %d/%m")
-
-        _temps, _clouds, _precips = [], [], []
-        _tlist = hourly_data.get("time", []) if hourly_data else []
-        for _i, _t in enumerate(_tlist):
-            if _t.startswith(_dpfx):
-                _hr = int(_t[11:13])
-                for _sfx in ["_jma_msm", "_gfs_seamless", "_ecmwf_ifs025"]:
-                    _v = _get_raw(hourly_data, "temperature_2m", _sfx, _i)
-                    if _v is not None:
-                        _temps.append((_hr, _v))
-                        break
-                else:
-                    _raw_t = hourly_data.get("temperature_2m", [])
-                    if _i < len(_raw_t) and _raw_t[_i] is not None:
-                        _temps.append((_hr, float(_raw_t[_i])))
-                _cv, _ = get_val(hourly_data, "cloud_cover", _i, prefer_jma)
-                _clouds.append(_cv)
-                for _sfx in ["_gfs_seamless", "_jma_msm", "_ecmwf_ifs025"]:
-                    _pv = _get_raw(hourly_data, "precipitation", _sfx, _i)
-                    if _pv is not None:
-                        _precips.append(_pv)
-                        break
-
-        if _temps:
-            _noon = min(_temps, key=lambda x: abs(x[0] - 12))
-            _temp_noon = round(_noon[1], 1)
-            _temp_min  = round(min(v for _, v in _temps), 1)
-            _temp_max  = round(max(v for _, v in _temps), 1)
-        else:
-            _temp_noon = _temp_min = _temp_max = None
-
-        _avg_cloud = round(sum(_clouds) / len(_clouds)) if _clouds else 0
-        _total_precip = round(sum(_precips), 1) if _precips else 0.0
-        _icon, _status = _cloud_status_icon(_avg_cloud, _total_precip)
-
-        if _temp_max is not None and _temp_max < 3.0 and _total_precip > 0.5:
-            _icon, _status = "\u2744\ufe0f", "Snowy"
-
-        _7day_rows.append({
-            "day": _day_label,
-            "icon": _icon,
-            "status": _status,
-            "temp_max": _temp_max,
-            "temp_min": _temp_min,
-            "cloud": _avg_cloud,
-        })
-
-    if _7day_rows:
-        _rows7 = ""
-        for _r in _7day_rows:
-            _tmax_str = f"{_r['temp_max']}\u00b0" if _r['temp_max'] is not None else "\u2014"
-            _tmin_str = f"{_r['temp_min']}\u00b0" if _r['temp_min'] is not None else "\u2014"
-            _cloud_color = '#22c55e' if _r['cloud'] <= 25 else ('#eab308' if _r['cloud'] <= 50 else ('#f97316' if _r['cloud'] <= 75 else '#ef4444'))
-            _rows7 += (
-                f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;'
-                f'background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 6px;'
-                f'border:1px solid #1e293b;flex:1;min-width:0;">'
-                f'<div style="font-size:11px;color:#94a3b8;font-weight:600;white-space:nowrap;'
-                f'overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;">{_r["day"]}</div>'
-                f'<div style="font-size:26px;line-height:1.1;">{_r["icon"]}</div>'
-                f'<div style="font-size:11px;color:#cbd5e1;font-weight:500;">{_r["status"]}</div>'
-                f'<div style="font-size:13px;font-weight:700;color:#f97316;">{_tmax_str}</div>'
-                f'<div style="font-size:11px;color:#60a5fa;">{_tmin_str}</div>'
-                f'<div style="font-size:10px;color:{_cloud_color};margin-top:2px;">{_r["cloud"]}%</div>'
-                f'</div>'
-            )
-        _forecast_html = (
-            '<div style="margin-top:8px;">'
-            '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
-            '\U0001f5d3\ufe0f 7-DAY FORECAST</div>'
-            '<div style="display:flex;gap:4px;width:100%;">'
-            + _rows7 +
-            '</div>'
-            '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
-            '\u2191 High &nbsp;\u2193 Low &nbsp;\u2601 Cloud%</div>'
-            '</div>'
-        )
-        st.markdown(_forecast_html, unsafe_allow_html=True)
 
 
 with col_left:
@@ -5114,6 +5186,248 @@ with col_left:
         if st.button("🔄 再試行", key="btn_retry_weather"):
             st.cache_data.clear()
             st.rerun(scope="app")
+
+# ── CLEAR SKY CHART — 3 ngày × 24 giờ (kiểu Clear Sky Chart, thay cho 7-DAY FORECAST) ──
+# Mỗi hàng = 1 chỉ số, mỗi ô = 1 giờ (giờ địa phương). Dữ liệu lấy từ hourly_data đã fetch
+# sẵn → đổi địa điểm là tự cập nhật. Màu: xanh đậm = tốt (trời quang), trắng = xấu (mây dày).
+_CSC_DAYS = 3
+_CSC_BG = (15, 23, 42)
+_CSC_DAY_COLORS = ["#facc15", "#f8fafc", "#f9a8d4"]
+_CSC_CLOUD_STOPS = [(0, (10, 36, 99)), (20, (29, 78, 216)), (40, (59, 130, 246)),
+                    (60, (147, 197, 253)), (80, (219, 234, 254)), (100, (255, 255, 255))]
+_CSC_HUMID_STOPS = [(0, (10, 36, 99)), (30, (59, 130, 246)), (50, (34, 197, 94)),
+                    (70, (250, 204, 21)), (85, (249, 115, 22)), (100, (220, 38, 38))]
+_CSC_TEMP_STOPS = [(-10, (76, 29, 149)), (0, (37, 99, 235)), (8, (34, 211, 238)),
+                   (15, (34, 197, 94)), (22, (250, 204, 21)), (30, (249, 115, 22)), (38, (220, 38, 38))]
+
+def _csc_rgb(stops, v):
+    if v <= stops[0][0]:
+        return stops[0][1]
+    if v >= stops[-1][0]:
+        return stops[-1][1]
+    for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
+        if v <= p1:
+            t = (v - p0) / float(p1 - p0)
+            return tuple(c0[i] + (c1[i] - c0[i]) * t for i in range(3))
+    return stops[-1][1]
+
+def _csc_hex(rgb, f=1.0):
+    return "#%02x%02x%02x" % tuple(int(max(0, min(255, rgb[i] * f + _CSC_BG[i] * (1.0 - f)))) for i in range(3))
+
+def _csc_dark_hex(sun_alt, moon_alt, moon_illum):
+    b = 1.0 if sun_alt >= 0 else max(0.0, (sun_alt + 18.0) / 18.0) ** 1.5
+    if moon_alt > 0:
+        b = max(b, (moon_illum / 100.0) * min(1.0, moon_alt / 25.0) * 0.55)
+    return "#%02x%02x%02x" % (int(15 + 240 * b), int(23 + 220 * b), int(42 + 150 * b))
+
+def _csc_get(hourly, field, idx, order, bare=True):
+    for sfx in order:
+        lst = hourly.get(f"{field}{sfx}", [])
+        if idx < len(lst) and lst[idx] is not None:
+            return float(lst[idx])
+    if bare:
+        lst = hourly.get(field, [])
+        if idx < len(lst) and lst[idx] is not None:
+            return float(lst[idx])
+    return None
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _csc_astro_grid(lat, lon, d0_str, utc_off_h, n_days):
+    d0 = datetime.strptime(d0_str, "%Y-%m-%d")
+    sun, moon = {}, {}
+    for d in range(n_days):
+        dd = d0 + timedelta(days=d)
+        for h in range(24):
+            sun[(d, h)] = calculate_exact_sun_altitude_ephem(lat, lon, dd.year, dd.month, dd.day, h, utc_off_h)
+            moon[(d, h)] = calculate_exact_moon_altitude_ephem(lat, lon, dd.year, dd.month, dd.day, h, utc_off_h)
+    return sun, moon
+
+def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
+    times = hourly.get("time", []) if hourly else []
+    if not times:
+        return None
+    idx_of = {t: i for i, t in enumerate(times)}
+    d0 = datetime.strptime(times[0][:10], "%Y-%m-%d")
+    utc_off_h = utc_off_s / 3600.0
+    sun_g, moon_g = _csc_astro_grid(lat, lon, times[0][:10], utc_off_h, _CSC_DAYS)
+    illum = {d: get_moon_phase_percent(d0 + timedelta(days=d))[0] for d in range(_CSC_DAYS)}
+    cols = [(d, d0 + timedelta(days=d), h) for d in range(_CSC_DAYS) for h in range(24)]
+    n = len(cols)
+    ALL = ("_jma_msm", "_ecmwf_ifs025", "_gfs_seamless")
+
+    recs = []
+    for d, day, h in cols:
+        idx = idx_of.get(f"{day.strftime('%Y-%m-%d')}T{h:02d}:00")
+        r = {"cloud": None, "src": "", "ecm": None, "hum": None, "wind": None, "temp": None}
+        if idx is not None:
+            c_jma = _csc_get(hourly, "cloud_cover", idx, ("_jma_msm",), bare=False)
+            c_gfs = _csc_get(hourly, "cloud_cover", idx, ("_gfs_seamless",), bare=True)
+            if c_jma is not None:
+                r["cloud"], r["src"] = c_jma, "JMA"
+            elif c_gfs is not None:
+                r["cloud"], r["src"] = c_gfs, "GFS"
+            r["ecm"] = _csc_get(hourly, "cloud_cover", idx, ("_ecmwf_ifs025",), bare=False)
+            r["hum"] = _csc_get(hourly, "relative_humidity_2m", idx, ALL)
+            r["wind"] = _csc_get(hourly, "wind_speed_10m", idx, ALL)
+            r["temp"] = _csc_get(hourly, "temperature_2m", idx, ALL)
+        sa = sun_g.get((d, h), -90.0)
+        ma = moon_g.get((d, h), -90.0)
+        r["sun"], r["moon"] = sa, ma
+        r["dim"] = 0.35 if sa > 0 else (0.65 if sa > -12 else 1.0)
+        recs.append(r)
+
+    def _tt(i):
+        _, day, h = cols[i]
+        return f"{day.month}/{day.day} {h:02d}:00"
+
+    def _edge(i):
+        d, day, h = cols[i]
+        b0 = datetime(day.year, day.month, day.day, h)
+        if b0 <= now_local < b0 + timedelta(hours=1):
+            return "box-shadow:inset 2px 0 0 0 #facc15;"
+        if h == 0 and d > 0:
+            return "box-shadow:inset 2px 0 0 0 #ef4444;"
+        return ""
+
+    hatch = "repeating-linear-gradient(45deg,#1e293b,#1e293b 2px,#334155 2px,#334155 3px)"
+    lab = "font-family:Consolas,'Courier New',monospace;font-size:11px;line-height:13px;color:#e2e8f0;white-space:nowrap;"
+
+    def _cell(i, bg, tip, h_px=13):
+        return f'<div title="{tip}" style="height:{h_px}px;background:{bg};{_edge(i)}"></div>'
+
+    def _na(i, name):
+        return _cell(i, hatch, f"{_tt(i)} {name}: n/a")
+
+    def _row(label, cells, label_bg=""):
+        lb = f"background:{label_bg};color:#0f172a;padding:0 3px;" if label_bg else ""
+        return f'<div style="{lab}{lb}">{label}</div>' + "".join(cells)
+
+    p = [f'<div style="overflow-x:auto;"><div style="min-width:760px;background:#000;border:1px solid #334155;'
+         f'border-radius:10px;padding:8px 10px;">'
+         f'<div style="display:grid;grid-template-columns:104px repeat({n},minmax(0,1fr));column-gap:1px;row-gap:1px;">']
+
+    # Header: ngày + giờ
+    p.append(f'<div style="{lab}font-size:10px;color:#94a3b8;">Local Time</div>')
+    for d in range(_CSC_DAYS):
+        day = d0 + timedelta(days=d)
+        col = _CSC_DAY_COLORS[d % len(_CSC_DAY_COLORS)]
+        p.append(f'<div style="grid-column:span 24;{lab}color:{col};overflow:hidden;">'
+                 f'{day.strftime("%Y-%m-%d")} {day.strftime("%a")}</div>')
+    p.append('<div></div>')
+    for d, day, h in cols:
+        col = _CSC_DAY_COLORS[d % len(_CSC_DAY_COLORS)]
+        txt = str(h) if h % 3 == 0 else ""
+        p.append(f'<div style="{lab}font-size:9px;line-height:12px;color:{col};overflow:visible;">{txt}</div>')
+
+    # Nhóm 1: bầu trời
+    cells = []
+    for i, r in enumerate(recs):
+        if r["cloud"] is None:
+            cells.append(_na(i, "Cloud"))
+        else:
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, r["cloud"]), r["dim"]),
+                               f'{_tt(i)} Cloud ({r["src"]}): {int(round(r["cloud"]))}%'))
+    p.append(_row("Cloud Cover:", cells))
+
+    cells = []
+    for i, r in enumerate(recs):
+        if r["ecm"] is None:
+            cells.append(_na(i, "ECMWF"))
+        else:
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, r["ecm"]), r["dim"]),
+                               f'{_tt(i)} ECMWF cloud: {int(round(r["ecm"]))}%'))
+    p.append(_row("ECMWF Cloud:", cells))
+
+    cells = []
+    for i, r in enumerate(recs):
+        if r["cloud"] is None:
+            cells.append(_na(i, "Transparency"))
+        else:
+            tr = 100 - r["cloud"] * 0.9 - max(0, (r["hum"] or 0) - 60) * 0.5
+            tr = max(0, min(100, tr))
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, 100 - tr), r["dim"]),
+                               f'{_tt(i)} Transparency: {int(round(tr))}%'))
+    p.append(_row("Transparency:", cells))
+
+    cells = []
+    for i, r in enumerate(recs):
+        if r["cloud"] is None:
+            cells.append(_na(i, "Seeing"))
+        else:
+            atm = max(0, min(100, 100 - max(0, (r["wind"] or 0) - 2) * 9))
+            se = atm * max(0, 100 - r["cloud"]) / 100.0
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, 100 - se), r["dim"]),
+                               f'{_tt(i)} Seeing: {int(round(se))}%'))
+    p.append(_row("Seeing:", cells))
+
+    cells = [_cell(i, _csc_dark_hex(r["sun"], r["moon"], illum.get(cols[i][0], 0.0)),
+                   f'{_tt(i)} sun {r["sun"]:.0f}° / moon {r["moon"]:.0f}°', 8)
+             for i, r in enumerate(recs)]
+    p.append(_row("Darkness:", cells, label_bg="#94a3b8"))
+
+    p.append('<div style="grid-column:1/-1;height:10px;"></div>')
+
+    # Nhóm 2: mặt đất
+    cells = []
+    for i, r in enumerate(recs):
+        if r["wind"] is None:
+            cells.append(_na(i, "Wind"))
+        else:
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, min(100, r["wind"] / 10.0 * 100))),
+                               f'{_tt(i)} Wind: {r["wind"]:.1f} m/s'))
+    p.append(_row("Wind:", cells))
+
+    cells = []
+    for i, r in enumerate(recs):
+        if r["hum"] is None:
+            cells.append(_na(i, "Humidity"))
+        else:
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_HUMID_STOPS, r["hum"])),
+                               f'{_tt(i)} Humidity: {int(round(r["hum"]))}%'))
+    p.append(_row("Humidity:", cells))
+
+    cells = []
+    for i, r in enumerate(recs):
+        if r["temp"] is None:
+            cells.append(_na(i, "Temp"))
+        else:
+            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_TEMP_STOPS, r["temp"])),
+                               f'{_tt(i)} Temperature: {r["temp"]:.1f}°C'))
+    p.append(_row("Temperature:", cells))
+
+    # Thanh đêm đang chọn (18:00 → 06:00)
+    sel_a = datetime(target_dt.year, target_dt.month, target_dt.day, 18)
+    sel_b = sel_a + timedelta(hours=12)
+    p.append('<div style="grid-column:1/-1;height:4px;"></div>')
+    p.append(f'<div style="{lab}font-size:10px;color:#fb923c;">Night</div>')
+    for d, day, h in cols:
+        b0 = datetime(day.year, day.month, day.day, h)
+        bg = "#fb923c" if (sel_a <= b0 < sel_b) else "transparent"
+        p.append(f'<div style="height:3px;background:{bg};"></div>')
+    p.append('</div>')  # grid
+
+    p.append('<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;'
+             'font-size:10px;color:#94a3b8;font-family:sans-serif;">'
+             '<span>Clear</span><div style="width:90px;height:6px;border-radius:3px;'
+             'background:linear-gradient(90deg,#0a2463,#1d4ed8,#3b82f6,#93c5fd,#dbeafe,#ffffff);"></div>'
+             '<span>Overcast</span>'
+             '<span><span style="color:#facc15;">|</span> now</span>'
+             '<span><span style="color:#ef4444;">|</span> midnight</span>'
+             '<span><span style="color:#fb923c;">&#9632;</span> selected night</span>'
+             '<span style="margin-left:auto;">1 block = 1 hour · hàng tối ngày được làm mờ · '
+             'Transparency/Seeing là ước tính từ mây, độ ẩm, gió</span></div>')
+    p.append('</div></div>')
+    return "".join(p)
+
+st.markdown("---")
+st.markdown("### 🌌 Clear Sky Forecast (3 days)")
+_csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
+_csc_html = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
+                            _loc_utc_offset, target_date, _csc_now_local)
+if _csc_html:
+    st.markdown(_csc_html, unsafe_allow_html=True)
+else:
+    st.caption("Clear Sky Forecast: weather data unavailable.")
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
