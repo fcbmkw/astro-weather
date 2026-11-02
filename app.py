@@ -5860,23 +5860,25 @@ def _lc_ts_label(ts):
     except Exception:
         return ""
 
-def _lc_card_html(cam_name, page_path, sub, img_url, ts):
-    link = "https://weathernews.jp" + page_path
+def _cam_card_html(img_src, link, sub, title, stamp, btn_label, extra=""):
+    """Thẻ camera dùng chung cho Sky & Road: cùng khung, ảnh 16:9 full-width, cùng bố cục chú thích."""
     shot = ""
-    if img_url:
+    if img_src:
         shot = (f'<a href="{link}" target="_blank" rel="noopener">'
-                f'<img src="{img_url}" referrerpolicy="no-referrer" '
-                f'alt="Camera image unavailable — open on Weathernews" '
-                f'style="width:100%;max-width:640px;border-radius:10px;display:block;'
-                f'margin-bottom:10px;background:#1e293b;"></a>')
-    stamp = f" · {_lc_ts_label(ts)}" if ts else ""
+                f'<img src="{img_src}" referrerpolicy="no-referrer" '
+                f'alt="Camera image unavailable — open the source page" '
+                f'style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;'
+                f'display:block;margin-bottom:10px;background:#1e293b;"></a>')
     return (f'<div style="{_lc_card}">{shot}'
-            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:4px;">{sub}</div>'
+            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:4px;min-height:34px;line-height:17px;">{sub}</div>'
             f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;">'
-            f'{_lc_html_mod.escape(cam_name)}<span style="color:#64748b;font-weight:500;'
-            f'font-size:12px;">{stamp}</span></div>'
-            f'<a href="{link}" target="_blank" rel="noopener" style="{_lc_btn}">'
-            f'Open on Weathernews ↗</a></div>')
+            f'{_lc_html_mod.escape(title)}<span style="color:#64748b;font-weight:500;'
+            f'font-size:12px;"> · {stamp}</span></div>'
+            f'<a href="{link}" target="_blank" rel="noopener" style="{_lc_btn}">{btn_label}</a>{extra}</div>')
+
+def _lc_card_html(cam_name, page_path, sub, img_url, ts):
+    return _cam_card_html(img_url, "https://weathernews.jp" + page_path, sub, cam_name,
+                          _lc_ts_label(ts) if ts else "", "Open on Weathernews ↗")
 
 st.markdown("---")
 st.markdown("### 📹 Live Sky Camera")
@@ -6084,20 +6086,13 @@ with _lc_col_road:
         _cam, _km, _mn, _b, _mime = _rd
         _stamp = f"{_cam[3][4:6]}/{_cam[3][6:8]} {_cam[3][8:10]}:{_cam[3][10:12]} JST"
         _detail = _RD_DETAIL.format(cid=_cam[0])
-        st.image(_b, use_container_width=True)
-        st.markdown(
-            f'<div style="{_lc_card}">'
-            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:4px;">'
-            f'Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from '
-            f'{_lc_html_mod.escape(_strip_loc_num(st.session_state.location_name))})</div>'
-            f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;">'
-            f'{_lc_html_mod.escape(_cam[1])}<span style="color:#64748b;font-weight:500;'
-            f'font-size:12px;"> · {_stamp}</span></div>'
-            f'<a href="{_detail}" target="_blank" rel="noopener" style="{_lc_btn}">'
-            f'Open on MLIT ↗</a> '
-            f'<a href="{_road_url}" target="_blank" rel="noopener" '
-            f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>'
-            f'</div>', unsafe_allow_html=True)
+        _src = f"data:{_mime};base64,{_rd_b64.b64encode(_b).decode()}"
+        _sub = (f"Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from "
+                f"{_lc_html_mod.escape(_strip_loc_num(st.session_state.location_name))})")
+        _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
+                  f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
+        st.markdown(_cam_card_html(_src, _detail, _sub, _cam[1], _stamp, "Open on MLIT ↗", _extra),
+                    unsafe_allow_html=True)
     else:   # không lấy được camera gần -> quay về bản đồ như cũ
         if _rd_diag:
             st.caption(f"ℹ️ {_rd_diag}")
