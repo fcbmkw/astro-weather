@@ -5990,20 +5990,29 @@ def _rd_list(code):
     return out
 
 @st.cache_data(ttl=2592000, show_spinner=False)
-def _rd_geocode(munis):
-    """{市区町村: [(lat, lon), ...]} — giữ nhiều kết quả vì tên như '中央区' trùng nhiều tỉnh."""
+def _rd_geocode(queries):
+    """{truy vấn: [(lat, lon), ...]} qua GSI. Giữ nhiều kết quả vì tên như '中央区' trùng nhiều tỉnh."""
     from concurrent.futures import ThreadPoolExecutor
-    def one(mn):
+    def one(q):
         try:
             j = requests.get("https://msearch.gsi.go.jp/address-search/AddressSearch",
-                             params={"q": mn}, timeout=8).json()
+                             params={"q": q}, timeout=8).json()
             pts = [(float(g["geometry"]["coordinates"][1]), float(g["geometry"]["coordinates"][0]))
                    for g in j[:10]]
-            return mn, pts
+            return q, pts
         except Exception:
-            return mn, []
+            return q, []
     with ThreadPoolExecutor(max_workers=8) as ex:
-        return {k: v for k, v in ex.map(one, munis) if v}
+        return {k: v for k, v in ex.map(one, queries) if v}
+
+def _rd_query(name):
+    """Khoá geocode cho 1 camera: 市区町村 nếu có; không thì dùng chính tên camera (đã làm sạch)."""
+    mn = _lc_muni(name)
+    if mn:
+        return mn
+    q = re.sub(r"[\(（].*?[\)）]", "", name)                 # bỏ '(仁木側)'
+    q = re.sub(r"(TN|ST|トンネル.*|カメラ\d*|\d+)$", "", q.strip())  # bỏ hậu tố TN / số
+    return q.strip() or None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _rd_fetch_img(url):
@@ -6018,22 +6027,32 @@ def _rd_fetch_img(url):
             pass
     return None, None
 
+_rd_diag = ""   # lý do hiển thị bản đồ (để dễ debug)
+
 def _rd_nearest(pref, lat, lon, top=5):
-    """Danh sách tối đa `top` camera gần nhất: [(km, (id, tên, url, ts), 市区町村)]."""
+    """Tối đa `top` camera gần nhất: [(km, (id, tên, url, ts), khoá-vị-trí)]. Ghi lý do vào _rd_diag."""
+    global _rd_diag
     cams = []
-    for code in _RD_REGION.get(pref, ()):
+    codes = _RD_REGION.get(pref, ())
+    for code in codes:
         cams += _rd_list(code)
     if not cams:
+        _rd_diag = f"Không đọc được danh sách camera MLIT (mã vùng {', '.join(codes) or '?'}) — kiểm tra _RD_REGION."
         return []
-    munis = tuple(sorted({mn for mn in (_lc_muni(c[1]) for c in cams) if mn}))
-    geo = _rd_geocode(munis) if munis else {}
+    keys = tuple(sorted({q for q in (_rd_query(c[1]) for c in cams) if q}))
+    geo = _rd_geocode(keys) if keys else {}
     ranked = []
     for c in cams:
-        mn = _lc_muni(c[1])
-        pts = geo.get(mn) if mn else None
+        q = _rd_query(c[1])
+        pts = geo.get(q) if q else None
         if pts:
-            ranked.append((min(_haversine_km(lat, lon, la, lo) for la, lo in pts), c, mn))
+            ranked.append((min(_haversine_km(lat, lon, la, lo) for la, lo in pts), c, q))
     ranked.sort(key=lambda x: x[0])
+    if not ranked:
+        _rd_diag = f"Đọc được {len(cams)} camera nhưng không geocode được vị trí nào."
+    elif ranked[0][0] > _RD_MAX_KM:
+        _rd_diag = (f"Camera gần nhất: {ranked[0][1][1]} (~{ranked[0][0]:.0f} km) — xa hơn {_RD_MAX_KM} km "
+                    f"nên hiển thị bản đồ.")
     return ranked[:top]
 
 _rd_pref = "Tokyo" if _lc_kind == "tokyo_center" else (_lc_pref if _lc_kind == "pref" else None)
@@ -6080,6 +6099,8 @@ with _lc_col_road:
             f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>'
             f'</div>', unsafe_allow_html=True)
     else:   # không lấy được camera gần -> quay về bản đồ như cũ
+        if _rd_diag:
+            st.caption(f"ℹ️ {_rd_diag}")
         _lc_components.iframe(_road_url, height=380, scrolling=False)
         st.markdown(
             f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
