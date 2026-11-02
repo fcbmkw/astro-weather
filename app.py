@@ -364,7 +364,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
-             ("map_tile", "windy"),
+             ("map_tile", "himawari"),
              ("_need_fly", False), ("_skip_prefetch", False),
              ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
              ("_scan_tonight", False), ("_scan_fallback_label", None)]:
@@ -2718,7 +2718,7 @@ st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
 _TILE_SAT_URL  = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
 
 if st.session_state.map_tile not in ("satellite", "himawari", "windy"):
-    st.session_state.map_tile = "windy"
+    st.session_state.map_tile = "himawari"
  
 # ==============================================================================
 # KHỐI C (v7 — bản sửa đúng) — xoá sạch KHỐI C cũ, dán nguyên khối này vào,
@@ -3101,7 +3101,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_MINZ   = 3;                  // native tile zoom range (upscaled beyond)
       var HIM_MAXZ   = 6;
       var HIM_FRAMES = 3;                  // latest 3 frames (10 min apart) merged into ONE image
-      var HIM_OPAC   = 0.75;   // adjustable with the slider
+      var HIM_OPAC   = 1.0;    // max brightness by default; adjustable with the slider
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
       var himFrames = [], himTok = 0;
@@ -3223,9 +3223,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       }
       function _himLabel() {
         if (!himFrames.length) return;
-        var a = himFrames[0].v, b = himFrames[himFrames.length - 1].v;
-        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(a).slice(0, 5) + ' '
-          + _himHM(a) + '\u2013' + _himHM(b) + ' JST (' + himFrames.length + ' merged)' + himNote;
+        var sh = himFrames.filter(function(f) { return f.shown; });
+        if (!sh.length) return;
+        var a = sh[0].v, b = sh[sh.length - 1].v;
+        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(b).slice(0, 5) + ' '
+          + (sh.length > 1 ? _himHM(a) + '\u2013' : '') + _himHM(b) + ' JST'
+          + (sh.length > 1 ? ' (' + sh.length + ' merged)' : '') + himNote;
       }
       function _himCleanup() {
         himTok++;
@@ -3278,21 +3281,28 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
       }
 
-      // Wait until ALL frames have loaded their tiles, then reveal them together
-      // (8 s safety timeout so a slow tile never leaves the map empty).
+      // No waiting: the NEWEST frame is shown right away (full opacity). The older
+      // frames are added on top (lighten blend) as soon as each one has loaded, so
+      // the cloud amount grows to the 3-frame merge without ever blocking the map.
       function _himMerge(tok) {
-        himFrames.forEach(function(f) { _himEnsure(f); });
-        var pending = himFrames.length, shown = false;
-        function reveal() {
-          if (shown || tok !== himTok) return;
-          shown = true;
-          himFrames.forEach(function(f) { if (f.layer) f.layer.setOpacity(HIM_OPAC); });
-          _himLabel();
-        }
-        himFrames.forEach(function(f) {
-          f.layer.once('load', function() { if (--pending <= 0) reveal(); });
+        var n = himFrames.length;
+        var order = [];
+        for (var k = n - 1; k >= 0; k--) order.push(himFrames[k]);   // newest first
+        order.forEach(function(f, idx) {
+          _himEnsure(f);
+          if (idx === 0) {
+            f.layer.setOpacity(HIM_OPAC);          // newest frame: visible immediately
+            f.shown = true;
+            _himLabel();
+          } else {
+            f.layer.once('load', function() {
+              if (tok !== himTok) return;
+              f.layer.setOpacity(HIM_OPAC);
+              f.shown = true;
+              _himLabel();
+            });
+          }
         });
-        setTimeout(reveal, 8000);
       }
 
       function _himEnter() {
@@ -3306,7 +3316,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (tok !== himTok) return;
           if (!list.length) { himLbl.textContent = 'Himawari: no data'; return; }
           himFrames = list.map(function(t) { return { b: t.b, v: t.v, layer: null }; });
-          himLbl.textContent = 'JMA Himawari IR  loading ' + himFrames.length + ' frames...';
           _himMerge(tok);
         });
       }
@@ -3366,8 +3375,8 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       });
 
       map.whenReady(function(){
-        var saved = _lsGet(LS_TILE, 'windy');
-        if (saved !== 'satellite' && saved !== 'himawari' && saved !== 'windy') saved = 'windy';
+        var saved = _lsGet(LS_TILE, 'himawari');
+        if (saved !== 'himawari' && saved !== 'windy') saved = 'himawari';   // Satellite no longer the start tab
         switchTile(saved);
       });
 
@@ -3380,7 +3389,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 """)
 
 class _CombinedControl(MacroElement):
-    def __init__(self, lpm_url, location_name, initial_tile="windy", lat=35.6895, lon=139.6917):
+    def __init__(self, lpm_url, location_name, initial_tile="himawari", lat=35.6895, lon=139.6917):
         super().__init__()
         self._name = '_CombinedControl'
         self._template = _COMBINED_CTRL_TEMPLATE
