@@ -5436,7 +5436,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
         sa = sun_g.get((d, h), -90.0)
         ma = moon_g.get((d, h), -90.0)
         r["sun"], r["moon"] = sa, ma
-        r["dim"] = 0.35 if sa > 0 else (0.65 if sa > -12 else 1.0)
+        r["dim"] = 1.0   # giữ đúng màu theo lượng mây (trước đây ban ngày bị pha tối -> ra màu xám)
         recs.append(r)
 
     def _tt(i):
@@ -5571,9 +5571,9 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
 
     p.append('<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;'
              'font-size:10px;color:#94a3b8;font-family:sans-serif;">'
-             '<span>Clear</span><div style="width:90px;height:6px;border-radius:3px;'
+             '<span>Clear (dark blue)</span><div style="width:90px;height:6px;border-radius:3px;'
              'background:linear-gradient(90deg,#0a2463,#1d4ed8,#3b82f6,#93c5fd,#dbeafe,#ffffff);"></div>'
-             '<span>Overcast</span>'
+             '<span>Overcast (white)</span>'
              '<span><span style="color:#facc15;">|</span> now</span>'
              '<span><span style="color:#ef4444;">|</span> midnight</span>'
              '<span><span style="color:#fb923c;">&#9632;</span> selected night</span>'
@@ -5887,44 +5887,65 @@ _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padd
             "font-family:sans-serif;")
 _lc_btn = ("display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;"
            "font-weight:700;font-size:13px;padding:7px 14px;border-radius:8px;")
-_lc_out = None
-try:
-    with st.spinner("Loading live camera..."):
-        if _lc_kind == "tokyo_center":
-            if "_lc_tokyo_pick" not in st.session_state:
-                st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
-            _pick = next((c for c in _LC_TOKYO_CENTER if c[0] == st.session_state._lc_tokyo_pick),
-                         _LC_TOKYO_CENTER[0])
-            _pp = f"/onebox/livecam/kanto/tokyo/{_pick[0]}/"
-            _iu, _ts = _lc_latest_image(_pp)
-            if _iu:
-                _lc_out = _lc_card_html(_pick[1], _pp, "Central Tokyo · random camera", _iu, _ts)
-        elif _lc_kind == "pref":
-            _near = _lc_pick_nearest(_lc_pref, st.session_state.lat, st.session_state.lon)
-            if _near:
-                _cam, _km, _area = _near
-                _iu, _ts = _lc_latest_image(_cam[2])
-                if _iu:
-                    _where = (f"Nearest camera area: {_area} (~{_km:.0f} km from "
-                              f"{_strip_loc_num(st.session_state.location_name)})") if _area else \
-                             f"{_lc_pref} · camera in the same prefecture"
-                    _lc_out = _lc_card_html(_cam[1], _cam[2], _where, _iu, _ts)
-except Exception:
-    _lc_out = None
+from contextlib import nullcontext as _nullctx
+_CAM_REFRESH_SEC = 120   # camera tự cập nhật mỗi 2 phút (Weathernews ~5 phút/ảnh, MLIT ~10 phút/ảnh)
 
-if _lc_out is None:   # không đọc được ảnh -> quay về thẻ link như trước
-    if _lc_kind == "tokyo_center":
-        _fb_path, _fb_txt = "kanto/tokyo/", "Tokyo live cameras"
-    elif _lc_kind == "pref":
-        _fb_path, _fb_txt = _LC_PREF[_lc_pref][0], f"{_lc_pref} ({_LC_PREF[_lc_pref][1]}) live cameras"
-    else:
-        _fb_path, _fb_txt = "", "All-Japan live cameras"
-    _lc_out = (f'<div style="{_lc_card}">'
-               f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">'
-               f'Could not load a camera image here — open it on Weathernews</div>'
-               f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">{_fb_txt}</div>'
-               f'<a href="{_LC_BASE}{_fb_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
-               f'Open ↗</a></div>')
+def _cam_spinner(msg):
+    # chỉ hiện spinner ở lần tải đầu; các lần tự refresh chạy ngầm cho đỡ nháy
+    if st.session_state.get("_cam_loaded"):
+        return _nullctx()
+    return st.spinner(msg)
+
+def _cam_fragment(fn):
+    frag = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
+    if frag is None:          # Streamlit cũ: không tự refresh được
+        return fn
+    try:
+        return frag(run_every=_CAM_REFRESH_SEC)(fn)
+    except TypeError:
+        return frag(fn)
+
+def _lc_build_sky():
+    _lc_out = None
+    try:
+        with _cam_spinner("Loading live camera..."):
+            if _lc_kind == "tokyo_center":
+                if "_lc_tokyo_pick" not in st.session_state:
+                    st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
+                _pick = next((c for c in _LC_TOKYO_CENTER if c[0] == st.session_state._lc_tokyo_pick),
+                             _LC_TOKYO_CENTER[0])
+                _pp = f"/onebox/livecam/kanto/tokyo/{_pick[0]}/"
+                _iu, _ts = _lc_latest_image(_pp)
+                if _iu:
+                    _lc_out = _lc_card_html(_pick[1], _pp, "Central Tokyo · random camera", _iu, _ts)
+            elif _lc_kind == "pref":
+                _near = _lc_pick_nearest(_lc_pref, st.session_state.lat, st.session_state.lon)
+                if _near:
+                    _cam, _km, _area = _near
+                    _iu, _ts = _lc_latest_image(_cam[2])
+                    if _iu:
+                        _where = (f"Nearest camera area: {_area} (~{_km:.0f} km from "
+                                  f"{_strip_loc_num(st.session_state.location_name)})") if _area else \
+                                 f"{_lc_pref} · camera in the same prefecture"
+                        _lc_out = _lc_card_html(_cam[1], _cam[2], _where, _iu, _ts)
+    except Exception:
+        _lc_out = None
+
+    if _lc_out is None:   # không đọc được ảnh -> quay về thẻ link như trước
+        if _lc_kind == "tokyo_center":
+            _fb_path, _fb_txt = "kanto/tokyo/", "Tokyo live cameras"
+        elif _lc_kind == "pref":
+            _fb_path, _fb_txt = _LC_PREF[_lc_pref][0], f"{_lc_pref} ({_LC_PREF[_lc_pref][1]}) live cameras"
+        else:
+            _fb_path, _fb_txt = "", "All-Japan live cameras"
+        _lc_out = (f'<div style="{_lc_card}">'
+                   f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">'
+                   f'Could not load a camera image here — open it on Weathernews</div>'
+                   f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">{_fb_txt}</div>'
+                   f'<a href="{_LC_BASE}{_fb_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
+                   f'Open ↗</a></div>')
+    return _lc_out
+
 # ── Bên phải: camera đường bộ MLIT (道路情報提供システム) — 1 camera gần nhất ──────────
 # Lấy từ trang danh sách tĩnh /roadinfo/sp/spImageList_<mã vùng>_1.html (HTML thường, không cần JS).
 # Mỗi camera có ảnh .../doro_gazo/pc/<yyyymmddhhmmss JST>/s_<id>.jpeg + tên (vd 札幌市小野幌).
@@ -5967,7 +5988,7 @@ _RD_IMG_RE = re.compile(
     r'<img[^>]+src="([^"]*?doro_gazo/pc/(\d{14})/s_([0-9A-Za-z]+)\.(?:jpe?g|png))"[^>]*>(.*?)(?=<img|\Z)',
     re.S | re.I)
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _rd_list(code):
     """[(camera_id, tên, url ảnh nhỏ, 'yyyymmddhhmmss' JST)] của 1 vùng. Lỗi -> []."""
     url = _RD_LIST.format(code=code)
@@ -6016,7 +6037,7 @@ def _rd_query(name):
     q = re.sub(r"(TN|ST|トンネル.*|カメラ\d*|\d+)$", "", q.strip())  # bỏ hậu tố TN / số
     return q.strip() or None
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _rd_fetch_img(url):
     """(bytes, mime) hoặc (None, None). Thử bản lớn (bỏ 's_') trước, rồi bản nhỏ."""
     for u in (url.replace("/s_", "/", 1), url):
@@ -6057,53 +6078,62 @@ def _rd_nearest(pref, lat, lon, top=5):
                     f"nên hiển thị bản đồ.")
     return ranked[:top]
 
-_rd_pref = "Tokyo" if _lc_kind == "tokyo_center" else (_lc_pref if _lc_kind == "pref" else None)
-_rd = None   # (cam, km, muni, bytes, mime)
-try:
-    if _rd_pref:
-        with st.spinner("Loading road camera..."):
-            for _km, _cam, _mn in _rd_nearest(_rd_pref, st.session_state.lat, st.session_state.lon):
-                if _km > _RD_MAX_KM:
-                    break
-                _b, _mime = _rd_fetch_img(_cam[2])
-                if _b:
-                    _rd = (_cam, _km, _mn, _b, _mime)
-                    break
-except Exception:
-    _rd = None
+def _rd_build():
+    _rd_pref = "Tokyo" if _lc_kind == "tokyo_center" else (_lc_pref if _lc_kind == "pref" else None)
+    _rd = None   # (cam, km, muni, bytes, mime)
+    try:
+        if _rd_pref:
+            with _cam_spinner("Loading road camera..."):
+                for _km, _cam, _mn in _rd_nearest(_rd_pref, st.session_state.lat, st.session_state.lon):
+                    if _km > _RD_MAX_KM:
+                        break
+                    _b, _mime = _rd_fetch_img(_cam[2])
+                    if _b:
+                        _rd = (_cam, _km, _mn, _b, _mime)
+                        break
+    except Exception:
+        _rd = None
+    return _rd
 
-_road_url = (f"https://www.road-info-prvs.mlit.go.jp/roadinfo/pc/"
-             f"?ido={st.session_state.lat:.5f}&keido={st.session_state.lon:.5f}&page=30&zoom=10")
-_lc_lbl = "font-family:sans-serif;font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px;"
-_lc_col_sky, _lc_col_road = st.columns(2)
-with _lc_col_sky:
-    st.markdown(f'<div style="{_lc_lbl}">☁️ SKY CAMERA · Weathernews</div>', unsafe_allow_html=True)
-    st.markdown(_lc_out, unsafe_allow_html=True)
-with _lc_col_road:
-    st.markdown(f'<div style="{_lc_lbl}">🛣️ ROAD CAMERA · MLIT 道路情報提供システム</div>',
-                unsafe_allow_html=True)
-    if _rd:
-        _cam, _km, _mn, _b, _mime = _rd
-        _stamp = f"{_cam[3][4:6]}/{_cam[3][6:8]} {_cam[3][8:10]}:{_cam[3][10:12]} JST"
-        _detail = _RD_DETAIL.format(cid=_cam[0])
-        _src = f"data:{_mime};base64,{_rd_b64.b64encode(_b).decode()}"
-        _sub = (f"Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from "
-                f"{_lc_html_mod.escape(_strip_loc_num(st.session_state.location_name))})")
-        _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
-                  f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
-        st.markdown(_cam_card_html(_src, _detail, _sub, _cam[1], _stamp, "Open on MLIT ↗", _extra),
+@_cam_fragment
+def _cam_render():
+    _sky_html = _lc_build_sky()
+    _rd = _rd_build()
+    st.session_state._cam_loaded = True
+    _road_url = (f"https://www.road-info-prvs.mlit.go.jp/roadinfo/pc/"
+                 f"?ido={st.session_state.lat:.5f}&keido={st.session_state.lon:.5f}&page=30&zoom=10")
+    _lc_lbl = "font-family:sans-serif;font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px;"
+    _lc_col_sky, _lc_col_road = st.columns(2)
+    with _lc_col_sky:
+        st.markdown(f'<div style="{_lc_lbl}">☁️ SKY CAMERA · Weathernews</div>', unsafe_allow_html=True)
+        st.markdown(_sky_html, unsafe_allow_html=True)
+    with _lc_col_road:
+        st.markdown(f'<div style="{_lc_lbl}">🛣️ ROAD CAMERA · MLIT 道路情報提供システム</div>',
                     unsafe_allow_html=True)
-    else:   # không lấy được camera gần -> quay về bản đồ như cũ
-        if _rd_diag:
-            st.caption(f"ℹ️ {_rd_diag}")
-        _lc_components.iframe(_road_url, height=380, scrolling=False)
-        st.markdown(
-            f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
-            f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
-            f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
-            unsafe_allow_html=True)
+        if _rd:
+            _cam, _km, _mn, _b, _mime = _rd
+            _stamp = f"{_cam[3][4:6]}/{_cam[3][6:8]} {_cam[3][8:10]}:{_cam[3][10:12]} JST"
+            _detail = _RD_DETAIL.format(cid=_cam[0])
+            _src = f"data:{_mime};base64,{_rd_b64.b64encode(_b).decode()}"
+            _sub = (f"Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from "
+                    f"{_lc_html_mod.escape(_strip_loc_num(st.session_state.location_name))})")
+            _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
+                      f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
+            st.markdown(_cam_card_html(_src, _detail, _sub, _cam[1], _stamp, "Open on MLIT ↗", _extra),
+                        unsafe_allow_html=True)
+        else:   # không lấy được camera gần -> quay về bản đồ như cũ
+            if _rd_diag:
+                st.caption(f"ℹ️ {_rd_diag}")
+            _lc_components.iframe(_road_url, height=380, scrolling=False)
+            st.markdown(
+                f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
+                f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
+                f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
+                unsafe_allow_html=True)
+
+_cam_render()
 st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT Japan "
-           "(each camera is operated by its road administrator).")
+           "(each camera is operated by its road administrator). Auto-refreshes every 2 minutes.")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
