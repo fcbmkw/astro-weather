@@ -2716,9 +2716,8 @@ st.markdown("<div style='margin-top:38px'></div>", unsafe_allow_html=True)
 
 # ── MAP tile switcher — ASCII keys only, no emoji in any string passed to folium ──
 _TILE_SAT_URL  = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
-_TILE_STR_URL  = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 
-if st.session_state.map_tile not in ("satellite", "street", "himawari", "windy"):
+if st.session_state.map_tile not in ("satellite", "himawari", "windy"):
     st.session_state.map_tile = "windy"
  
 # ==============================================================================
@@ -2921,17 +2920,9 @@ m = folium.Map(
 )
 
 # ── Tile layers (chỉ để JS switchTile có thể gọi; không load ngay) ──
-_street_layer = folium.TileLayer(
-    tiles=_TILE_STR_URL, attr='CartoDB Voyager', name='street', overlay=False
-)
-_street_layer.add_to(m)
+# (Street tab removed. OpenRailwayMap is now added by JS only in Satellite mode.)
 
-folium.TileLayer(
-    tiles='https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
-    name='OpenRailwayMap', overlay=True, control=True, opacity=0.25, attr='OpenRailwayMap'
-).add_to(m)
-
-# ── Combined BottomRight control: [📍 Label  LPM] + [Windy|Satellite|Street] ──
+# ── Combined BottomRight control: [📍 Label  LPM] + [Windy|Satellite|Himawari] ──
 # Gộp thành một control duy nhất (column) để kiểm soát khoảng cách chính xác.
 from folium import MacroElement
 from jinja2 import Template
@@ -3084,7 +3075,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       };
 
 
-      // ── Row 2: Windy | Satellite | Street ─────────────────────────────────
+      // ── Row 2: Windy | Satellite | Himawari ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
       tileRow.style.cssText = (
         'display:flex;gap:4px;background:rgba(15,23,42,0.88);'
@@ -3093,11 +3084,11 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       );
 
       var tiles = {
-        satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-        street:    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
       };
-      var attrs = { satellite: 'Google Satellite Hybrid', street: 'CartoDB Voyager' };
+      var attrs = { satellite: 'Google Satellite Hybrid' };
       var current = null;
+      var ormLayer = null;   // OpenRailwayMap overlay, Satellite mode only
       var btns = {};
 
       // ── Himawari (JMA) infrared: dark base + labels + short animation ────────
@@ -3110,13 +3101,23 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_MINZ   = 3;                  // native tile zoom range (upscaled beyond)
       var HIM_MAXZ   = 6;
       var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
-      var HIM_OPAC   = 0.85;
+      var HIM_OPAC   = 0.75;   // adjustable with the slider
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
       var PLAY_HTML  = '&#9654;';
       var PAUSE_HTML = '&#10074;&#10074;';
       var himFrames = [], himIdx = 0, himTimer = null, himTok = 0, himPlaying = false;
       var himLabelLayer = null;
+      var himNote = '';
+      var himBorderLayers = [], himBorderCache = {};
+      var HIM_BORDERS = [
+        { w: 1.0, o: 0.9, urls: [
+          'https://cdn.jsdelivr.net/gh/dataofjapan/land@master/japan.geojson',
+          'https://raw.githubusercontent.com/dataofjapan/land/master/japan.geojson' ] },
+        { w: 0.9, o: 0.8, urls: [
+          'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_coastline.geojson',
+          'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson' ] }
+      ];
 
       var himRow = L.DomUtil.create('div', '', col);
       himRow.style.cssText = (
@@ -3133,6 +3134,16 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       );
       var himLbl = L.DomUtil.create('span', '', himRow);
       himLbl.style.cssText = 'color:#e2e8f0;font-size:11px;font-weight:600;white-space:nowrap;';
+      var himSlider = L.DomUtil.create('input', '', himRow);
+      himSlider.type = 'range'; himSlider.min = '15'; himSlider.max = '100';
+      himSlider.value = String(Math.round(HIM_OPAC * 100));
+      himSlider.title = 'IR cloud opacity (lower = see borders better)';
+      himSlider.style.cssText = 'width:70px;height:4px;cursor:pointer;';
+      L.DomEvent.disableClickPropagation(himRow);
+      L.DomEvent.on(himSlider, 'input', function() {
+        HIM_OPAC = (+himSlider.value) / 100;
+        if (himFrames[himIdx] && himFrames[himIdx].layer) himFrames[himIdx].layer.setOpacity(HIM_OPAC);
+      });
 
       function _p2(n) { return (n < 10 ? '0' : '') + n; }
 
@@ -3217,11 +3228,11 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         himFrames.forEach(function(f, k) {
           if (f.layer) f.layer.setOpacity(k === i ? HIM_OPAC : 0);
         });
-        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v);
+        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v) + himNote;
       }
       function _himStop() {
         himPlaying = false;
-        if (himTimer) { clearInterval(himTimer); himTimer = null; }
+        if (himTimer) { clearTimeout(himTimer); himTimer = null; }
         himPlay.innerHTML = PLAY_HTML;
       }
       function _himCleanup() {
@@ -3230,40 +3241,90 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         himFrames.forEach(function(f) { if (f.layer) { map.removeLayer(f.layer); } });
         himFrames = [];
         if (himLabelLayer) { map.removeLayer(himLabelLayer); himLabelLayer = null; }
+        himBorderLayers.forEach(function(l) { map.removeLayer(l); });
+        himBorderLayers = [];
+        himNote = '';
         himRow.style.display = 'none';
       }
+      function _himFetchFirst(urls, cb) {
+        var i = 0;
+        (function next() {
+          if (i >= urls.length) { cb(null); return; }
+          var u = urls[i++];
+          if (himBorderCache[u]) { cb(himBorderCache[u]); return; }
+          try {
+            fetch(u).then(function(r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+              .then(function(j) { himBorderCache[u] = j; cb(j); })
+              .catch(next);
+          } catch (e) { next(); }
+        })();
+      }
+      // Vector borders (prefectures + coastlines) drawn ABOVE the cloud tiles.
+      function _himBorders(tok) {
+        if (!map.getPane('himBorders')) {
+          var pn = map.createPane('himBorders');
+          pn.style.zIndex = 250;
+          pn.style.pointerEvents = 'none';
+        }
+        var okCount = 0, doneCount = 0;
+        HIM_BORDERS.forEach(function(src) {
+          _himFetchFirst(src.urls, function(data) {
+            doneCount++;
+            if (tok === himTok && data) {
+              var lyr = L.geoJSON(data, {
+                pane: 'himBorders', interactive: false,
+                style: { color: '#f8fafc', weight: src.w, opacity: src.o, fill: false }
+              });
+              lyr.addTo(map);
+              himBorderLayers.push(lyr);
+              okCount++;
+            }
+            if (tok === himTok && doneCount === HIM_BORDERS.length && okCount === 0) {
+              himNote = '  (no border data)';
+              if (himFrames[himIdx]) _himShow(himIdx);
+            }
+          });
+        });
+      }
+
+      // Auto-loop: 600 ms per frame, 1.8 s pause on the newest frame, then restart.
+      function _himStart(from) {
+        if (!himFrames.length) return;
+        himPlaying = true;
+        himPlay.innerHTML = PAUSE_HTML;
+        himFrames.forEach(function(f) { _himEnsure(f); });
+        var tok = himTok;
+        var i = from || 0;
+        var last = himFrames.length - 1;
+        _himShow(i);
+        function tick() {
+          if (!himPlaying || tok !== himTok) return;
+          i = (i + 1) % himFrames.length;
+          _himShow(i);
+          himTimer = setTimeout(tick, i === last ? 1800 : 600);
+        }
+        himTimer = setTimeout(tick, 1200);   // let the extra frames load their tiles first
+      }
+
       function _himEnter() {
         himRow.style.display = 'flex';
         himLbl.textContent = 'JMA Himawari IR  loading...';
         himLabelLayer = L.tileLayer(HIM_LABELS, { maxZoom: 19, zIndex: 10, opacity: 0.9 });
         himLabelLayer.addTo(map);
         var tok = ++himTok;
+        _himBorders(tok);
         _himLoadTimes(function(list) {
           if (tok !== himTok) return;
           if (!list.length) { himLbl.textContent = 'Himawari: no data'; return; }
           himFrames = list.map(function(t) { return { b: t.b, v: t.v, layer: null }; });
-          var last = himFrames.length - 1;
-          _himEnsure(himFrames[last]);
-          _himShow(last);
+          _himStart(0);
         });
       }
 
       L.DomEvent.on(himPlay, 'click', function() {
         if (!himFrames.length) return;
         if (himPlaying) { _himStop(); return; }
-        himPlaying = true;
-        himPlay.innerHTML = PAUSE_HTML;
-        himFrames.forEach(function(f) { _himEnsure(f); });
-        var tok = himTok;
-        var i = 0;
-        _himShow(0);
-        setTimeout(function() {   // let the extra frames load their tiles first
-          if (!himPlaying || tok !== himTok) return;
-          himTimer = setInterval(function() {
-            i = (i + 1) % himFrames.length;
-            _himShow(i);
-          }, 650);
-        }, 1000);
+        _himStart(himIdx);
       });
 
       function switchTile(mode) {
@@ -3277,6 +3338,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         if (zoomIn)  { zoomIn.style.opacity  = isWindy ? '0.35' : '1'; zoomIn.style.pointerEvents  = isWindy ? 'none' : 'auto'; zoomIn.style.cursor  = isWindy ? 'not-allowed' : ''; }
         if (zoomOut) { zoomOut.style.opacity = isWindy ? '0.35' : '1'; zoomOut.style.pointerEvents = isWindy ? 'none' : 'auto'; zoomOut.style.cursor = isWindy ? 'not-allowed' : ''; }
         _himCleanup();
+        if (ormLayer) { map.removeLayer(ormLayer); ormLayer = null; }
         if (mode === 'windy') {
           var c = map.getCenter();
           var z = map.getZoom();
@@ -3295,6 +3357,11 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (current) { map.removeLayer(current); }
           current = L.tileLayer(tiles[mode], { attribution: attrs[mode], maxZoom: 19 });
           current.addTo(map);
+          if (mode === 'satellite') {
+            ormLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+              { opacity: 0.25, maxZoom: 19, attribution: 'OpenRailwayMap' });
+            ormLayer.addTo(map);
+          }
         }
         _lsSet(LS_TILE, mode);
         Object.keys(btns).forEach(function(k){
@@ -3303,7 +3370,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
       }
 
-      ['windy','satellite','street','himawari'].forEach(function(mode){
+      ['windy','satellite','himawari'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', tileRow);
         btn.textContent = mode === 'windy' ? 'Windy'
                         : mode.charAt(0).toUpperCase() + mode.slice(1);
@@ -3316,7 +3383,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 
       map.whenReady(function(){
         var saved = _lsGet(LS_TILE, 'windy');
-        if (saved !== 'satellite' && saved !== 'street' && saved !== 'himawari' && saved !== 'windy') saved = 'windy';
+        if (saved !== 'satellite' && saved !== 'himawari' && saved !== 'windy') saved = 'windy';
         switchTile(saved);
       });
 
