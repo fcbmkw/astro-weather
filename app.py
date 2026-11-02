@@ -378,6 +378,11 @@ def _strip_loc_num(name: str) -> str:
     import re
     return re.sub(r'^\d+\.\s*', '', name).strip()
 
+def _disp_name_html(name: str) -> str:
+    """Tên hiển thị (đã bỏ chữ Nhật) tô màu cam, dùng trong tiêu đề."""
+    import html as _h
+    return f'<span style="color:#fb923c;">{_h.escape(_disp_name(name))}</span>'
+
 def _disp_name(name: str) -> str:
     """Tên hiển thị gọn: bỏ số thứ tự đầu + chữ Nhật.
     'Senjojiki Cirque 千畳敷カール, Nagano' -> 'Senjojiki Cirque, Nagano'. Chỉ dùng để HIỂN THỊ."""
@@ -5636,7 +5641,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     return "".join(p)
 
 st.markdown("---")
-st.markdown(f"### 🌌 Clear Sky Forecast \"{_disp_name(st.session_state.location_name)}\" (3 days)")
+st.markdown(f'### 🌌 Clear Sky Forecast "{_disp_name_html(st.session_state.location_name)}" (3 days)', unsafe_allow_html=True)
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
 _csc_html = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
                             _loc_utc_offset, target_date, _csc_now_local)
@@ -5644,109 +5649,6 @@ if _csc_html:
     st.markdown(_csc_html, unsafe_allow_html=True)
 else:
     st.caption("Clear Sky Forecast: weather data unavailable.")
-
-# ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
-st.markdown("---")
-st.markdown("### 📊 Moon, Sun & Milkyway Altitude (°)")
-
-import plotly.graph_objects as go
-
-# ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
-# Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
-def _sun_bright_opacity(sun_alt):
-    if sun_alt <= -13:
-        return 0.0
-    op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
-    return round(min(max(op, 0.0), 0.50), 3)
-
-fig = go.Figure()
-
-# ── Background brightness bands (vrect per slot) ─────────────────────────────
-_x_positions = list(range(len(hours_labels)))
-for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
-    _op = _sun_bright_opacity(_sa)
-    if _op > 0.005:
-        fig.add_vrect(
-            x0=_i - 0.5, x1=_i + 0.5,
-            fillcolor="rgba(251,146,60,1.0)",
-            opacity=_op,
-            layer="below",
-            line_width=0,
-        )
-
-# ── Moon: filled area ─────────────────────────────────────────────────────────
-fig.add_trace(go.Scatter(
-    x=_x_positions, y=moon_altitudes,
-    mode='lines',
-    name='🌙 Moon',
-    line=dict(color='#fbbf24', width=2.5),
-    fill='tozeroy',
-    fillcolor='rgba(251,191,36,0.20)',
-    hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
-    customdata=hours_labels,
-))
-
-# ── Sun: dashed blue line ─────────────────────────────────────────────────────
-fig.add_trace(go.Scatter(
-    x=_x_positions, y=sun_altitudes,
-    mode='lines',
-    name='☀️ Sun',
-    line=dict(color='#38bdf8', width=2.5, dash='dash'),
-    hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
-    customdata=hours_labels,
-))
-
-# ── Milky Way GC: dashed purple ───────────────────────────────────────────────
-fig.add_trace(go.Scatter(
-    x=_x_positions, y=milkyway_altitudes,
-    mode='lines',
-    name='🌌 Milkyway',
-    line=dict(color='#a78bfa', width=2.0, dash='dot'),
-    hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
-    customdata=hours_labels,
-))
-
-# ── Horizon rule ──────────────────────────────────────────────────────────────
-fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
-
-# ── -13° rule ─────────────────────────────────────────────────────────────────
-fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
-              annotation_text="−13°", annotation_font_color="rgba(251,146,60,0.7)",
-              annotation_position="bottom right")
-
-# ── Layout ────────────────────────────────────────────────────────────────────
-fig.update_layout(
-    height=480,
-    paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(15,23,42,0.0)',
-    font=dict(color='#94a3b8', size=12),
-    xaxis=dict(
-        tickmode='array',
-        tickvals=_x_positions,
-        ticktext=hours_labels,
-        gridcolor='rgba(71,85,105,0.3)',
-    ),
-    yaxis=dict(
-        gridcolor='rgba(71,85,105,0.3)',
-        title=None,
-        zeroline=False,
-    ),
-    legend=dict(
-        orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
-        font=dict(color='#cbd5e1'),
-        bgcolor='rgba(0,0,0,0)',
-    ),
-    margin=dict(l=50, r=20, t=40, b=40),
-    hovermode='x unified',
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# Legend note
-
-
-
-
 
 # ── LIVE SKY CAMERA (Weathernews) ─────────────────────────────────────────────
 # Tokyo mặc định → 1 camera ngẫu nhiên ở trung tâm Tokyo (giữ nguyên trong 1 phiên).
@@ -5935,7 +5837,7 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
                           _lc_ts_label(ts) if ts else "", "Open on Weathernews ↗")
 
 st.markdown("---")
-st.markdown(f"### 📹 Live Sky Camera: near {_disp_name(st.session_state.location_name)}")
+st.markdown(f'### 📹 Live Sky Camera: near {_disp_name_html(st.session_state.location_name)}', unsafe_allow_html=True)
 _lc_kind, _lc_pref = _lc_resolve()
 _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
             "font-family:sans-serif;")
@@ -6188,6 +6090,105 @@ def _cam_render():
 _cam_render()
 st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT Japan "
            "(each camera is operated by its road administrator). Auto-refreshes every 2 minutes.")
+
+# ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
+st.markdown("---")
+st.markdown("### 📊 Moon, Sun & Milkyway Altitude (°)")
+
+import plotly.graph_objects as go
+
+# ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
+# Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
+def _sun_bright_opacity(sun_alt):
+    if sun_alt <= -13:
+        return 0.0
+    op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
+    return round(min(max(op, 0.0), 0.50), 3)
+
+fig = go.Figure()
+
+# ── Background brightness bands (vrect per slot) ─────────────────────────────
+_x_positions = list(range(len(hours_labels)))
+for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
+    _op = _sun_bright_opacity(_sa)
+    if _op > 0.005:
+        fig.add_vrect(
+            x0=_i - 0.5, x1=_i + 0.5,
+            fillcolor="rgba(251,146,60,1.0)",
+            opacity=_op,
+            layer="below",
+            line_width=0,
+        )
+
+# ── Moon: filled area ─────────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=moon_altitudes,
+    mode='lines',
+    name='🌙 Moon',
+    line=dict(color='#fbbf24', width=2.5),
+    fill='tozeroy',
+    fillcolor='rgba(251,191,36,0.20)',
+    hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Sun: dashed blue line ─────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=sun_altitudes,
+    mode='lines',
+    name='☀️ Sun',
+    line=dict(color='#38bdf8', width=2.5, dash='dash'),
+    hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Milky Way GC: dashed purple ───────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=milkyway_altitudes,
+    mode='lines',
+    name='🌌 Milkyway',
+    line=dict(color='#a78bfa', width=2.0, dash='dot'),
+    hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Horizon rule ──────────────────────────────────────────────────────────────
+fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
+
+# ── -13° rule ─────────────────────────────────────────────────────────────────
+fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
+              annotation_text="−13°", annotation_font_color="rgba(251,146,60,0.7)",
+              annotation_position="bottom right")
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+fig.update_layout(
+    height=480,
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(15,23,42,0.0)',
+    font=dict(color='#94a3b8', size=12),
+    xaxis=dict(
+        tickmode='array',
+        tickvals=_x_positions,
+        ticktext=hours_labels,
+        gridcolor='rgba(71,85,105,0.3)',
+    ),
+    yaxis=dict(
+        gridcolor='rgba(71,85,105,0.3)',
+        title=None,
+        zeroline=False,
+    ),
+    legend=dict(
+        orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
+        font=dict(color='#cbd5e1'),
+        bgcolor='rgba(0,0,0,0)',
+    ),
+    margin=dict(l=50, r=20, t=40, b=40),
+    hovermode='x unified',
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# Legend note
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
