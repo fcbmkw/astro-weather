@@ -3091,7 +3091,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var ormLayer = null;   // OpenRailwayMap overlay, Satellite mode only
       var btns = {};
 
-      // ── Himawari (JMA) infrared: dark base + labels + short animation ────────
+      // ── Himawari (JMA) infrared: dark base + labels + 3-frame merged still ───
       // Tiles are plain <img> requests, so no CORS problem. The frame list comes
       // from targetTimes_jp.json (fetch); if that fetch is blocked we probe tiles
       // backwards in 10-min steps instead (basetime == validtime for satimg).
@@ -3100,13 +3100,11 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_ELEM   = 'B13/TBB';          // infrared (works day and night)
       var HIM_MINZ   = 3;                  // native tile zoom range (upscaled beyond)
       var HIM_MAXZ   = 6;
-      var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
+      var HIM_FRAMES = 3;                  // latest 3 frames (10 min apart) merged into ONE image
       var HIM_OPAC   = 0.75;   // adjustable with the slider
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
-      var PLAY_HTML  = '&#9654;';
-      var PAUSE_HTML = '&#10074;&#10074;';
-      var himFrames = [], himIdx = 0, himTimer = null, himTok = 0, himPlaying = false;
+      var himFrames = [], himTok = 0;
       var himLabelLayer = null;
       var himNote = '';
       var himBorderLayers = [], himBorderCache = {};
@@ -3125,13 +3123,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'background:rgba(15,23,42,0.88);border:1px solid #334155;'
         + 'border-radius:8px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.6);'
       );
-      var himPlay = L.DomUtil.create('button', '', himRow);
-      himPlay.innerHTML = PLAY_HTML;
-      himPlay.title = 'Play / pause the last ~70 min';
-      himPlay.style.cssText = (
-        'border:none;cursor:pointer;border-radius:5px;padding:2px 9px;'
-        + 'font-size:12px;font-weight:700;background:#3b82f6;color:#ffffff;'
-      );
       var himLbl = L.DomUtil.create('span', '', himRow);
       himLbl.style.cssText = 'color:#e2e8f0;font-size:11px;font-weight:600;white-space:nowrap;';
       var himSlider = L.DomUtil.create('input', '', himRow);
@@ -3142,7 +3133,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       L.DomEvent.disableClickPropagation(himRow);
       L.DomEvent.on(himSlider, 'input', function() {
         HIM_OPAC = (+himSlider.value) / 100;
-        if (himFrames[himIdx] && himFrames[himIdx].layer) himFrames[himIdx].layer.setOpacity(HIM_OPAC);
+        himFrames.forEach(function(f) { if (f.layer) f.layer.setOpacity(HIM_OPAC); });
       });
 
       function _p2(n) { return (n < 10 ? '0' : '') + n; }
@@ -3154,6 +3145,8 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         return _p2(d.getUTCMonth() + 1) + '/' + _p2(d.getUTCDate()) + ' '
           + _p2(d.getUTCHours()) + ':' + _p2(d.getUTCMinutes()) + ' JST';
       }
+      // 'yyyymmddhhmmss' (UTC) -> 'HH:mm' (JST)
+      function _himHM(v) { return _himFmt(v).slice(6, 11); }
       function _himUtcStamp(ms) {
         var d = new Date(ms);
         return d.getUTCFullYear() + _p2(d.getUTCMonth() + 1) + _p2(d.getUTCDate())
@@ -3215,6 +3208,9 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         } catch (e) { fallback(); }
       }
 
+      // 'lighten' blend = per-pixel max brightness of the 3 IR frames. On the IR
+      // product white = cold/high cloud, so the merged image is the UNION of the
+      // clouds seen in the last ~30 min (more cloud than a single frame).
       function _himEnsure(f) {
         if (f.layer) return;
         f.layer = L.tileLayer(_himUrl(f), {
@@ -3222,22 +3218,17 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           zIndex: 5, attribution: 'JMA'
         });
         f.layer.addTo(map);
+        var el = f.layer.getContainer();
+        if (el) el.style.mixBlendMode = 'lighten';
       }
-      function _himShow(i) {
-        himIdx = i;
-        himFrames.forEach(function(f, k) {
-          if (f.layer) f.layer.setOpacity(k === i ? HIM_OPAC : 0);
-        });
-        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v) + himNote;
-      }
-      function _himStop() {
-        himPlaying = false;
-        if (himTimer) { clearTimeout(himTimer); himTimer = null; }
-        himPlay.innerHTML = PLAY_HTML;
+      function _himLabel() {
+        if (!himFrames.length) return;
+        var a = himFrames[0].v, b = himFrames[himFrames.length - 1].v;
+        himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(a).slice(0, 5) + ' '
+          + _himHM(a) + '\u2013' + _himHM(b) + ' JST (' + himFrames.length + ' merged)' + himNote;
       }
       function _himCleanup() {
         himTok++;
-        _himStop();
         himFrames.forEach(function(f) { if (f.layer) { map.removeLayer(f.layer); } });
         himFrames = [];
         if (himLabelLayer) { map.removeLayer(himLabelLayer); himLabelLayer = null; }
@@ -3281,29 +3272,27 @@ _COMBINED_CTRL_TEMPLATE = Template("""
             }
             if (tok === himTok && doneCount === HIM_BORDERS.length && okCount === 0) {
               himNote = '  (no border data)';
-              if (himFrames[himIdx]) _himShow(himIdx);
+              if (himFrames.length) _himLabel();
             }
           });
         });
       }
 
-      // Auto-loop: 600 ms per frame, 1.8 s pause on the newest frame, then restart.
-      function _himStart(from) {
-        if (!himFrames.length) return;
-        himPlaying = true;
-        himPlay.innerHTML = PAUSE_HTML;
+      // Wait until ALL frames have loaded their tiles, then reveal them together
+      // (8 s safety timeout so a slow tile never leaves the map empty).
+      function _himMerge(tok) {
         himFrames.forEach(function(f) { _himEnsure(f); });
-        var tok = himTok;
-        var i = from || 0;
-        var last = himFrames.length - 1;
-        _himShow(i);
-        function tick() {
-          if (!himPlaying || tok !== himTok) return;
-          i = (i + 1) % himFrames.length;
-          _himShow(i);
-          himTimer = setTimeout(tick, i === last ? 1800 : 600);
+        var pending = himFrames.length, shown = false;
+        function reveal() {
+          if (shown || tok !== himTok) return;
+          shown = true;
+          himFrames.forEach(function(f) { if (f.layer) f.layer.setOpacity(HIM_OPAC); });
+          _himLabel();
         }
-        himTimer = setTimeout(tick, 1200);   // let the extra frames load their tiles first
+        himFrames.forEach(function(f) {
+          f.layer.once('load', function() { if (--pending <= 0) reveal(); });
+        });
+        setTimeout(reveal, 8000);
       }
 
       function _himEnter() {
@@ -3317,15 +3306,10 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (tok !== himTok) return;
           if (!list.length) { himLbl.textContent = 'Himawari: no data'; return; }
           himFrames = list.map(function(t) { return { b: t.b, v: t.v, layer: null }; });
-          _himStart(0);
+          himLbl.textContent = 'JMA Himawari IR  loading ' + himFrames.length + ' frames...';
+          _himMerge(tok);
         });
       }
-
-      L.DomEvent.on(himPlay, 'click', function() {
-        if (!himFrames.length) return;
-        if (himPlaying) { _himStop(); return; }
-        _himStart(himIdx);
-      });
 
       function switchTile(mode) {
         var mapEl = map.getContainer();
@@ -5002,6 +4986,82 @@ with col_right:
         st.session_state.weather_source = chosen
         st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
         st.rerun()
+
+
+    # ── TODAY HIGHLIGHT — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────────
+    # Mỗi vùng: liệt kê các địa điểm có thời tiết đêm nay OK (PERFECT / GOOD STARRY NIGHT).
+    # Không có địa điểm nào → ghi "None" (xám). Muốn thêm/bớt vùng chỉ cần sửa _TH_REGIONS.
+    _TH_REGIONS = ["kanto", "chubu", "tohoku", "hokkaido", "shikoku", "okinawa", "kyushu"]
+    _TH_MAX_SHOW = 2   # số địa điểm hiển thị tối đa mỗi vùng (còn lại gộp thành +N)
+
+    def _th_short(name):
+        n = re.sub(r"^\d+\.\s*", "", name.rsplit(",", 1)[0])
+        n = re.sub(r"[^\x00-\x7F]+", " ", n)
+        n = re.sub(r"\s+", " ", n).strip()
+        return n or name
+
+    @st.cache_data(ttl=1800, show_spinner=False)
+    def _today_highlight_data(source, day_key):
+        """{region: [(short_name, full_name, tier), ...]} — PERFECT trước, GOOD sau.
+        Chạy tuần tự (không thread) vì @st.cache_data không thread-safe khi write.
+        Dùng danh sách dedupe 60km → ~75 địa điểm; weather fetch đã cache 1h."""
+        out = {}
+        for rk in _TH_REGIONS:
+            hits = []
+            for nm, (la, lo) in _locs_for_region(rk, for_best_or_tonight=True):
+                res = _night_verdict_for_single_loc(la, lo, day_off=0)
+                if not res:
+                    continue
+                tier = res["verdict"].get("tier")
+                if tier in ("PERFECT NIGHT", "GOOD STARRY NIGHT"):
+                    hits.append((_th_short(nm), nm, tier))
+            hits.sort(key=lambda x: 0 if x[2] == "PERFECT NIGHT" else 1)
+            out[rk] = hits
+        return out
+
+    with st.spinner("Today highlight..."):
+        try:
+            _th_data = _today_highlight_data(st.session_state.weather_source,
+                                             _night_base_jst.strftime("%Y-%m-%d"))
+        except Exception:
+            _th_data = {}
+
+    _th_rows = ""
+    for _rk in _TH_REGIONS:
+        _hits = _th_data.get(_rk, [])
+        _lbl_col = "#e2e8f0" if _hits else "#64748b"
+        if _hits:
+            _chips = ""
+            for _sn, _fn, _tier in _hits[:_TH_MAX_SHOW]:
+                _c = "#6ee7b7" if _tier == "PERFECT NIGHT" else "#93c5fd"
+                _chips += (f'<span title="{_fn} — {_tier}" style="color:{_c};font-weight:600;'
+                           f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+                           f'min-width:0;flex:0 1 auto;">{_sn}</span>')
+            if len(_hits) > _TH_MAX_SHOW:
+                _more = "&#10;".join(h[1] for h in _hits[_TH_MAX_SHOW:])
+                _chips += (f'<span title="{_more}" style="color:#94a3b8;flex:0 0 auto;">'
+                           f'+{len(_hits) - _TH_MAX_SHOW}</span>')
+        else:
+            _chips = '<span style="color:#64748b;font-weight:600;">None</span>'
+        _th_rows += (
+            f'<div style="display:flex;align-items:center;gap:6px;height:16px;'
+            f'background:rgba(255,255,255,0.04);border:1px solid #1e293b;border-radius:6px;'
+            f'padding:0 6px;font-size:10px;line-height:16px;">'
+            f'<span style="flex:0 0 52px;color:{_lbl_col};font-weight:700;">'
+            f'{_REGION_LABELS.get(_rk, _rk.title())}</span>'
+            f'<div style="display:flex;gap:6px;min-width:0;flex:1;overflow:hidden;">{_chips}</div>'
+            f'</div>'
+        )
+    st.markdown(
+        '<div style="margin-top:8px;">'
+        '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
+        '\U0001f31f TODAY HIGHLIGHT</div>'
+        f'<div style="display:flex;flex-direction:column;gap:2px;width:100%;">{_th_rows}</div>'
+        '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
+        '<span style="color:#6ee7b7;">&#9679;</span> Perfect &nbsp;'
+        '<span style="color:#93c5fd;">&#9679;</span> Good &nbsp;(tonight)</div>'
+        '</div>',
+        unsafe_allow_html=True)
 
 
 
