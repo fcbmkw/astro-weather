@@ -5412,9 +5412,9 @@ with col_left:
 # ── CLEAR SKY CHART — 3 ngày × 24 giờ (kiểu Clear Sky Chart, thay cho 7-DAY FORECAST) ──
 # Mỗi hàng = 1 chỉ số, mỗi ô = 1 giờ (giờ địa phương). Dữ liệu lấy từ hourly_data đã fetch
 # sẵn → đổi địa điểm là tự cập nhật. Màu: xanh đậm = tốt (trời quang), trắng = xấu (mây dày).
-_CSC_DAYS = 3
+_CSC_DAYS = 7
 _CSC_BG = (15, 23, 42)
-_CSC_DAY_COLORS = ["#facc15", "#f8fafc", "#f9a8d4"]
+_CSC_DAY_COLORS = ["#facc15", "#f8fafc", "#f9a8d4", "#86efac", "#7dd3fc", "#fdba74", "#c4b5fd"]
 _CSC_CLOUD_STOPS = [(0, (10, 36, 99)), (20, (29, 78, 216)), (40, (59, 130, 246)),
                     (60, (147, 197, 253)), (80, (219, 234, 254)), (100, (255, 255, 255))]
 _CSC_HUMID_STOPS = [(0, (10, 36, 99)), (30, (59, 130, 246)), (50, (34, 197, 94)),
@@ -5506,7 +5506,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
         d, day, h = cols[i]
         b0 = datetime(day.year, day.month, day.day, h)
         if b0 <= now_local < b0 + timedelta(hours=1):
-            return "box-shadow:inset 2px 0 0 0 #facc15;"
+            return "box-shadow:inset 4px 0 0 0 #facc15;"
         if h == 0 and d > 0:
             return "box-shadow:inset 2px 0 0 0 #ef4444;"
         return ""
@@ -5520,22 +5520,24 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     def _na(i, name):
         return _cell(i, hatch, f"{_tt(i)} {name}: n/a")
 
+    stick = "position:sticky;left:0;z-index:2;background:#000;"
+
     def _row(label, cells, label_bg=""):
         lb = f"background:{label_bg};color:#0f172a;padding:0 3px;" if label_bg else ""
-        return f'<div style="{lab}{lb}">{label}</div>' + "".join(cells)
+        return f'<div style="{lab}{stick}{lb}">{label}</div>' + "".join(cells)
 
-    p = [f'<div style="overflow-x:auto;"><div style="min-width:760px;background:#000;border:1px solid #334155;'
+    p = [f'<div id="sc" style="overflow-x:auto;cursor:grab;user-select:none;"><div style="width:max(233.34%,1773px);box-sizing:border-box;background:#000;border:1px solid #334155;'
          f'border-radius:10px;padding:8px 10px;">'
          f'<div style="display:grid;grid-template-columns:104px repeat({n},minmax(0,1fr));column-gap:1px;row-gap:1px;">']
 
     # Header: ngày + giờ
-    p.append(f'<div style="{lab}font-size:10px;color:#94a3b8;">Local Time</div>')
+    p.append(f'<div style="{lab}{stick}font-size:10px;color:#94a3b8;">Local Time</div>')
     for d in range(_CSC_DAYS):
         day = d0 + timedelta(days=d)
         col = _CSC_DAY_COLORS[d % len(_CSC_DAY_COLORS)]
         p.append(f'<div style="grid-column:span 24;{lab}color:{col};overflow:hidden;">'
                  f'{day.strftime("%Y-%m-%d")} {day.strftime("%a")}</div>')
-    p.append('<div></div>')
+    p.append(f'<div style="{stick}"></div>')
     for d, day, h in cols:
         col = _CSC_DAY_COLORS[d % len(_CSC_DAY_COLORS)]
         txt = str(h) if h % 3 == 0 else ""
@@ -5621,7 +5623,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     sel_a = datetime(target_dt.year, target_dt.month, target_dt.day, 18)
     sel_b = sel_a + timedelta(hours=12)
     p.append('<div style="grid-column:1/-1;height:4px;"></div>')
-    p.append(f'<div style="{lab}font-size:10px;color:#fb923c;">Night</div>')
+    p.append(f'<div style="{lab}{stick}font-size:10px;color:#fb923c;">Night</div>')
     for d, day, h in cols:
         b0 = datetime(day.year, day.month, day.day, h)
         bg = "#fb923c" if (sel_a <= b0 < sel_b) else "transparent"
@@ -5636,17 +5638,36 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
              '<span><span style="color:#facc15;">|</span> now</span>'
              '<span><span style="color:#ef4444;">|</span> midnight</span>'
              '<span><span style="color:#fb923c;">&#9632;</span> selected night</span>'
+             '<span style="color:#64748b;">· drag ↔ to see days 4–7</span>'
              '</div>')
     p.append('</div></div>')
-    return "".join(p)
+    _sel_idx = next((i for i, (d, day, h) in enumerate(cols)
+                     if sel_a <= datetime(day.year, day.month, day.day, h) < sel_b), 0)
+    return "".join(p), _sel_idx, n
 
 st.markdown("---")
-st.markdown(f'### 🌌 Clear Sky Forecast "{_disp_name_html(st.session_state.location_name)}" (3 days)', unsafe_allow_html=True)
+st.markdown(f'### 🌌 Clear Sky Forecast "{_disp_name_html(st.session_state.location_name)}" (7 days)', unsafe_allow_html=True)
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
-_csc_html = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
-                            _loc_utc_offset, target_date, _csc_now_local)
-if _csc_html:
-    st.markdown(_csc_html, unsafe_allow_html=True)
+_csc_res = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
+                           _loc_utc_offset, target_date, _csc_now_local)
+if _csc_res:
+    import streamlit.components.v1 as _csc_components
+    _csc_html, _csc_sel, _csc_n = _csc_res
+    _csc_doc = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+        'html,body{margin:0;padding:0;background:transparent;}'
+        '#sc{scrollbar-width:thin;scrollbar-color:#475569 #0f172a;}'
+        '#sc::-webkit-scrollbar{height:8px;}#sc::-webkit-scrollbar-thumb{background:#475569;border-radius:4px;}'
+        '</style></head><body>' + _csc_html +
+        '<script>(function(){var sc=document.getElementById("sc");if(!sc)return;'
+        'var down=false,sx=0,sl=0;'
+        'sc.addEventListener("mousedown",function(e){down=true;sx=e.pageX;sl=sc.scrollLeft;sc.style.cursor="grabbing";});'
+        'window.addEventListener("mouseup",function(){down=false;sc.style.cursor="grab";});'
+        'window.addEventListener("mousemove",function(e){if(!down)return;e.preventDefault();sc.scrollLeft=sl-(e.pageX-sx);});'
+        'var SEL=' + str(int(_csc_sel)) + ',N=' + str(int(_csc_n)) + ';'
+        'if(SEL>=60){sc.scrollLeft=Math.max(0,SEL/N*sc.scrollWidth-sc.clientWidth*0.25);}'
+        '})();</script></body></html>')
+    _csc_components.html(_csc_doc, height=255)
 else:
     st.caption("Clear Sky Forecast: weather data unavailable.")
 
@@ -6241,9 +6262,6 @@ def _cam_render():
                 unsafe_allow_html=True)
 
 _cam_render()
-st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT Japan "
-           "(each camera is operated by its road administrator). Auto-refreshes every 2 minutes; frames loop automatically (▶/❚❚ to control).")
-
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
 st.markdown("### 📊 Moon, Sun & Milkyway Altitude (°)")
