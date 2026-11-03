@@ -3151,7 +3151,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_MAXZ   = 6;
       var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
       var HIM_OPAC   = 1.0;    // max by default; adjustable with the slider
-      var HIM_CONT   = 2.0;    // cloud contrast (CSS contrast()) = 50% along the 100-300% range; sliders are hidden
+      var HIM_CONT   = 1.45;   // cloud contrast (CSS contrast()), range 100-300%; 145% keeps thin cloud visible; sliders are hidden
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
       var PLAY_HTML  = '&#9654;';
@@ -5832,11 +5832,103 @@ def _cam_card_html(img_src, link, sub, title, stamp, btn_label, extra=""):
             f'font-size:12px;"> · {stamp}</span></div>'
             f'<a href="{link}" target="_blank" rel="noopener" style="{_lc_btn}">{btn_label}</a>{extra}</div>')
 
-def _lc_card_html(cam_name, page_path, sub, img_url, ts):
-    return _cam_card_html(img_url, "https://weathernews.jp" + page_path, sub, cam_name,
-                          _lc_ts_label(ts) if ts else "", "Open on Weathernews ↗")
+_CAM_H = 595   # chiều cao iframe của thẻ camera (ảnh tối đa 420px + chú thích)
 
-st.markdown("---")
+_CAM_DOC_TMPL = r"""<!--ANIM--><!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
+.card{box-sizing:border-box;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;}
+.shot{position:relative;}
+.shot img{width:100%;aspect-ratio:16/9;max-height:420px;object-fit:cover;border-radius:10px;display:block;background:#1e293b;}
+.ctl{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center;}
+.pp{background:rgba(15,23,42,.78);color:#e2e8f0;border:1px solid #475569;border-radius:8px;font-size:12px;padding:4px 10px;cursor:pointer;}
+.cnt{background:rgba(15,23,42,.78);color:#cbd5e1;border-radius:8px;font-size:11px;padding:4px 8px;}
+.bar{height:3px;background:#1e293b;border-radius:2px;margin:6px 0 8px;overflow:hidden;}
+.bar>i{display:block;height:100%;width:0;background:#fb923c;}
+.sub{color:#94a3b8;font-size:12px;margin-bottom:4px;min-height:34px;line-height:17px;}
+.ttl{color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;}
+.ttl span{color:#64748b;font-weight:500;font-size:12px;}
+</style></head><body>
+<div class="card">
+  <div class="shot"><a href="__LINK__" target="_blank" rel="noopener"><img id="im" referrerpolicy="no-referrer" alt="Camera image unavailable — open the source page"></a>
+    <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div></div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="sub">__SUB__</div>
+  <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
+  <a href="__LINK__" target="_blank" rel="noopener" style="__LCBTN__">__BTNLABEL__</a>__EXTRA__
+</div>
+<script>
+(function(){
+var CFG=__CFG__;
+var img=document.getElementById('im'),st=document.getElementById('st'),pp=document.getElementById('pp'),
+    bar=document.getElementById('bar'),cnt=document.getElementById('cnt'),ctl=document.getElementById('ctl');
+var frames=[],idx=0,timer=null,playing=false;
+function show(i){idx=i;img.src=frames[i].s;st.textContent=frames[i].l;
+  bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
+function tick(){var n=(idx+1)%frames.length;show(n);timer=setTimeout(tick,n===frames.length-1?1600:450);}
+function play(){playing=true;pp.textContent='❚❚';clearTimeout(timer);timer=setTimeout(tick,450);}
+function pause(){playing=false;pp.textContent='▶';clearTimeout(timer);}
+pp.onclick=function(e){e.preventDefault();playing?pause():play();};
+function start(fr){
+  frames=fr; if(!frames.length)return;
+  if(frames.length<2){show(0);bar.style.width='100%';return;}
+  ctl.style.display='flex'; show(0); play();
+}
+function p2(n){return (n<10?'0':'')+n;}
+function toTs(ms){var d=new Date(ms);return ''+d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds());}
+function parse(t){return Date.UTC(+t.slice(0,4),+t.slice(4,6)-1,+t.slice(6,8),+t.slice(8,10),+t.slice(10,12),+t.slice(12,14));}
+function lbl(t){return t.slice(4,6)+'/'+t.slice(6,8)+' '+t.slice(8,10)+':'+t.slice(10,12)+' JST';}
+if(CFG.mode==='static'){ start(CFG.frames); }
+else{
+  // Weathernews: ảnh đặt tên theo thời điểm chụp (JST). Hiện ảnh mới nhất ngay, rồi dò ngược từng phút
+  // trong trình duyệt; ảnh nào tồn tại thì đưa vào vòng lặp.
+  img.src=CFG.base+CFG.anchor+'.'+CFG.ext; st.textContent=lbl(CFG.anchor);
+  var A=parse(CFG.anchor),total=CFG.minutes+1,done=0,hits=[],fin=false;
+  function finish(){
+    if(fin)return; fin=true;
+    hits.sort(function(a,b){return a.t<b.t?-1:1;});
+    start(hits.slice(-CFG.max).map(function(h){return {s:h.s,l:lbl(h.t)};}));
+  }
+  for(var k=0;k<=CFG.minutes;k++){
+    (function(t){
+      var im=new Image(); im.referrerPolicy='no-referrer';
+      var url=CFG.base+t+'.'+CFG.ext;
+      im.onload=function(){hits.push({t:t,s:url});if(++done===total)finish();};
+      im.onerror=function(){if(++done===total)finish();};
+      im.src=url;
+    })(toTs(A-k*60000));
+  }
+  setTimeout(finish,9000);
+}
+})();
+</script></body></html>"""
+
+def _cam_anim_doc(cfg, link, sub, title, stamp, btn_label, extra=""):
+    """Thẻ camera có animation (HTML đầy đủ cho components.html). cfg: static(frames) hoặc probe(Weathernews)."""
+    import json as _json
+    doc = _CAM_DOC_TMPL
+    for k, v in (("__CFG__", _json.dumps(cfg).replace("</", "<\\/")), ("__LCBTN__", _lc_btn),
+                 ("__LINK__", link), ("__SUB__", sub), ("__TITLE__", _lc_html_mod.escape(title)),
+                 ("__STAMP__", stamp), ("__BTNLABEL__", btn_label), ("__EXTRA__", extra)):
+        doc = doc.replace(k, v)
+    return doc
+
+def _cam_show(content):
+    if isinstance(content, str) and content.startswith("<!--ANIM-->"):
+        _lc_components.html(content, height=_CAM_H)
+    else:
+        st.markdown(content, unsafe_allow_html=True)
+
+def _lc_card_html(cam_name, page_path, sub, img_url, ts):
+    link = "https://weathernews.jp" + page_path
+    m = re.search(r"/livecam/([0-9A-Za-z]+)/640/(\d{14})\.(jpg|webp)", img_url or "")
+    if m:
+        cfg = {"mode": "probe", "base": img_url[:img_url.rindex("/") + 1], "ext": m.group(3),
+               "anchor": m.group(2), "minutes": 50, "max": 10}
+    else:
+        cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}]}
+    return _cam_anim_doc(cfg, link, sub, cam_name, _lc_ts_label(ts) if ts else "", "Open on Weathernews ↗")
+
 st.markdown(f'### 📹 Live Sky Camera: near {_disp_name_html(st.session_state.location_name)}', unsafe_allow_html=True)
 _lc_kind, _lc_pref = _lc_resolve()
 _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
@@ -5993,8 +6085,7 @@ def _rd_query(name):
     q = re.sub(r"(TN|ST|トンネル.*|カメラ\d*|\d+)$", "", q.strip())  # bỏ hậu tố TN / số
     return q.strip() or None
 
-@st.cache_data(ttl=120, show_spinner=False)
-def _rd_fetch_img(url):
+def _rd_fetch_img_impl(url):
     """(bytes, mime) hoặc (None, None). Thử bản lớn (bỏ 's_') trước, rồi bản nhỏ."""
     for u in (url.replace("/s_", "/", 1), url):
         try:
@@ -6006,7 +6097,70 @@ def _rd_fetch_img(url):
             pass
     return None, None
 
-_rd_diag = ""   # lý do hiển thị bản đồ (để dễ debug)
+@st.cache_data(ttl=120, show_spinner=False)
+def _rd_fetch_img(url):
+    return _rd_fetch_img_impl(url)
+
+def _rd_compress(b, mime):
+    """Thu nhỏ ≤800px, JPEG q72 để nhúng nhiều khung vào animation mà vẫn nhẹ."""
+    try:
+        import io
+        from PIL import Image as _PILImage
+        im = _PILImage.open(io.BytesIO(b)).convert("RGB")
+        im.thumbnail((800, 800))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=72, optimize=True)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:
+        return b, mime
+
+@st.cache_resource
+def _rd_frame_store():
+    return {}
+
+def _rd_get_frames(urls):
+    """Tải song song (thread thuần requests) các khung chưa có; ảnh cũ không đổi nên giữ lại.
+    Khung không tồn tại/ lỗi được thử lại sau 10 phút."""
+    import time as _t
+    from concurrent.futures import ThreadPoolExecutor
+    store = _rd_frame_store()
+    now = _t.time()
+    todo = [u for u in urls if u not in store or (store[u][1] is None and now - store[u][0] > 600)]
+    def one(u):
+        b, mime = _rd_fetch_img_impl(u)
+        return u, (_rd_compress(b, mime) if b else None)
+    if todo:
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            for u, res in ex.map(one, todo):
+                store[u] = (now, res)
+        if len(store) > 200:
+            for k in sorted(store, key=lambda x: store[x][0])[:60]:
+                store.pop(k, None)
+    return [store[u][1] if u in store else None for u in urls]
+
+def _rd_frames(cam, b, mime, back=5):
+    """Danh sách khung (cũ -> mới) cho animation: cam[3] là thư mục thời gian (mỗi 10 phút, JST)."""
+    ts = cam[3]
+    def lab(t):
+        return f"{t[4:6]}/{t[6:8]} {t[8:10]}:{t[10:12]} JST"
+    def uri(res):
+        return f"data:{res[1]};base64,{_rd_b64.b64encode(res[0]).decode()}"
+    stamps, urls = [], []
+    try:
+        t0 = datetime.strptime(ts, "%Y%m%d%H%M%S")
+        for k in range(back, 0, -1):
+            tk = (t0 - timedelta(minutes=10 * k)).strftime("%Y%m%d%H%M%S")
+            stamps.append(tk); urls.append(cam[2].replace(ts, tk))
+    except Exception:
+        pass
+    store = _rd_frame_store()
+    if cam[2] not in store or store[cam[2]][1] is None:     # khung mới nhất: dùng ảnh đã tải sẵn
+        import time as _t
+        store[cam[2]] = (_t.time(), _rd_compress(b, mime))
+    res = _rd_get_frames(urls)
+    frames = [{"s": uri(r), "l": lab(t)} for t, r in zip(stamps, res) if r]
+    frames.append({"s": uri(store[cam[2]][1]), "l": lab(ts)})
+    return frames
 
 def _rd_nearest(pref, lat, lon, top=5):
     """Tối đa `top` camera gần nhất: [(km, (id, tên, url, ts), khoá-vị-trí)]. Ghi lý do vào _rd_diag."""
@@ -6062,21 +6216,20 @@ def _cam_render():
     _lc_col_sky, _lc_col_road = st.columns(2)
     with _lc_col_sky:
         st.markdown(f'<div style="{_lc_lbl}">☁️ SKY CAMERA · Weathernews</div>', unsafe_allow_html=True)
-        st.markdown(_sky_html, unsafe_allow_html=True)
+        _cam_show(_sky_html)
     with _lc_col_road:
         st.markdown(f'<div style="{_lc_lbl}">🛣️ ROAD CAMERA · MLIT 道路情報提供システム</div>',
                     unsafe_allow_html=True)
         if _rd:
             _cam, _km, _mn, _b, _mime = _rd
-            _stamp = f"{_cam[3][4:6]}/{_cam[3][6:8]} {_cam[3][8:10]}:{_cam[3][10:12]} JST"
             _detail = _RD_DETAIL.format(cid=_cam[0])
-            _src = f"data:{_mime};base64,{_rd_b64.b64encode(_b).decode()}"
+            _frames = _rd_frames(_cam, _b, _mime)
             _sub = (f"Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from "
                     f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
             _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
                       f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
-            st.markdown(_cam_card_html(_src, _detail, _sub, _cam[1], _stamp, "Open on MLIT ↗", _extra),
-                        unsafe_allow_html=True)
+            _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
+                                    _frames[-1]["l"], "Open on MLIT ↗", _extra))
         else:   # không lấy được camera gần -> quay về bản đồ như cũ
             if _rd_diag:
                 st.caption(f"ℹ️ {_rd_diag}")
@@ -6089,7 +6242,7 @@ def _cam_render():
 
 _cam_render()
 st.caption("Sky camera images: Weathernews (weathernews.jp). Road cameras: MLIT Japan "
-           "(each camera is operated by its road administrator). Auto-refreshes every 2 minutes.")
+           "(each camera is operated by its road administrator). Auto-refreshes every 2 minutes; frames loop automatically (▶/❚❚ to control).")
 
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
@@ -6125,7 +6278,7 @@ fig.add_trace(go.Scatter(
     x=_x_positions, y=moon_altitudes,
     mode='lines',
     name='🌙 Moon',
-    line=dict(color='#fbbf24', width=2.5),
+    line=dict(color='#fbbf24', width=4),
     fill='tozeroy',
     fillcolor='rgba(251,191,36,0.20)',
     hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
@@ -6137,7 +6290,7 @@ fig.add_trace(go.Scatter(
     x=_x_positions, y=sun_altitudes,
     mode='lines',
     name='☀️ Sun',
-    line=dict(color='#38bdf8', width=2.5, dash='dash'),
+    line=dict(color='#38bdf8', width=4, dash='dash'),
     hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
     customdata=hours_labels,
 ))
@@ -6147,16 +6300,16 @@ fig.add_trace(go.Scatter(
     x=_x_positions, y=milkyway_altitudes,
     mode='lines',
     name='🌌 Milkyway',
-    line=dict(color='#a78bfa', width=2.0, dash='dot'),
+    line=dict(color='#a78bfa', width=3.5, dash='dash'),
     hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
     customdata=hours_labels,
 ))
 
 # ── Horizon rule ──────────────────────────────────────────────────────────────
-fig.add_hline(y=0, line=dict(color='#475569', dash='dot', width=1))
+fig.add_hline(y=0, line=dict(color='#64748b', dash='dot', width=1.5))
 
 # ── -13° rule ─────────────────────────────────────────────────────────────────
-fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.50)', dash='dot', width=1),
+fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.70)', dash='dot', width=1.5),
               annotation_text="−13°", annotation_font_color="rgba(251,146,60,0.7)",
               annotation_position="bottom right")
 
@@ -6171,11 +6324,13 @@ fig.update_layout(
         tickvals=_x_positions,
         ticktext=hours_labels,
         gridcolor='rgba(71,85,105,0.3)',
+        fixedrange=True,
     ),
     yaxis=dict(
         gridcolor='rgba(71,85,105,0.3)',
         title=None,
         zeroline=False,
+        fixedrange=True,
     ),
     legend=dict(
         orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
@@ -6184,9 +6339,12 @@ fig.update_layout(
     ),
     margin=dict(l=50, r=20, t=40, b=40),
     hovermode='x unified',
+    dragmode=False,
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True,
+                config={'displayModeBar': False, 'scrollZoom': False, 'doubleClick': False,
+                        'showAxisDragHandles': False})
 
 # Legend note
 
