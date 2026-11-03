@@ -3151,13 +3151,18 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_MAXZ   = 6;
       var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
       var HIM_OPAC   = 1.0;    // max by default; adjustable with the slider
-      var HIM_CONT   = 1.5;    // cloud contrast (CSS contrast()), range 100-300%; 145% keeps thin cloud visible; sliders are hidden
-      var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
-      var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
-      var HIM_LIGHTS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
-      var LS_LIGHTS  = 'astro_him_lights';
-      var himLights  = (_lsGet(LS_LIGHTS, '1') !== '0');   // city lights on by default
-      var himLightsLayer = null;
+      var HIM_CONT   = 1.2;    // cloud contrast (CSS contrast()); 1.0 = original, higher = darker gaps between clouds
+      // Base map = NASA VIIRS Black Marble (city lights on black), free, no API key.
+      // (Carto basemaps now print "API KEY REQUIRED" over every tile, so Carto is no longer used.)
+      var HIM_BASE_PRIMARY  = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png';
+      var HIM_BASE_FALLBACK = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
+      // CSS filter on the lights layer: contrast>1 kills the faint grey haze and keeps bright cores -> crisper, darker look.
+      // Tune here: brightness(0.8-1.2), contrast(1.2-2.0).
+      var HIM_LIGHT_FILTER = 'brightness(1.0) contrast(1.6) saturate(1.1)';
+      // Source data is coarse (IR 2 km/px, lights 500 m/px) -> cap zoom so it never looks like a blurry blow-up.
+      var HIM_VIEW_MAXZ = 8;
+      // Labels: Esri reference layer (free, no key), designed to overlay dark imagery.
+      var HIM_LABELS = 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
       var PLAY_HTML  = '&#9654;';
       var PAUSE_HTML = '&#10074;&#10074;';
       var himFrames = [], himIdx = 0, himTimer = null, himTok = 0, himPlaying = false;
@@ -3187,10 +3192,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'font-size:12px;font-weight:700;background:#3b82f6;color:#ffffff;'
       );
       var himLbl = L.DomUtil.create('span', '', himRow);
-      var himLightBtn = L.DomUtil.create('button', '', himRow);
-      himLightBtn.innerHTML = '&#128161;';
-      himLightBtn.title = 'City lights (light pollution) on / off';
-      himLightBtn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;padding:2px 7px;font-size:12px;';
       himLbl.style.cssText = 'color:#e2e8f0;font-size:11px;font-weight:600;white-space:nowrap;';
       var himSlider = L.DomUtil.create('input', '', himRow);
       himSlider.type = 'range'; himSlider.min = '15'; himSlider.max = '100';
@@ -3209,7 +3210,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         if (!f.layer) return;
         var el = f.layer.getContainer();
         if (el) el.style.filter = 'contrast(' + HIM_CONT + ')';
-        if (el) el.style.mixBlendMode = himLights ? 'screen' : '';
+        if (el) el.style.mixBlendMode = 'screen';
       }
       L.DomEvent.on(himCont, 'input', function() {
         HIM_CONT = (+himCont.value) / 100;
@@ -3307,25 +3308,19 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
         himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v) + himNote;
       }
-      function _himLightsApply() {
-        if (himLightsLayer) { map.removeLayer(himLightsLayer); himLightsLayer = null; }
-        if (himLights) {
-          himLightsLayer = L.tileLayer(HIM_LIGHTS, {
-            maxNativeZoom: 8, maxZoom: 19, zIndex: 3, attribution: 'NASA GIBS / VIIRS City Lights'
-          });
-          himLightsLayer.addTo(map);
-          var lc = himLightsLayer.getContainer();
-          if (lc) lc.style.mixBlendMode = 'screen';
-        }
-        himFrames.forEach(_himApplyFilter);
-        himLightBtn.style.background = himLights ? '#f59e0b' : 'transparent';
-        himLightBtn.style.color = himLights ? '#0f172a' : '#94a3b8';
+      // Base layer = city lights (always on). If the primary Black Marble tiles all fail, fall back to CityLights 2012.
+      function _himBaseLayer() {
+        var oks = 0, errs = 0, swapped = false;
+        var lyr = L.tileLayer(HIM_BASE_PRIMARY, {
+          maxNativeZoom: 8, maxZoom: 19, zIndex: 1, attribution: 'NASA GIBS / VIIRS Black Marble'
+        });
+        lyr.on('tileload', function() { oks++; });
+        lyr.on('tileerror', function() {
+          errs++;
+          if (!swapped && oks === 0 && errs >= 4) { swapped = true; lyr.setUrl(HIM_BASE_FALLBACK); }
+        });
+        return lyr;
       }
-      L.DomEvent.on(himLightBtn, 'click', function() {
-        himLights = !himLights;
-        _lsSet(LS_LIGHTS, himLights ? '1' : '0');
-        _himLightsApply();
-      });
       function _himStop() {
         himPlaying = false;
         if (himTimer) { clearTimeout(himTimer); himTimer = null; }
@@ -3337,7 +3332,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         himFrames.forEach(function(f) { if (f.layer) { map.removeLayer(f.layer); } });
         himFrames = [];
         if (himLabelLayer) { map.removeLayer(himLabelLayer); himLabelLayer = null; }
-        if (himLightsLayer) { map.removeLayer(himLightsLayer); himLightsLayer = null; }
+        map.setMaxZoom(19);   // undo the Himawari zoom cap
         himBorderLayers.forEach(function(l) { map.removeLayer(l); });
         himBorderLayers = [];
         himNote = '';
@@ -3408,7 +3403,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         himLbl.textContent = 'JMA Himawari IR  loading...';
         himLabelLayer = L.tileLayer(HIM_LABELS, { maxZoom: 19, zIndex: 10, opacity: 0.9 });
         himLabelLayer.addTo(map);
-        _himLightsApply();
         var tok = ++himTok;
         _himBorders(tok);
         _himLoadTimes(function(list) {
@@ -3447,8 +3441,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         } else if (mode === 'himawari') {
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
-          current = L.tileLayer(HIM_DARK, { attribution: 'CartoDB', maxZoom: 19, zIndex: 1 });
+          current = _himBaseLayer();
           current.addTo(map);
+          var _bc = current.getContainer();
+          if (_bc) _bc.style.filter = HIM_LIGHT_FILTER;
+          map.setMaxZoom(HIM_VIEW_MAXZ);
+          if (map.getZoom() > HIM_VIEW_MAXZ) map.setZoom(HIM_VIEW_MAXZ);
           _himEnter();
         } else {
           if (_windyFrame) _windyFrame.style.display = 'none';
@@ -6081,7 +6079,7 @@ for _p in ("Fukuoka", "Saga", "Nagasaki", "Oita", "Kumamoto", "Miyazaki", "Kagos
 _RD_REGION["Okinawa"] = ("90",)
 _RD_REGION.update({"Yamanashi": ("83", "85"), "Nagano": ("83", "84", "85"),
                    "Fukui": ("84", "86"), "Mie": ("85", "86")})
-_RD_MAX_KM = 50   # xa hơn mức này thì coi như không có camera gần -> quay về bản đồ
+_RD_MAX_KM = 35   #xa hơn mức này thì coi như không có camera gần -> quay về bản đồ
 
 _RD_IMG_RE = re.compile(
     r'<img[^>]+src="([^"]*?doro_gazo/pc/(\d{14})/s_([0-9A-Za-z]+)\.(?:jpe?g|png))"[^>]*>(.*?)(?=<img|\Z)',
@@ -6250,6 +6248,12 @@ def _rd_nearest(pref, lat, lon, top=5):
         m = _RD_PREF_RE.match(title or "")
         return (not m) or (not allowed) or (m.group(1) in allowed)
 
+    user_ja = _lc_pref_full(pref) if pref in _LC_PREF else ""   # vd 'Kanagawa' -> '神奈川県'
+
+    def pref_of(title):
+        m = _RD_PREF_RE.match(title or "")
+        return m.group(1) if m else ""
+
     ranked = []
     for c in cams:
         ov = next((v for k, v in _RD_COORD_OVERRIDE.items() if c[1].startswith(k)), None)
@@ -6258,13 +6262,22 @@ def _rd_nearest(pref, lat, lon, top=5):
             continue
         q = _rd_query(c[1])
         cands = [x for x in (geo.get(q) or []) if in_region(x[2])]
+        # bỏ kết quả "mờ" của GSI: tiêu đề phải thật sự chứa tên đã tìm (vd '神奈川県三浦市' chứa '三浦市')
+        strict = [x for x in cands if q and q in x[2]]
+        if strict:
+            cands = strict
         if not cands:
             continue
-        if _lc_muni(c[1]):      # có 市区町村: tên trùng giữa các tỉnh -> lấy điểm gần người dùng nhất
-            d = min(_haversine_km(lat, lon, la, lo) for la, lo, _t in cands)
-        else:                   # chỉ có địa danh: lấy kết quả liên quan nhất của GSI (không lấy cái gần nhất)
-            d = _haversine_km(lat, lon, cands[0][0], cands[0][1])
-        ranked.append((d, c, q))
+        mine = [x for x in cands if pref_of(x[2]) == user_ja]   # ưu tiên địa danh nằm ĐÚNG tỉnh của người dùng
+        if _lc_muni(c[1]):      # có 市区町村: lấy điểm gần người dùng nhất, trong số ứng viên cùng tỉnh (nếu có)
+            la, lo, tt = min(mine or cands, key=lambda x: _haversine_km(lat, lon, x[0], x[1]))
+        else:                   # chỉ có địa danh: lấy kết quả GSI xếp liên quan nhất, ưu tiên cùng tỉnh
+            la, lo, tt = (mine or cands)[0]
+        d = _haversine_km(lat, lon, la, lo)
+        # địa danh nằm ở tỉnh khác chỉ được chấp nhận nếu rất gần (camera sát ranh giới tỉnh)
+        if pref_of(tt) != user_ja and d > 25:
+            continue
+        ranked.append((d, c, f"{q} → {tt}"))
     ranked.sort(key=lambda x: x[0])
     if not ranked:
         _rd_diag = f"Đọc được {len(cams)} camera nhưng không geocode được vị trí nào."
@@ -6310,7 +6323,8 @@ def _cam_render():
             _detail = _RD_DETAIL.format(cid=_cam[0])
             _frames = _rd_frames(_cam, _b, _mime)
             _sub = (f"Nearest road camera (approx. position): {_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
-                    f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
+                    f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})"
+                    f"<br><span style='color:#64748b;'>geocoded: {_lc_html_mod.escape(str(_mn))}</span>")
             _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
                       f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
             _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
