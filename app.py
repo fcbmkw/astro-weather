@@ -3158,9 +3158,23 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_BASE_FALLBACK = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
       // CSS filter on the lights layer: contrast>1 kills the faint grey haze and keeps bright cores -> crisper, darker look.
       // Tune here: brightness(0.8-1.2), contrast(1.2-2.0).
-      var HIM_LIGHT_FILTER = 'brightness(1.0) contrast(1.6) saturate(1.1)';
-      // Source data is coarse (IR 2 km/px, lights 500 m/px) -> cap zoom so it never looks like a blurry blow-up.
-      var HIM_VIEW_MAXZ = 8;
+      // Gamma curve out = AMP * in^EXP on the lights: EXP>1 darkens the haze/mid-tones, AMP<1 caps the blown-out city cores.
+      //   core too bright -> lower HIM_GAMMA_AMP (0.6-0.9)   |   too dim overall -> lower HIM_GAMMA_EXP (1.3-2.2)
+      var HIM_GAMMA_AMP = 0.80;
+      var HIM_GAMMA_EXP = 1.9;
+      (function() {
+        if (document.getElementById('him-gamma-svg')) return;
+        var d = document.createElement('div');
+        d.id = 'him-gamma-svg';
+        d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
+        var fn = function(c) { return '<feFunc' + c + ' type="gamma" amplitude="' + HIM_GAMMA_AMP + '" exponent="' + HIM_GAMMA_EXP + '" offset="0"/>'; };
+        d.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"><filter id="him-gamma" color-interpolation-filters="sRGB">'
+          + '<feComponentTransfer>' + fn('R') + fn('G') + fn('B') + '</feComponentTransfer></filter></svg>';
+        document.body.appendChild(d);
+      })();
+      var HIM_LIGHT_FILTER = 'url(#him-gamma)';
+      // Max zoom in Himawari mode (data is coarse, so deeper zoom is just an enlarged/blurry view).
+      var HIM_VIEW_MAXZ = 12;
       // Labels: Esri reference layer (free, no key), designed to overlay dark imagery.
       var HIM_LABELS = 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
       var PLAY_HTML  = '&#9654;';
@@ -5859,9 +5873,9 @@ def _lc_pick_nearest(pref, lat, lon):
     return cams[0], None, None
 
 def _lc_ts_label(ts):
-    # Timestamp trong tên file ảnh của Weathernews đã là giờ JST -> KHÔNG cộng thêm 9h.
+    # Timestamp trong tên file ảnh của Weathernews là UTC -> cộng 9h để ra giờ JST.
     try:
-        return datetime.strptime(ts, "%Y%m%d%H%M%S").strftime("%m/%d %H:%M JST")
+        return (datetime.strptime(ts, "%Y%m%d%H%M%S") + timedelta(hours=9)).strftime("%m/%d %H:%M JST")
     except Exception:
         return ""
 
@@ -5926,7 +5940,7 @@ function start(fr){
 function p2(n){return (n<10?'0':'')+n;}
 function toTs(ms){var d=new Date(ms);return ''+d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds());}
 function parse(t){return Date.UTC(+t.slice(0,4),+t.slice(4,6)-1,+t.slice(6,8),+t.slice(8,10),+t.slice(10,12),+t.slice(12,14));}
-function lbl(t){return t.slice(4,6)+'/'+t.slice(6,8)+' '+t.slice(8,10)+':'+t.slice(10,12)+' JST';}
+function lbl(t){var d=new Date(parse(t)+9*3600000);return p2(d.getUTCMonth()+1)+'/'+p2(d.getUTCDate())+' '+p2(d.getUTCHours())+':'+p2(d.getUTCMinutes())+' JST';}
 if(CFG.mode==='static'){ start(CFG.frames); }
 else{
   // Weathernews: ảnh đặt tên theo thời điểm chụp (JST). Hiện ảnh mới nhất ngay, rồi dò ngược từng phút
