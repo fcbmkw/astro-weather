@@ -3160,7 +3160,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       // Tune here: brightness(0.8-1.2), contrast(1.2-2.0).
       // Gamma curve out = AMP * in^EXP on the lights: EXP>1 darkens the haze/mid-tones, AMP<1 caps the blown-out city cores.
       //   core too bright -> lower HIM_GAMMA_AMP (0.6-0.9)   |   too dim overall -> lower HIM_GAMMA_EXP (1.3-2.2)
-      var HIM_GAMMA_AMP = 0.80;
+      var HIM_GAMMA_AMP = 0.50;
       var HIM_GAMMA_EXP = 1.9;
       (function() {
         if (document.getElementById('him-gamma-svg')) return;
