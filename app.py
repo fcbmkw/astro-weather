@@ -5114,7 +5114,7 @@ with col_right:
         st.rerun()
 
 
-    # ── TODAY HIGHLIGHT — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────────
+    # ── BEST TODAY — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────────
     # Mỗi vùng: liệt kê các địa điểm có thời tiết đêm nay OK (PERFECT / GOOD STARRY NIGHT).
     # Không có địa điểm nào → ghi "None" (xám). Muốn thêm/bớt vùng chỉ cần sửa _TH_REGIONS.
     _TH_REGIONS = ["kanto", "chubu", "tohoku", "hokkaido", "shikoku", "okinawa", "kyushu"]
