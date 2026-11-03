@@ -3151,9 +3151,13 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var HIM_MAXZ   = 6;
       var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
       var HIM_OPAC   = 1.0;    // max by default; adjustable with the slider
-      var HIM_CONT   = 1.00;   // cloud contrast (CSS contrast()), range 100-300%; 145% keeps thin cloud visible; sliders are hidden
+      var HIM_CONT   = 1.0;    // cloud contrast (CSS contrast()), range 100-300%; 145% keeps thin cloud visible; sliders are hidden
       var HIM_DARK   = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png';
       var HIM_LABELS = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png';
+      var HIM_LIGHTS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
+      var LS_LIGHTS  = 'astro_him_lights';
+      var himLights  = (_lsGet(LS_LIGHTS, '1') !== '0');   // city lights on by default
+      var himLightsLayer = null;
       var PLAY_HTML  = '&#9654;';
       var PAUSE_HTML = '&#10074;&#10074;';
       var himFrames = [], himIdx = 0, himTimer = null, himTok = 0, himPlaying = false;
@@ -3183,6 +3187,10 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         + 'font-size:12px;font-weight:700;background:#3b82f6;color:#ffffff;'
       );
       var himLbl = L.DomUtil.create('span', '', himRow);
+      var himLightBtn = L.DomUtil.create('button', '', himRow);
+      himLightBtn.innerHTML = '&#128161;';
+      himLightBtn.title = 'City lights (light pollution) on / off';
+      himLightBtn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;padding:2px 7px;font-size:12px;';
       himLbl.style.cssText = 'color:#e2e8f0;font-size:11px;font-weight:600;white-space:nowrap;';
       var himSlider = L.DomUtil.create('input', '', himRow);
       himSlider.type = 'range'; himSlider.min = '15'; himSlider.max = '100';
@@ -3201,6 +3209,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         if (!f.layer) return;
         var el = f.layer.getContainer();
         if (el) el.style.filter = 'contrast(' + HIM_CONT + ')';
+        if (el) el.style.mixBlendMode = himLights ? 'screen' : '';
       }
       L.DomEvent.on(himCont, 'input', function() {
         HIM_CONT = (+himCont.value) / 100;
@@ -3298,6 +3307,25 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
         himLbl.textContent = 'JMA Himawari IR  ' + _himFmt(himFrames[i].v) + himNote;
       }
+      function _himLightsApply() {
+        if (himLightsLayer) { map.removeLayer(himLightsLayer); himLightsLayer = null; }
+        if (himLights) {
+          himLightsLayer = L.tileLayer(HIM_LIGHTS, {
+            maxNativeZoom: 8, maxZoom: 19, zIndex: 3, attribution: 'NASA GIBS / VIIRS City Lights'
+          });
+          himLightsLayer.addTo(map);
+          var lc = himLightsLayer.getContainer();
+          if (lc) lc.style.mixBlendMode = 'screen';
+        }
+        himFrames.forEach(_himApplyFilter);
+        himLightBtn.style.background = himLights ? '#f59e0b' : 'transparent';
+        himLightBtn.style.color = himLights ? '#0f172a' : '#94a3b8';
+      }
+      L.DomEvent.on(himLightBtn, 'click', function() {
+        himLights = !himLights;
+        _lsSet(LS_LIGHTS, himLights ? '1' : '0');
+        _himLightsApply();
+      });
       function _himStop() {
         himPlaying = false;
         if (himTimer) { clearTimeout(himTimer); himTimer = null; }
@@ -3309,6 +3337,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         himFrames.forEach(function(f) { if (f.layer) { map.removeLayer(f.layer); } });
         himFrames = [];
         if (himLabelLayer) { map.removeLayer(himLabelLayer); himLabelLayer = null; }
+        if (himLightsLayer) { map.removeLayer(himLightsLayer); himLightsLayer = null; }
         himBorderLayers.forEach(function(l) { map.removeLayer(l); });
         himBorderLayers = [];
         himNote = '';
@@ -3379,6 +3408,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         himLbl.textContent = 'JMA Himawari IR  loading...';
         himLabelLayer = L.tileLayer(HIM_LABELS, { maxZoom: 19, zIndex: 10, opacity: 0.9 });
         himLabelLayer.addTo(map);
+        _himLightsApply();
         var tok = ++himTok;
         _himBorders(tok);
         _himLoadTimes(function(list) {
@@ -6083,19 +6113,38 @@ def _rd_list(code):
 
 @st.cache_data(ttl=2592000, show_spinner=False)
 def _rd_geocode(queries):
-    """{truy vấn: [(lat, lon), ...]} qua GSI. Giữ nhiều kết quả vì tên như '中央区' trùng nhiều tỉnh."""
+    """{truy vấn: [(lat, lon, 'tỉnh+địa chỉ'), ...]} qua GSI (giữ thứ tự độ liên quan GSI trả về)."""
     from concurrent.futures import ThreadPoolExecutor
     def one(q):
         try:
             j = requests.get("https://msearch.gsi.go.jp/address-search/AddressSearch",
                              params={"q": q}, timeout=8).json()
-            pts = [(float(g["geometry"]["coordinates"][1]), float(g["geometry"]["coordinates"][0]))
-                   for g in j[:10]]
+            pts = [(float(g["geometry"]["coordinates"][1]), float(g["geometry"]["coordinates"][0]),
+                    str((g.get("properties") or {}).get("title", ""))) for g in j[:10]]
             return q, pts
         except Exception:
             return q, []
     with ThreadPoolExecutor(max_workers=8) as ex:
         return {k: v for k, v in ex.map(one, queries) if v}
+
+# Tỉnh (tiếng Nhật) thuộc mỗi vùng mã MLIT — dùng để loại các địa danh trùng tên ở vùng khác
+_RD_REGION_JA = {
+    "81": ("北海道",),
+    "82": ("青森県", "岩手県", "秋田県", "宮城県", "山形県", "福島県"),
+    "83": ("東京都", "神奈川県", "埼玉県", "千葉県", "茨城県", "栃木県", "群馬県", "山梨県", "長野県"),
+    "84": ("新潟県", "富山県", "石川県", "福井県", "長野県"),
+    "85": ("静岡県", "愛知県", "岐阜県", "三重県", "長野県", "山梨県"),
+    "86": ("大阪府", "兵庫県", "京都府", "滋賀県", "奈良県", "和歌山県", "三重県", "福井県"),
+    "87": ("広島県", "岡山県", "山口県", "島根県", "鳥取県"),
+    "88": ("香川県", "徳島県", "愛媛県", "高知県"),
+    "89": ("福岡県", "佐賀県", "長崎県", "大分県", "熊本県", "宮崎県", "鹿児島県"),
+    "90": ("沖縄県",),
+}
+# Nếu thấy camera đặt sai chỗ: thêm vào đây  "đoạn đầu tên camera": (vĩ độ, kinh độ)
+_RD_COORD_OVERRIDE = {
+    "上野原": (35.622, 139.108),     # 上野原 (Yamanashi), quốc lộ 20
+}
+_RD_PREF_RE = re.compile(r"^(北海道|東京都|京都府|大阪府|.{2,3}県)")
 
 def _rd_query(name):
     """Khoá geocode cho 1 camera: 市区町村 nếu có; không thì dùng chính tên camera (đã làm sạch)."""
@@ -6193,14 +6242,29 @@ def _rd_nearest(pref, lat, lon, top=5):
     if not cams:
         _rd_diag = f"Không đọc được danh sách camera MLIT (mã vùng {', '.join(codes) or '?'}) — kiểm tra _RD_REGION."
         return []
+    allowed = tuple(sorted({x for c in codes for x in _RD_REGION_JA.get(c, ())}))
     keys = tuple(sorted({q for q in (_rd_query(c[1]) for c in cams) if q}))
     geo = _rd_geocode(keys) if keys else {}
+
+    def in_region(title):
+        m = _RD_PREF_RE.match(title or "")
+        return (not m) or (not allowed) or (m.group(1) in allowed)
+
     ranked = []
     for c in cams:
+        ov = next((v for k, v in _RD_COORD_OVERRIDE.items() if c[1].startswith(k)), None)
+        if ov:
+            ranked.append((_haversine_km(lat, lon, ov[0], ov[1]), c, "override"))
+            continue
         q = _rd_query(c[1])
-        pts = geo.get(q) if q else None
-        if pts:
-            ranked.append((min(_haversine_km(lat, lon, la, lo) for la, lo in pts), c, q))
+        cands = [x for x in (geo.get(q) or []) if in_region(x[2])]
+        if not cands:
+            continue
+        if _lc_muni(c[1]):      # có 市区町村: tên trùng giữa các tỉnh -> lấy điểm gần người dùng nhất
+            d = min(_haversine_km(lat, lon, la, lo) for la, lo, _t in cands)
+        else:                   # chỉ có địa danh: lấy kết quả liên quan nhất của GSI (không lấy cái gần nhất)
+            d = _haversine_km(lat, lon, cands[0][0], cands[0][1])
+        ranked.append((d, c, q))
     ranked.sort(key=lambda x: x[0])
     if not ranked:
         _rd_diag = f"Đọc được {len(cams)} camera nhưng không geocode được vị trí nào."
@@ -6245,7 +6309,7 @@ def _cam_render():
             _cam, _km, _mn, _b, _mime = _rd
             _detail = _RD_DETAIL.format(cid=_cam[0])
             _frames = _rd_frames(_cam, _b, _mime)
-            _sub = (f"Nearest road camera: {_lc_html_mod.escape(_mn)} (~{_km:.0f} km from "
+            _sub = (f"Nearest road camera (approx. position): {_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
                     f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
             _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
                       f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
