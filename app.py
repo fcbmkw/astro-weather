@@ -3872,21 +3872,6 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         inp.focus();
       });
 
-      {% if this.has_results %}
-      // ── Nút ✕ đóng kết quả (Search location / AI) + xoá vòng tròn nhấp nháy ──
-      var _closeRes = L.DomUtil.create('div', '', wrapper);
-      _closeRes.innerHTML = '&#10005;&nbsp;Close results';
-      _closeRes.title = 'Close results and remove the blinking circles';
-      _closeRes.style.cssText = ('margin-top:4px;display:inline-block;cursor:pointer;'
-        + 'background:rgba(15,23,42,0.92);border:1px solid #475569;border-radius:8px;'
-        + 'padding:3px 9px;color:#e2e8f0;font-size:11px;font-weight:600;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);');
-      L.DomEvent.on(_closeRes, 'click', function(e){
-        L.DomEvent.stop(e);
-        if (typeof window._triggerOff === 'function') window._triggerOff();
-      });
-      {% endif %}
-
       // ── Dropdown ───────────────────────────────────────────────────────────
       var dropdown = L.DomUtil.create('div', '', wrapper);
       dropdown.style.cssText = (
@@ -4778,6 +4763,7 @@ if _ai_rows:
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
+<span class="mkw-x" data-close="ai" title="Close" style="position:absolute;top:3px;right:6px;pointer-events:auto;cursor:pointer;color:#cbd5e1;font-size:13px;line-height:1;font-family:sans-serif;padding:2px 4px;">✕</span>
 <div style="color:#67e8f9;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">
 🤖 AI picks — summary
 </div>
@@ -4835,6 +4821,7 @@ if _scan_r2 and _scan_r2 != "none":
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
+<span class="mkw-x" data-close="scan" title="Close" style="position:absolute;top:3px;right:6px;pointer-events:auto;cursor:pointer;color:#cbd5e1;font-size:13px;line-height:1;font-family:sans-serif;padding:2px 4px;">✕</span>
 <div style="color:#fbcfe8;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
 🌸 Tonight — best spots ({_region_lbl_tn}) / moon {_moon_tn:.0f}%
 </div>
@@ -4894,6 +4881,7 @@ if _scan_r2 and _scan_r2 != "none":
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
+<span class="mkw-x" data-close="scan" title="Close" style="position:absolute;top:3px;right:6px;pointer-events:auto;cursor:pointer;color:#cbd5e1;font-size:13px;line-height:1;font-family:sans-serif;padding:2px 4px;">✕</span>
 <div style="color:#fb923c;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:6px;">
 🏆 {_date_header}
 </div>
@@ -4923,11 +4911,12 @@ if _scan_r2 and _scan_r2 != "none":
   display:inline-flex;align-items:center;
   white-space:nowrap;width:fit-content;
   background:{_ban_bg};border:1.5px solid {_ban_bdr};
-  border-radius:10px;padding:6px 13px;
+  border-radius:10px;padding:6px 28px 6px 13px;
   font-family:sans-serif;color:{_ban_clr};font-size:13px;font-weight:700;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
+<span class="mkw-x" data-close="scan" title="Close" style="position:absolute;top:3px;right:6px;pointer-events:auto;cursor:pointer;color:#cbd5e1;font-size:13px;line-height:1;font-family:sans-serif;padding:2px 4px;">✕</span>
 {_ban_txt}
 </div>
 </div>""", unsafe_allow_html=True)
@@ -4972,14 +4961,44 @@ elif _scan_r2 == "none":
   position:absolute;top:557px;left:2px;
   display:inline-flex;align-items:center;gap:5px;white-space:nowrap;width:fit-content;
   background:rgba(10,14,22,0.90);border:1.5px solid rgba(148,163,184,0.35);
-  border-radius:10px;padding:6px 13px;
+  border-radius:10px;padding:6px 28px 6px 13px;
   font-family:sans-serif;color:#94a3b8;font-size:12px;font-weight:600;
   box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
   pointer-events:none;
 ">
+<span class="mkw-x" data-close="scan" title="Close" style="position:absolute;top:3px;right:6px;pointer-events:auto;cursor:pointer;color:#cbd5e1;font-size:13px;line-height:1;font-family:sans-serif;padding:2px 4px;">✕</span>
 <span style="font-size:15px;">{_fallback_icon_str}</span><span>{_fallback_lbl} in {_region_lbl_none} {_range_lbl}</span>
 </div>
 </div>""", unsafe_allow_html=True)
+
+# ── Nút ✕ của các cửa sổ kết quả trên map (Search location / AI picks) ───────────────
+# ✕ là phần tử HTML nằm trong cửa sổ (góc trên-phải); click được bắt bởi 1 listener nhỏ
+# gắn vào trang cha, rồi bấm hộ nút Streamlit ẩn tương ứng → Python xoá kết quả + vòng tròn.
+def _mkw_close_scan():
+    st.session_state._scan_result = None
+    st.session_state._scan_best = False
+    st.session_state._scan_tonight = False
+    st.session_state._scan_fallback_label = None
+    st.session_state._scan_scanning = False
+
+def _mkw_close_ai():
+    st.session_state._ai_rings = []
+    st.session_state._ai_panel = []
+
+st.markdown('<style>div[class*="st-key-mkw_close_"]{display:none !important;}</style>', unsafe_allow_html=True)
+if st.session_state._scan_result is not None:
+    st.button("x", key="mkw_close_scan", on_click=_mkw_close_scan)
+if st.session_state.get("_ai_panel"):
+    st.button("x", key="mkw_close_ai", on_click=_mkw_close_ai)
+import streamlit.components.v1 as _mkw_comp
+_mkw_comp.html("""<script>
+(function(){try{var P=window.parent;if(P.__mkwXInstalled)return;P.__mkwXInstalled=true;
+P.document.addEventListener('click',function(e){
+  var x=e.target&&e.target.closest?e.target.closest('.mkw-x'):null;if(!x)return;
+  var b=P.document.querySelector('.st-key-mkw_close_'+x.getAttribute('data-close')+' button');
+  if(b){e.preventDefault();e.stopPropagation();b.click();}
+},true);}catch(err){}})();
+</script>""", height=0)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
 # URL is used inline in the nav row beside the location selectbox
@@ -6123,7 +6142,7 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 <div class="card">
   <div class="shot"><a href="__LINK__" target="_blank" rel="noopener"><img id="im" referrerpolicy="no-referrer" alt="Camera image unavailable — open the source page"></a>
     <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div>
-    <div class="cn" id="cn" style="display:none" title="Contrast / night boost — double-click to reset"><span>🌙</span><input id="ct" type="range" min="0" max="100" value="100" step="1" aria-label="Contrast"><b id="cv">0</b></div></div>
+    <div class="cn" id="cn" style="display:none" title="Dim image — drag left = darker, double-click to reset"><span>🌙</span><input id="ct" type="range" min="0" max="100" value="100" step="1" aria-label="Contrast"><b id="cv">0</b></div></div>
   <div class="bar"><i id="bar"></i></div>
   <div class="sub">__SUB__</div>
   <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
@@ -6145,12 +6164,12 @@ function label(i){var f=frames[i];if(f.e==null){st.style.color='';return f.l;}
   var r=age(f.e,i===frames.length-1);st.style.color=r.c;return r.t;}
 setInterval(function(){if(frames.length)st.textContent=label(idx);},20000);
 // Thanh contrast (chỉ bật khi CFG.contrast): tăng sáng + tương phản để thấy sao/mây lúc đêm. Nhớ giá trị qua localStorage.
-function applyC(v){v=+v||0;img.style.filter=v?('brightness('+(1+v*0.04).toFixed(2)+') contrast('+(1+v*0.025).toFixed(2)+')'):'none';cv.textContent=v;}
-var CK=CFG.ckey||'astro_cam_contrast';
-if(CFG.contrast){cn.style.display='flex';var s0=0;try{s0=+(localStorage.getItem(CK)||0);}catch(e){}
-  ct.value=100-s0;applyC(s0);ct.oninput=function(){applyC(100-ct.value);};
-  ct.onchange=function(){try{localStorage.setItem(CK,100-ct.value);}catch(e){}};
-  ct.ondblclick=function(){ct.value=100;applyC(0);ct.onchange();};}
+function applyC(p){p=(p===undefined||p===null||isNaN(+p))?100:+p;img.style.filter=p>=100?'none':('brightness('+(0.15+0.85*p/100).toFixed(2)+')');cv.textContent=p;}
+var CK=(CFG.ckey||'astro_cam_contrast')+'_dim';
+if(CFG.contrast){cn.style.display='flex';var s0=100;try{var q=localStorage.getItem(CK);if(q!==null)s0=+q;}catch(e){}
+  ct.value=s0;applyC(s0);ct.oninput=function(){applyC(ct.value);};
+  ct.onchange=function(){try{localStorage.setItem(CK,ct.value);}catch(e){}};
+  ct.ondblclick=function(){ct.value=100;applyC(100);ct.onchange();};}
 function show(i){idx=i;img.src=frames[i].s;st.textContent=label(i);
   bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
 function tick(){var n=(idx+1)%frames.length;show(n);timer=setTimeout(tick,n===frames.length-1?1600:450);}
