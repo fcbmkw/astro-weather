@@ -369,7 +369,7 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("_need_fly", False), ("_skip_prefetch", False),
              ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
              ("_scan_tonight", False), ("_scan_fallback_label", None),
-             ("_ai_rings", [])]:
+             ("_ai_rings", []), ("_ai_panel", [])]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -2428,6 +2428,31 @@ def tool_check_location_tonight(location_name: str) -> dict:
     }
 
 
+_EN_WD_AI = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+def _ai_panel_row(c):
+    """Một dòng của bảng tóm tắt AI trên bản đồ (từ dict candidate/tool): tên, ngày, sao, mây, trăng, Bortle."""
+    short, _, pref = _disp_name(c.get("matched_name") or c.get("location_name") or "").partition(",")
+    d = None
+    try:
+        if c.get("date"):
+            d = datetime.strptime(str(c["date"])[:10], "%Y-%m-%d")
+        elif c.get("sky_tier") is not None:          # tool tra cứu 1 địa điểm cho đêm nay
+            d = _night_base_jst.replace(tzinfo=None)
+    except Exception:
+        d = None
+    bortle = c.get("bortle_class")
+    if bortle is None and "lat" in c:
+        try:
+            bortle = calculate_accurate_bortle(c["lat"], c["lon"])[0]
+        except Exception:
+            bortle = None
+    return {"name": short.strip(), "pref": pref.strip(),
+            "date": f"{d.month}/{d.day} {_EN_WD_AI[d.weekday()]}" if d else "",
+            "tier": c.get("sky_tier"), "stars": c.get("stars") or "",
+            "detail": c.get("detail") or "", "moon": c.get("moon_illumination_pct"),
+            "wk": bool(c.get("is_weekend")), "bortle": bortle}
+
 def ask_astro_ai(user_question: str):
     """Gửi câu hỏi tới Gemini KÈM LỊCH SỬ hội thoại (st.session_state.astro_ai_history)
     để AI nhớ ngữ cảnh câu trước (vd hỏi tiếp 'thế cuối tuần thì sao' sau khi đã hỏi
@@ -2436,7 +2461,8 @@ def ask_astro_ai(user_question: str):
 
     Trả về tuple (answer_text: str, fly_to: dict|None).
     """
-    st.session_state._ai_rings = []     # mỗi câu hỏi mới → bỏ vòng tròn của câu trước
+    st.session_state._ai_rings = []     # mỗi câu hỏi mới → bỏ vòng tròn + bảng tóm tắt của câu trước
+    st.session_state._ai_panel = []
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     system_prompt = (
         f"Hôm nay là {now_jst.strftime('%A, %Y-%m-%d')} (giờ Nhật Bản, JST). "
@@ -2569,20 +2595,26 @@ def ask_astro_ai(user_question: str):
         {"role": "model", "parts": [{"text": answer_text}]}
     ]
 
-    # ── Vòng tròn nhấp nháy: các địa điểm AI nêu (theo [[SHOW]]); thiếu thẻ → tất cả
-    # candidate của tool. pick = -1 (AI báo không có địa điểm nào) mà không có SHOW → không vẽ.
-    _rings = []
+    # ── Vòng tròn nhấp nháy + bảng tóm tắt: các địa điểm AI nêu (theo [[SHOW]]); thiếu thẻ →
+    # tất cả candidate của tool. pick = -1 (AI báo không có địa điểm nào) mà không có SHOW → không vẽ.
+    _shown = []
     _rd = last_result["data"]
     if _rd and not (pick_idx == -1 and show_idx is None):
         _cands = [_rd] if "lat" in _rd else \
                  [c for c in [_rd.get("best")] + list(_rd.get("alternatives", [])) if c]
         if show_idx is not None:
             _cands = [_cands[i] for i in dict.fromkeys(show_idx) if 0 <= i < len(_cands)]
-        for _c in _cands:
-            if "lat" in _c:
-                _rings.append([_c.get("matched_name") or _c.get("location_name") or "",
-                               _c["lat"], _c["lon"]])
-    st.session_state._ai_rings = _rings
+        _shown = [c for c in _cands if "lat" in c]
+    st.session_state._ai_rings = [[c.get("matched_name") or c.get("location_name") or "", c["lat"], c["lon"]]
+                                  for c in _shown]
+    st.session_state._ai_panel = [_ai_panel_row(c) for c in _shown]
+    if _shown:
+        # Chỉ giữ MỘT bên: AI vừa ra kết quả trên bản đồ → tắt kết quả của Search Location (như lệnh "off").
+        st.session_state._scan_result = None
+        st.session_state._scan_best = False
+        st.session_state._scan_tonight = False
+        st.session_state._scan_fallback_label = None
+        st.session_state._scan_scanning = False
 
     fly_to = None
     data = last_result["data"]
@@ -3463,6 +3495,40 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         if (himPlaying) { _himStop(); return; }
         _himStart(himIdx);
       });
+
+      // ── Auto-refresh: đọc lại targetTimes mỗi 5 phút (và khi quay lại tab/cửa sổ) để bản đồ mở lâu
+      // vẫn hiện khung mây mới nhất. Chỉ thay khung khi có ảnh MỚI HƠN; tái dùng layer của khung còn lại.
+      var HIM_REFRESH_MS = 5 * 60 * 1000;
+      var himLastRef = 0;
+      function _himRefresh(force) {
+        if (!himFrames.length) return;                        // không ở tab Himawari / đang tải lần đầu
+        var nowMs = Date.now();
+        if (!force && nowMs - himLastRef < 30000) return;     // gộp các sự kiện timer/visibility/focus liên tiếp
+        himLastRef = nowMs;
+        var tok = himTok;
+        _himLoadTimes(function(list) {
+          if (tok !== himTok || !list.length || !himFrames.length) return;
+          if (list[list.length - 1].v <= himFrames[himFrames.length - 1].v) return;   // chưa có ảnh mới
+          var old = {}, keep = {};
+          himFrames.forEach(function(f) { old[f.v] = f; });
+          var nf = list.map(function(t) {
+            var o = old[t.v];
+            if (o) { keep[t.v] = 1; return o; }
+            return { b: t.b, v: t.v, layer: null };
+          });
+          himFrames.forEach(function(f) { if (!keep[f.v] && f.layer) { map.removeLayer(f.layer); } });
+          var wasPlaying = himPlaying;
+          _himStop();
+          himFrames = nf;
+          himFrames.forEach(function(f) { _himEnsure(f); });
+          if (wasPlaying) { _himStart(Math.min(himIdx, himFrames.length - 1)); }
+          else { _himShow(himFrames.length - 1); }
+        });
+      }
+      setInterval(function() { _himRefresh(false); }, HIM_REFRESH_MS);
+      document.addEventListener('visibilitychange', function() { if (!document.hidden) { _himRefresh(false); } });
+      window.addEventListener('focus', function() { _himRefresh(false); });
+      window.addEventListener('online', function() { _himRefresh(true); });
 
       function switchTile(mode) {
         var mapEl = map.getContainer();
@@ -4623,6 +4689,59 @@ if _verdict:
 # Dùng cùng cơ chế margin-top âm như top-center label (đã được xác nhận hoạt động).
 # Map height=575. top-center dùng margin-top=-644, position:absolute;top:40px.
 # Bottom-left: margin-top=-644 + position:absolute;top:505px (575-56px banner-14px padding)
+# ── AI SUMMARY PANEL — bảng tóm tắt các địa điểm AI đề xuất (overlay góc dưới-trái bản đồ) ──
+# Cùng cơ chế margin-top âm như banner Scan; neo đáy (translateY(-100%)) nên cao bao nhiêu cũng không tràn.
+_ai_rows = st.session_state.get("_ai_panel") or []
+if _ai_rows:
+    import html as _aih
+    _AI_TIER_CLR = {"PERFECT NIGHT": "#6ee7b7", "GOOD STARRY NIGHT": "#fcd34d"}
+    _AI_RANK = ["🥇", "🥈", "🥉"]
+    _ai_parts = []
+    for _i, _r in enumerate(_ai_rows):
+        _bits = []
+        if _r.get("tier"):
+            _bits.append(f'<span style="color:{_AI_TIER_CLR.get(_r["tier"], "#94a3b8")};font-weight:700;">'
+                         f'{_aih.escape(str(_r["tier"]))}</span>')
+        if _r.get("detail"):
+            _bits.append(_aih.escape(str(_r["detail"])))
+        if _r.get("moon") is not None:
+            _bits.append(f'🌙 {float(_r["moon"]):.0f}%')
+        if _r.get("bortle") is not None:
+            try:
+                _bits.append(f'Bortle {float(_r["bortle"]):g}')
+            except (TypeError, ValueError):
+                pass
+        _bdr = "" if _i == len(_ai_rows) - 1 else "border-bottom:1px solid rgba(103,232,249,0.20);"
+        _ai_parts.append(
+            f'<div style="padding:5px 0;{_bdr}">'
+            f'<div style="display:flex;align-items:center;gap:8px;">'
+            f'<span style="font-size:15px;flex-shrink:0;">{_AI_RANK[_i] if _i < 3 else "▪"}</span>'
+            f'<span style="color:#a5f3fc;font-weight:700;font-size:13px;flex:1;overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap;">{_aih.escape(_r.get("name", ""))}'
+            f'<span style="color:#64748b;font-weight:500;font-size:10px;"> {_aih.escape(_r.get("pref", ""))}</span></span>'
+            f'<span style="color:{"#fcd34d" if _r.get("wk") else "#94a3b8"};font-size:11px;flex-shrink:0;">{_aih.escape(_r.get("date", ""))}</span>'
+            f'<span style="color:#fbbf24;font-size:12px;flex-shrink:0;">{_aih.escape(str(_r.get("stars", "")))}</span>'
+            f'</div>'
+            f'<div style="color:#94a3b8;font-size:10px;margin:2px 0 0 23px;line-height:1.35;">{" · ".join(_bits)}</div>'
+            f'</div>')
+    st.markdown(f"""
+<div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
+<div style="
+  position:absolute;top:584px;left:2px;transform:translateY(-100%);
+  width:340px;max-width:calc(100% - 12px);
+  background:rgba(4,22,32,0.95);border:1.5px solid rgba(103,232,249,0.80);
+  border-radius:10px;padding:8px 12px;
+  font-family:sans-serif;
+  box-shadow:0 2px 16px rgba(0,0,0,0.75);backdrop-filter:blur(3px);
+  pointer-events:none;
+">
+<div style="color:#67e8f9;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">
+🤖 AI picks — summary
+</div>
+{"".join(_ai_parts)}
+</div>
+</div>""", unsafe_allow_html=True)
+
 _scan_r2 = st.session_state._scan_result
 
 if _scan_r2 and _scan_r2 != "none":
@@ -4847,7 +4966,8 @@ if map_data:
     if lc and lc != st.session_state._last_lc and (
             _is_best_trig or _is_tonight_trig or _is_off_trig or
             _is_mkw_scan_trig or _is_mkw_best_trig or _is_region_scan_trig):
-        st.session_state._ai_rings = []   # Search box scan/off → bỏ vòng tròn của AI
+        st.session_state._ai_rings = []   # Search box scan/off → bỏ vòng tròn + bảng của AI
+        st.session_state._ai_panel = []
     if _is_mkw_scan_trig and lc and lc != st.session_state._last_lc:
         _d = max(0, min(6, round((_lc_lng - 200.0) * 100)))
         st.session_state._last_lc = lc
@@ -5978,14 +6098,15 @@ function age(e,last){var m=Math.max(0,Math.round((Date.now()-e)/60000));
   var t=m<1?'just now':(m<60?m+' min ago':Math.floor(m/60)+' h '+(m%60)+' min ago');
   if(!last)return {t:t,c:''};
   return m<20?{t:'● LIVE · '+t,c:'#4ade80'}:{t:'⚠ '+t,c:'#fbbf24'};}
-function label(i){var f=frames[i];if(f.e===undefined){st.style.color='';return f.l;}
+function label(i){var f=frames[i];if(f.e==null){st.style.color='';return f.l;}
   var r=age(f.e,i===frames.length-1);st.style.color=r.c;return r.t;}
 setInterval(function(){if(frames.length)st.textContent=label(idx);},20000);
 // Thanh contrast (chỉ bật khi CFG.contrast): tăng sáng + tương phản để thấy sao/mây lúc đêm. Nhớ giá trị qua localStorage.
 function applyC(v){v=+v||0;img.style.filter=v?('brightness('+(1+v*0.04).toFixed(2)+') contrast('+(1+v*0.025).toFixed(2)+')'):'none';cv.textContent=v;}
-if(CFG.contrast){cn.style.display='flex';var s0=0;try{s0=+(localStorage.getItem('astro_cam_contrast')||0);}catch(e){}
+var CK=CFG.ckey||'astro_cam_contrast';
+if(CFG.contrast){cn.style.display='flex';var s0=0;try{s0=+(localStorage.getItem(CK)||0);}catch(e){}
   ct.value=s0;applyC(s0);ct.oninput=function(){applyC(ct.value);};
-  ct.onchange=function(){try{localStorage.setItem('astro_cam_contrast',ct.value);}catch(e){}};
+  ct.onchange=function(){try{localStorage.setItem(CK,ct.value);}catch(e){}};
   ct.ondblclick=function(){ct.value=0;applyC(0);ct.onchange();};}
 function show(i){idx=i;img.src=frames[i].s;st.textContent=label(i);
   bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
@@ -6289,6 +6410,12 @@ def _rd_frames(cam, b, mime, back=5):
     ts = cam[3]
     def lab(t):
         return f"{t[4:6]}/{t[6:8]} {t[8:10]}:{t[10:12]} JST"
+    def ems(t):   # mốc thời gian (JST) -> epoch ms, để trình duyệt tính "X min ago"
+        try:
+            return int(datetime.strptime(t, "%Y%m%d%H%M%S").replace(
+                tzinfo=timezone(timedelta(hours=9))).timestamp() * 1000)
+        except Exception:
+            return None
     def uri(res):
         return f"data:{res[1]};base64,{_rd_b64.b64encode(res[0]).decode()}"
     stamps, urls = [], []
@@ -6304,8 +6431,8 @@ def _rd_frames(cam, b, mime, back=5):
         import time as _t
         store[cam[2]] = (_t.time(), _rd_compress(b, mime))
     res = _rd_get_frames(urls)
-    frames = [{"s": uri(r), "l": lab(t)} for t, r in zip(stamps, res) if r]
-    frames.append({"s": uri(store[cam[2]][1]), "l": lab(ts)})
+    frames = [{"s": uri(r), "l": lab(t), "e": ems(t)} for t, r in zip(stamps, res) if r]
+    frames.append({"s": uri(store[cam[2]][1]), "l": lab(ts), "e": ems(ts)})
     return frames
 
 def _rd_nearest(pref, lat, lon, top=5):
@@ -6405,8 +6532,9 @@ def _cam_render():
                     f"<br><span style='color:#64748b;'>geocoded: {_lc_html_mod.escape(str(_mn))}</span>")
             _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
                       f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
-            _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
-                                    _frames[-1]["l"], "Open on MLIT ↗", _extra))
+            _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames, "contrast": True,
+                                     "ckey": "astro_cam_contrast_road"}, _detail, _sub, _cam[1],
+                                    "", "Open on MLIT ↗", _extra))
         else:   # không lấy được camera gần -> quay về bản đồ như cũ
             if _rd_diag:
                 st.caption(f"ℹ️ {_rd_diag}")
