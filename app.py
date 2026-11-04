@@ -368,7 +368,8 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("map_tile", "himawari"),
              ("_need_fly", False), ("_skip_prefetch", False),
              ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
-             ("_scan_tonight", False), ("_scan_fallback_label", None)]:
+             ("_scan_tonight", False), ("_scan_fallback_label", None),
+             ("_ai_rings", [])]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -2435,6 +2436,7 @@ def ask_astro_ai(user_question: str):
 
     Trả về tuple (answer_text: str, fly_to: dict|None).
     """
+    st.session_state._ai_rings = []     # mỗi câu hỏi mới → bỏ vòng tròn của câu trước
     now_jst = datetime.now(timezone(timedelta(hours=9)))
     system_prompt = (
         f"Hôm nay là {now_jst.strftime('%A, %Y-%m-%d')} (giờ Nhật Bản, JST). "
@@ -2476,7 +2478,13 @@ def ask_astro_ai(user_question: str):
         "về 1 địa điểm đơn; dùng -1 nếu không có địa điểm nào để ghim bản đồ, vd chỉ "
         "trả lời chung chung không dựa trên tool). Dòng '[[PICK:N]]' này sẽ bị ẩn "
         "khỏi người dùng, chỉ dùng để hệ thống tự cập nhật bản đồ + lịch, nên đừng "
-        "giải thích gì thêm về nó."
+        "giải thích gì thêm về nó.\n\n"
+        "NGOÀI RA, ngay TRƯỚC dòng '[[PICK:N]]', thêm 1 dòng riêng '[[SHOW:i,j,k]]' "
+        "liệt kê chỉ số của TẤT CẢ các địa điểm bạn THỰC SỰ nêu tên trong câu trả lời "
+        "(0 = best, 1 = alternatives[0], 2 = alternatives[1]; vd '[[SHOW:0,1,2]]' nếu "
+        "nêu cả 3, '[[SHOW:0]]' nếu chỉ nêu 1). Hệ thống dùng nó để vẽ vòng tròn nhấp "
+        "nháy quanh các địa điểm đó trên bản đồ. Dùng '[[SHOW:]]' nếu không nêu địa điểm "
+        "nào. Dòng này cũng bị ẩn khỏi người dùng, đừng giải thích gì về nó."
     )
 
     history = st.session_state.get("astro_ai_history", [])
@@ -2542,6 +2550,14 @@ def ask_astro_ai(user_question: str):
     # ĐÚNG với địa điểm + đêm mà AI thực sự nêu là ưu tiên, thay vì luôn mặc định
     # lấy "best" theo thuật toán (có thể khác với lựa chọn AI trình bày, ví dụ khi
     # AI cân nhắc thêm các tiêu chí user vừa nêu như "chỉ tính đất liền").
+    # Tách "[[SHOW:i,j,k]]" (ẩn) — danh sách địa điểm AI thực sự nêu tên → vẽ vòng tròn
+    # nhấp nháy trên bản đồ. Phải tách TRƯỚC [[PICK:N]] vì PICK phải nằm ở cuối câu.
+    show_idx = None
+    _show_match = re.search(r"\[\[SHOW:([\d,\s]*)\]\]", answer_text)
+    if _show_match:
+        show_idx = [int(x) for x in re.findall(r"\d+", _show_match.group(1))]
+        answer_text = (answer_text[:_show_match.start()] + answer_text[_show_match.end():]).rstrip()
+
     pick_idx = None
     _pick_match = re.search(r"\[\[PICK:(-?\d+)\]\]\s*$", answer_text.strip())
     if _pick_match:
@@ -2552,6 +2568,21 @@ def ask_astro_ai(user_question: str):
     st.session_state.astro_ai_history = contents + [
         {"role": "model", "parts": [{"text": answer_text}]}
     ]
+
+    # ── Vòng tròn nhấp nháy: các địa điểm AI nêu (theo [[SHOW]]); thiếu thẻ → tất cả
+    # candidate của tool. pick = -1 (AI báo không có địa điểm nào) mà không có SHOW → không vẽ.
+    _rings = []
+    _rd = last_result["data"]
+    if _rd and not (pick_idx == -1 and show_idx is None):
+        _cands = [_rd] if "lat" in _rd else \
+                 [c for c in [_rd.get("best")] + list(_rd.get("alternatives", [])) if c]
+        if show_idx is not None:
+            _cands = [_cands[i] for i in dict.fromkeys(show_idx) if 0 <= i < len(_cands)]
+        for _c in _cands:
+            if "lat" in _c:
+                _rings.append([_c.get("matched_name") or _c.get("location_name") or "",
+                               _c["lat"], _c["lon"]])
+    st.session_state._ai_rings = _rings
 
     fly_to = None
     data = last_result["data"]
@@ -4423,51 +4454,52 @@ if _selected_marker_args:
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
                   for c in LOCATION_DATABASE.values())
 
+# ── Ring helpers (dùng chung cho Scan + AI) ──────────────────────────────────
+# ── Ring helper — CSS injected once, ring div absolutely centered on the coordinate ──
+# icon_size=(0,0) / icon_anchor=(0,0): Leaflet places the DivIcon origin exactly at
+# the lat/lon pixel. The ring div uses position:absolute + transform:translate(-50%,-50%)
+# to center itself around that origin — no offset from <style> tags possible.
+_ring_css = (
+    '<style>'
+    '@keyframes great-night-pulse {'
+    '0%{transform:translate(-50%,-50%) scale(0.6);opacity:0.9;}'
+    '70%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}'
+    '100%{transform:translate(-50%,-50%) scale(0.6);opacity:0;}}'
+    '.great-night-ring{'
+    'pointer-events:none!important;'
+    'overflow:visible!important;}'
+    '</style>'
+)
+
+def _make_ring_div(color, shadow):
+    return (
+        '<div style="position:absolute;top:0;left:0;'
+        'width:64px;height:64px;border-radius:50%;'
+        f'border:3px solid {color};'
+        f'box-shadow:0 0 14px {shadow};'
+        'animation:great-night-pulse 1.8s ease-out infinite;'
+        'pointer-events:none;"></div>'
+    )
+
+def _add_rings(locations, color, shadow, css_already_injected=False):
+    """Render ring markers for a list of (lat,lon) or (name,coords,verdict) entries."""
+    ring_div = _make_ring_div(color, shadow)
+    for _i, entry in enumerate(locations):
+        coords = entry[1] if isinstance(entry[0], str) else list(entry)
+        _html = (_ring_css if (_i == 0 and not css_already_injected) else "") + ring_div
+        folium.Marker(
+            list(coords),
+            icon=folium.DivIcon(
+                html=_html,
+                icon_size=(0, 0), icon_anchor=(0, 0),
+                class_name="great-night-ring"),
+        ).add_to(m)
+    return True  # css injected
+
 # ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh tất cả địa điểm ──────
 # Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
 _scan_r = st.session_state._scan_result
 if _scan_r and _scan_r != "none":
-    # ── Ring helper — CSS injected once, ring div absolutely centered on the coordinate ──
-    # icon_size=(0,0) / icon_anchor=(0,0): Leaflet places the DivIcon origin exactly at
-    # the lat/lon pixel. The ring div uses position:absolute + transform:translate(-50%,-50%)
-    # to center itself around that origin — no offset from <style> tags possible.
-    _ring_css = (
-        '<style>'
-        '@keyframes great-night-pulse {'
-        '0%{transform:translate(-50%,-50%) scale(0.6);opacity:0.9;}'
-        '70%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}'
-        '100%{transform:translate(-50%,-50%) scale(0.6);opacity:0;}}'
-        '.great-night-ring{'
-        'pointer-events:none!important;'
-        'overflow:visible!important;}'
-        '</style>'
-    )
-
-    def _make_ring_div(color, shadow):
-        return (
-            '<div style="position:absolute;top:0;left:0;'
-            'width:64px;height:64px;border-radius:50%;'
-            f'border:3px solid {color};'
-            f'box-shadow:0 0 14px {shadow};'
-            'animation:great-night-pulse 1.8s ease-out infinite;'
-            'pointer-events:none;"></div>'
-        )
-
-    def _add_rings(locations, color, shadow, css_already_injected=False):
-        """Render ring markers for a list of (lat,lon) or (name,coords,verdict) entries."""
-        ring_div = _make_ring_div(color, shadow)
-        for _i, entry in enumerate(locations):
-            coords = entry[1] if isinstance(entry[0], str) else list(entry)
-            _html = (_ring_css if (_i == 0 and not css_already_injected) else "") + ring_div
-            folium.Marker(
-                list(coords),
-                icon=folium.DivIcon(
-                    html=_html,
-                    icon_size=(0, 0), icon_anchor=(0, 0),
-                    class_name="great-night-ring"),
-            ).add_to(m)
-        return True  # css injected
-
     _is_best_ring    = st.session_state.get("_scan_best", False)
     _is_tonight_ring = st.session_state.get("_scan_tonight", False)
 
@@ -4492,6 +4524,12 @@ if _scan_r and _scan_r != "none":
         # Scan command: vẽ vòng tròn xanh cho tất cả địa điểm PERFECT NIGHT
         _all_locs = _scan_r.get("all_locs", [(_scan_r["loc_name"], _scan_r["loc_coords"], _scan_r["verdict"])])
         _add_rings(_all_locs, "#6ee7b7", "rgba(110,231,183,0.8)")
+
+# ── AI CHAT result — vòng tròn nhấp nháy (xanh lơ) quanh các địa điểm AI vừa đề xuất ──
+_ai_ring_locs = st.session_state.get("_ai_rings") or []
+if _ai_ring_locs:
+    _add_rings([(_n, (_la, _lo)) for _n, _la, _lo in _ai_ring_locs],
+               "#67e8f9", "rgba(103,232,249,0.85)")
 
 if not is_bookmark:
     folium.Marker(
@@ -4806,6 +4844,10 @@ if map_data:
     _is_mkw_scan_trig = abs(_lc_lat - 89.55) < 0.02
     _is_mkw_best_trig = abs(_lc_lat - 89.45) < 0.02
     _is_region_scan_trig = abs(_lc_lat - 89.35) < 0.02
+    if lc and lc != st.session_state._last_lc and (
+            _is_best_trig or _is_tonight_trig or _is_off_trig or
+            _is_mkw_scan_trig or _is_mkw_best_trig or _is_region_scan_trig):
+        st.session_state._ai_rings = []   # Search box scan/off → bỏ vòng tròn của AI
     if _is_mkw_scan_trig and lc and lc != st.session_state._last_lc:
         _d = max(0, min(6, round((_lc_lng - 200.0) * 100)))
         st.session_state._last_lc = lc
@@ -5906,6 +5948,9 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 .ctl{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center;}
 .pp{background:rgba(15,23,42,.78);color:#e2e8f0;border:1px solid #475569;border-radius:8px;font-size:12px;padding:4px 10px;cursor:pointer;}
 .cnt{background:rgba(15,23,42,.78);color:#cbd5e1;border-radius:8px;font-size:11px;padding:4px 8px;}
+.cn{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(15,23,42,.78);border:1px solid #475569;border-radius:8px;padding:3px 8px;color:#cbd5e1;font-size:11px;}
+.cn input{width:88px;accent-color:#fb923c;margin:0;cursor:pointer;}
+.cn b{min-width:18px;text-align:right;font-weight:600;}
 .bar{height:3px;background:#1e293b;border-radius:2px;margin:6px 0 8px;overflow:hidden;}
 .bar>i{display:block;height:100%;width:0;background:#fb923c;}
 .sub{color:#94a3b8;font-size:12px;margin-bottom:4px;min-height:34px;line-height:17px;}
@@ -5914,7 +5959,8 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 </style></head><body>
 <div class="card">
   <div class="shot"><a href="__LINK__" target="_blank" rel="noopener"><img id="im" referrerpolicy="no-referrer" alt="Camera image unavailable — open the source page"></a>
-    <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div></div>
+    <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div>
+    <div class="cn" id="cn" style="display:none" title="Contrast / night boost — double-click to reset"><span>🌙</span><input id="ct" type="range" min="0" max="100" value="0" step="1" aria-label="Contrast"><b id="cv">0</b></div></div>
   <div class="bar"><i id="bar"></i></div>
   <div class="sub">__SUB__</div>
   <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
@@ -5924,9 +5970,24 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 (function(){
 var CFG=__CFG__;
 var img=document.getElementById('im'),st=document.getElementById('st'),pp=document.getElementById('pp'),
-    bar=document.getElementById('bar'),cnt=document.getElementById('cnt'),ctl=document.getElementById('ctl');
+    bar=document.getElementById('bar'),cnt=document.getElementById('cnt'),ctl=document.getElementById('ctl'),
+    ct=document.getElementById('ct'),cv=document.getElementById('cv'),cn=document.getElementById('cn');
 var frames=[],idx=0,timer=null,playing=false;
-function show(i){idx=i;img.src=frames[i].s;st.textContent=frames[i].l;
+// Nhãn thời gian: "● LIVE · 4 min ago" (tính theo đồng hồ trình duyệt, tự cập nhật) thay cho giờ tuyệt đối.
+function age(e,last){var m=Math.max(0,Math.round((Date.now()-e)/60000));
+  var t=m<1?'just now':(m<60?m+' min ago':Math.floor(m/60)+' h '+(m%60)+' min ago');
+  if(!last)return {t:t,c:''};
+  return m<20?{t:'● LIVE · '+t,c:'#4ade80'}:{t:'⚠ '+t,c:'#fbbf24'};}
+function label(i){var f=frames[i];if(f.e===undefined){st.style.color='';return f.l;}
+  var r=age(f.e,i===frames.length-1);st.style.color=r.c;return r.t;}
+setInterval(function(){if(frames.length)st.textContent=label(idx);},20000);
+// Thanh contrast (chỉ bật khi CFG.contrast): tăng sáng + tương phản để thấy sao/mây lúc đêm. Nhớ giá trị qua localStorage.
+function applyC(v){v=+v||0;img.style.filter=v?('brightness('+(1+v*0.04).toFixed(2)+') contrast('+(1+v*0.025).toFixed(2)+')'):'none';cv.textContent=v;}
+if(CFG.contrast){cn.style.display='flex';var s0=0;try{s0=+(localStorage.getItem('astro_cam_contrast')||0);}catch(e){}
+  ct.value=s0;applyC(s0);ct.oninput=function(){applyC(ct.value);};
+  ct.onchange=function(){try{localStorage.setItem('astro_cam_contrast',ct.value);}catch(e){}};
+  ct.ondblclick=function(){ct.value=0;applyC(0);ct.onchange();};}
+function show(i){idx=i;img.src=frames[i].s;st.textContent=label(i);
   bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
 function tick(){var n=(idx+1)%frames.length;show(n);timer=setTimeout(tick,n===frames.length-1?1600:450);}
 function play(){playing=true;pp.textContent='❚❚';clearTimeout(timer);timer=setTimeout(tick,450);}
@@ -5940,17 +6001,20 @@ function start(fr){
 function p2(n){return (n<10?'0':'')+n;}
 function toTs(ms){var d=new Date(ms);return ''+d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds());}
 function parse(t){return Date.UTC(+t.slice(0,4),+t.slice(4,6)-1,+t.slice(6,8),+t.slice(8,10),+t.slice(10,12),+t.slice(12,14));}
-function lbl(t){var d=new Date(parse(t)+9*3600000);return p2(d.getUTCMonth()+1)+'/'+p2(d.getUTCDate())+' '+p2(d.getUTCHours())+':'+p2(d.getUTCMinutes())+' JST';}
 if(CFG.mode==='static'){ start(CFG.frames); }
 else{
   // Weathernews: ảnh đặt tên theo thời điểm chụp (JST). Hiện ảnh mới nhất ngay, rồi dò ngược từng phút
   // trong trình duyệt; ảnh nào tồn tại thì đưa vào vòng lặp.
-  img.src=CFG.base+CFG.anchor+'.'+CFG.ext; st.textContent=lbl(CFG.anchor);
   var A=parse(CFG.anchor),total=CFG.minutes+1,done=0,hits=[],fin=false;
+  // Tự nhận biết mốc giờ trong tên file: nếu là UTC thì "tuổi" ảnh ~0-60 phút; nếu lệch ~-9h
+  // nghĩa là mốc đó là giờ JST (không phải UTC) → trừ 9h cho đúng.
+  var OFF=0,d0=Date.now()-A; if(d0<-4*3600000&&d0>-14*3600000)OFF=-9*3600000;
+  img.src=CFG.base+CFG.anchor+'.'+CFG.ext;
+  var r0=age(A+OFF,true); st.textContent=r0.t; st.style.color=r0.c;
   function finish(){
     if(fin)return; fin=true;
     hits.sort(function(a,b){return a.t<b.t?-1:1;});
-    start(hits.slice(-CFG.max).map(function(h){return {s:h.s,l:lbl(h.t)};}));
+    start(hits.slice(-CFG.max).map(function(h){return {s:h.s,e:parse(h.t)+OFF};}));
   }
   for(var k=0;k<=CFG.minutes;k++){
     (function(t){
@@ -5987,10 +6051,10 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
     m = re.search(r"/livecam/([0-9A-Za-z]+)/640/(\d{14})\.(jpg|webp)", img_url or "")
     if m:
         cfg = {"mode": "probe", "base": img_url[:img_url.rindex("/") + 1], "ext": m.group(3),
-               "anchor": m.group(2), "minutes": 50, "max": 10}
+               "anchor": m.group(2), "minutes": 50, "max": 10, "contrast": True}
     else:
-        cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}]}
-    return _cam_anim_doc(cfg, link, sub, cam_name, _lc_ts_label(ts) if ts else "", "Open on Weathernews ↗")
+        cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}], "contrast": True}
+    return _cam_anim_doc(cfg, link, sub, cam_name, "" if cfg["mode"] == "probe" else (_lc_ts_label(ts) if ts else ""), "Open on Weathernews ↗")
 
 st.markdown(f'### 📹 Live Sky Camera: near {_disp_name_html(st.session_state.location_name)}', unsafe_allow_html=True)
 _lc_kind, _lc_pref = _lc_resolve()
