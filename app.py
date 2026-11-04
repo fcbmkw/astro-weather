@@ -2065,7 +2065,7 @@ def _run_great_night_scan(start_day=0, region="kanto"):
 # Ưu tiên cuối tuần (Fri=4, Sat=5, Sun=6). Weekday (Mon-Thu) hiển thị màu trắng.
 _WEEKEND_DAYS = {4, 5, 6}  # weekday(): Mon=0..Sun=6; Fri=4, Sat=5, Sun=6
 
-def _run_best_scan(region="kanto"):
+def _run_best_scan(region="kanto", limit=3):
     """Quét 7 ngày tới cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc), trả về top 3 (dedupe <60km).
     - Ưu tiên cuối tuần (Fri/Sat/Sun) trước Mon-Thu.
     - Trong cùng tier + streak: ưu tiên cuối tuần, rồi streak dài hơn.
@@ -2130,7 +2130,7 @@ def _run_best_scan(region="kanto"):
             continue
         seen_coords.append(loc_coords)
         top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum))
-        if len(top3) == 3:
+        if len(top3) >= limit:
             break
 
     # Guarantee at least 1 weekend in top3
@@ -2174,7 +2174,7 @@ def _run_best_scan(region="kanto"):
     }
 
 # ── TONIGHT SCAN — quét đêm nay (day_off=0) cho Kanto hoặc toàn quốc ────────
-def _run_tonight_scan(region="kanto"):
+def _run_tonight_scan(region="kanto", limit=3):
     """Quét đêm nay (day_off=0) và trả về top3 địa điểm tốt nhất màu pink, cho 1 vùng địa lý.
     region='japan' → 269 địa điểm toàn quốc, khác → vùng tương ứng (dedupe <60km).
     - Không yêu cầu moon < 35% (tonight hiển thị kết quả dù trăng sáng).
@@ -2231,7 +2231,7 @@ def _run_tonight_scan(region="kanto"):
             continue
         seen_coords.append(loc_coords)
         top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum, False))
-        if len(top3) == 3:
+        if len(top3) >= limit:
             break
 
     if not top3:
@@ -2288,14 +2288,14 @@ def _serialize_scan_result(result):
                 result["verdict"], result["moon_illum"], is_weekend_best)
 
     alternatives = []
-    for row in top3[1:3]:
+    for row in top3[1:]:
         d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend = row
         alternatives.append(_one(d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend))
 
     return {"found": True, "best": best, "alternatives": alternatives}
 
 
-def tool_scan_best_weekend(region: str = "kanto") -> dict:
+def tool_scan_best_weekend(region: str = "kanto", top_n: int = 3) -> dict:
     """Tìm địa điểm và ngày chụp ảnh sao TỐT NHẤT trong 7 ngày tới, ưu tiên cuối tuần
     (Thứ 6/7/Chủ Nhật). Dùng khi user hỏi mơ hồ về thời gian: 'cuối tuần này',
     'tuần này', 'vài ngày tới', hoặc không nói rõ đêm nào.
@@ -2305,25 +2305,29 @@ def tool_scan_best_weekend(region: str = "kanto") -> dict:
             'hokkaido', 'tohoku', 'kanto', 'chubu', 'kansai', 'chugoku',
             'shikoku', 'kyushu', 'okinawa', 'japan' (japan = toàn quốc, chậm hơn).
             Mặc định 'kanto' nếu user không nói rõ vùng nào.
+        top_n: số địa điểm cần trả về (1-5, mặc định 3). Khi user yêu cầu N địa điểm
+            (vd '5 điểm', '4 chỗ') thì truyền top_n=N.
 
     Returns:
         dict: {"found": true, "best": {...}, "alternatives": [...]}
         hoặc {"found": false, "reason": "..."} nếu không có đêm nào đủ đẹp.
     """
-    return _serialize_scan_result(_run_best_scan(region=region))
+    return _serialize_scan_result(_run_best_scan(region=region, limit=max(1, min(5, int(top_n or 3)))))
 
 
-def tool_scan_tonight(region: str = "kanto") -> dict:
+def tool_scan_tonight(region: str = "kanto", top_n: int = 3) -> dict:
     """Kiểm tra điều kiện chụp ảnh sao ĐÊM NAY (chỉ đêm nay, không phải ngày khác)
     cho 1 vùng địa lý. Dùng khi user hỏi cụ thể 'tối nay', 'đêm nay'.
 
     Args:
         region: vùng địa lý, cùng danh sách như tool_scan_best_weekend. Mặc định 'kanto'.
+        top_n: số địa điểm cần trả về (1-5, mặc định 3). Khi user yêu cầu N địa điểm
+            (vd '5 điểm', '4 chỗ') thì truyền top_n=N.
 
     Returns:
         dict cùng cấu trúc như tool_scan_best_weekend, nhưng chỉ xét đêm nay.
     """
-    return _serialize_scan_result(_run_tonight_scan(region=region))
+    return _serialize_scan_result(_run_tonight_scan(region=region, limit=max(1, min(5, int(top_n or 3)))))
 
 
 def tool_check_location_darkness(location_name: str) -> dict:
@@ -2482,6 +2486,8 @@ def ask_astro_ai(user_question: str):
         "-> gọi tool_scan_tonight.\n"
         "- Nếu chỉ hỏi độ tối bầu trời (Bortle) của 1 nơi, không liên quan thời tiết "
         "-> gọi tool_check_location_darkness.\n"
+        "- Nếu user yêu cầu N địa điểm (vd '5 điểm', '4 chỗ') -> gọi tool_scan_* với top_n=N (tối đa 5) "
+        "và chỉ nêu đúng các địa điểm tool trả về, không tự thêm địa điểm khác.\n"
         "- LUÔN gọi ít nhất 1 tool trước khi trả lời, không được tự bịa thời tiết/"
         "địa điểm/toạ độ.\n"
         "- Vùng 'kanto' đã TỰ ĐỘNG loại bỏ các đảo xa không đi ô tô được (Ogasawara, "
@@ -2970,6 +2976,25 @@ _placeholder_text = st.session_state.get(
     "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
 )
 
+
+def _astro_ai_close():
+    """Nút ✕ của khung kết quả AI: xoá câu trả lời + vòng tròn/bảng AI trên bản đồ."""
+    st.session_state.astro_ai_answer = None
+    st.session_state._ai_rings = []
+    st.session_state._ai_panel = []
+
+st.markdown(
+    """
+    <style>
+    div[class*="st-key-astro_ai_answer_box"] { position: relative; padding-right: 36px !important; }
+    div[class*="st-key-astro_ai_close"] { position: absolute; top: 6px; right: 8px; width: auto !important; z-index: 5; }
+    div[class*="st-key-astro_ai_close"] button { min-height: 0 !important; height: 26px !important; width: 26px !important;
+        padding: 0 !important; line-height: 1 !important; border-radius: 6px !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 _ai_panel = st.container()
 with _ai_panel:
     _ai_question = st.chat_input(
@@ -2982,6 +3007,7 @@ with _ai_panel:
         _answer_slot = st.empty()
         if st.session_state.get("astro_ai_answer"):
             _answer_slot.markdown(st.session_state.astro_ai_answer)
+            st.button("✕", key="astro_ai_close", help="Close AI result", on_click=_astro_ai_close)
 
 # --- LOGIC XỬ LÝ ---
 if _ai_question and _ai_question.strip():
@@ -3165,7 +3191,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       };
       // lat=89.65 → "off": tắt banner/ring ngay, không load data
       window._triggerOff = function() {
-        map.fire('click', { latlng: L.latLng(89.65, 100) });
+        map.fire('click', { latlng: L.latLng(89.65, 100 + (Date.now() % 100000) / 1e7) });
       };
       // lat=89.55 → mkw scan  (lng=200+day_off*0.01, day_off=days-1 for days 1-6, 0 for days=0)
       window._triggerMkwScan = function(days) {
@@ -3846,6 +3872,21 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         inp.focus();
       });
 
+      {% if this.has_results %}
+      // ── Nút ✕ đóng kết quả (Search location / AI) + xoá vòng tròn nhấp nháy ──
+      var _closeRes = L.DomUtil.create('div', '', wrapper);
+      _closeRes.innerHTML = '&#10005;&nbsp;Close results';
+      _closeRes.title = 'Close results and remove the blinking circles';
+      _closeRes.style.cssText = ('margin-top:4px;display:inline-block;cursor:pointer;'
+        + 'background:rgba(15,23,42,0.92);border:1px solid #475569;border-radius:8px;'
+        + 'padding:3px 9px;color:#e2e8f0;font-size:11px;font-weight:600;'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.6);');
+      L.DomEvent.on(_closeRes, 'click', function(e){
+        L.DomEvent.stop(e);
+        if (typeof window._triggerOff === 'function') window._triggerOff();
+      });
+      {% endif %}
+
       // ── Dropdown ───────────────────────────────────────────────────────────
       var dropdown = L.DomUtil.create('div', '', wrapper);
       dropdown.style.cssText = (
@@ -4324,14 +4365,16 @@ _SEARCH_CTRL_TEMPLATE = Template("""
 """)
 
 class _SearchControl(MacroElement):
-    def __init__(self, loc_list="[]", alias_dict="{}"):
+    def __init__(self, loc_list="[]", alias_dict="{}", has_results=False):
         super().__init__()
         self._name = '_SearchControl'
+        self.has_results = bool(has_results)
         self._template = _SEARCH_CTRL_TEMPLATE
         self.loc_list = loc_list
         self.alias_dict = alias_dict
 
-_SearchControl(loc_list=_loc_js_list, alias_dict=_kanji_alias_js).add_to(m)
+_SearchControl(loc_list=_loc_js_list, alias_dict=_kanji_alias_js,
+               has_results=bool(st.session_state._scan_result is not None or st.session_state.get("_ai_rings"))).add_to(m)
 
 # ── CSS cho tooltip (hover) ────────────────────────────────────────────────────
 m.get_root().html.add_child(folium.Element("""
@@ -6080,7 +6123,7 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 <div class="card">
   <div class="shot"><a href="__LINK__" target="_blank" rel="noopener"><img id="im" referrerpolicy="no-referrer" alt="Camera image unavailable — open the source page"></a>
     <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div>
-    <div class="cn" id="cn" style="display:none" title="Contrast / night boost — double-click to reset"><span>🌙</span><input id="ct" type="range" min="0" max="100" value="0" step="1" aria-label="Contrast"><b id="cv">0</b></div></div>
+    <div class="cn" id="cn" style="display:none" title="Contrast / night boost — double-click to reset"><span>🌙</span><input id="ct" type="range" min="0" max="100" value="100" step="1" aria-label="Contrast"><b id="cv">0</b></div></div>
   <div class="bar"><i id="bar"></i></div>
   <div class="sub">__SUB__</div>
   <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
@@ -6105,9 +6148,9 @@ setInterval(function(){if(frames.length)st.textContent=label(idx);},20000);
 function applyC(v){v=+v||0;img.style.filter=v?('brightness('+(1+v*0.04).toFixed(2)+') contrast('+(1+v*0.025).toFixed(2)+')'):'none';cv.textContent=v;}
 var CK=CFG.ckey||'astro_cam_contrast';
 if(CFG.contrast){cn.style.display='flex';var s0=0;try{s0=+(localStorage.getItem(CK)||0);}catch(e){}
-  ct.value=s0;applyC(s0);ct.oninput=function(){applyC(ct.value);};
-  ct.onchange=function(){try{localStorage.setItem(CK,ct.value);}catch(e){}};
-  ct.ondblclick=function(){ct.value=0;applyC(0);ct.onchange();};}
+  ct.value=100-s0;applyC(s0);ct.oninput=function(){applyC(100-ct.value);};
+  ct.onchange=function(){try{localStorage.setItem(CK,100-ct.value);}catch(e){}};
+  ct.ondblclick=function(){ct.value=100;applyC(0);ct.onchange();};}
 function show(i){idx=i;img.src=frames[i].s;st.textContent=label(i);
   bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
 function tick(){var n=(idx+1)%frames.length;show(n);timer=setTimeout(tick,n===frames.length-1?1600:450);}
