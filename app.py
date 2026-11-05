@@ -3575,6 +3575,18 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           map.setMaxZoom(HIM_VIEW_MAXZ);
           if (map.getZoom() > HIM_VIEW_MAXZ) map.setZoom(HIM_VIEW_MAXZ);
           _himEnter();
+        } else if (mode === 'lightpol') {
+          // Light Map: NASA VIIRS night lights (sáng hơn chế độ Himawari) + nhãn địa danh
+          if (_windyFrame) _windyFrame.style.display = 'none';
+          if (current) { map.removeLayer(current); }
+          current = _himBaseLayer();
+          current.addTo(map);
+          var _lpc = current.getContainer();
+          if (_lpc) _lpc.style.filter = 'brightness(1.7) contrast(1.15) saturate(1.2)';
+          himLabelLayer = L.tileLayer(HIM_LABELS, { maxZoom: 19, zIndex: 10, opacity: 0.9 });
+          himLabelLayer.addTo(map);   // được dọn bởi _himCleanup() khi đổi tab
+          map.setMaxZoom(HIM_VIEW_MAXZ);
+          if (map.getZoom() > HIM_VIEW_MAXZ) map.setZoom(HIM_VIEW_MAXZ);
         } else {
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
@@ -3593,10 +3605,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
       }
 
-      ['windy','satellite','himawari'].forEach(function(mode){
+      ['windy','satellite','himawari','lightpol'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', tileRow);
         btn.textContent = mode === 'windy' ? 'Windy'
+                        : mode === 'lightpol' ? 'Light Map'
                         : mode.charAt(0).toUpperCase() + mode.slice(1);
+        if (mode === 'lightpol') btn.title = 'Light pollution view (NASA VIIRS night lights)';
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
           + 'padding:3px 10px;font-size:12px;font-weight:600;'
           + 'transition:background 0.2s,color 0.2s;background:transparent;color:#94a3b8;';
@@ -3606,7 +3620,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 
       map.whenReady(function(){
         var saved = _lsGet(LS_TILE, 'himawari');
-        if (saved !== 'himawari' && saved !== 'windy') saved = 'himawari';   // Satellite no longer the start tab
+        if (['himawari','windy','satellite','lightpol'].indexOf(saved) < 0) saved = 'himawari';
+        // Chỉ lần mở trang ĐẦU TIÊN mới bắt đầu bằng Himawari thay cho Satellite.
+        // Các lần rerun sau (click chọn địa điểm...) giữ nguyên tab user đang xem.
+        var _firstLoad = true;
+        try { var _P = window.parent; _firstLoad = !_P.__mkwTileInit; _P.__mkwTileInit = true; } catch(e) {}
+        if (_firstLoad && saved === 'satellite') saved = 'himawari';
         switchTile(saved);
       });
 
