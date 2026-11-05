@@ -3565,6 +3565,17 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         [_lpmVisible, _lpmPending].forEach(function(f) { if (f && f.parentNode) f.parentNode.removeChild(f); });
         _lpmVisible = null; _lpmPending = null;
       }
+      // Di chuyển/zoom NỀN LPM theo Leaflet ngay lập tức bằng CSS transform (không chờ tải lại):
+      // iframe đang hiển thị biết "tâm+zoom lúc nạp" (_base); mỗi khung hình ta tính độ lệch pixel + tỉ lệ
+      // so với view hiện tại của Leaflet rồi áp transform. Khi dừng, nạp iframe mới rồi mới thay.
+      function _lpmSync(c, z, anim) {
+        var f = _lpmVisible;
+        if (!f || !f._base) return;
+        var pb = map.project(f._base.center, z), pc = map.project(c, z);
+        var s = Math.pow(2, z - f._base.zoom);
+        f.style.transition = anim ? 'transform 0.25s cubic-bezier(0,0,0.25,1)' : 'none';
+        f.style.transform = 'translate(' + (pb.x - pc.x) + 'px,' + (pb.y - pc.y) + 'px) scale(' + s + ')';
+      }
       function _lpmShowAt() {
         var c = map.getCenter();
         var z = Math.max(2, Math.min(18, Math.round(map.getZoom())));
@@ -3574,22 +3585,31 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         if (_lpmPending && _lpmPending.parentNode) _lpmPending.parentNode.removeChild(_lpmPending);
         var nf = document.createElement('iframe');
         nf.setAttribute('data-src', src);
+        nf._base = { center: c, zoom: z };
         nf.title = 'Light Pollution Map';
         nf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
-        nf.style.cssText = ('position:absolute;top:0;left:0;width:100%;height:100%;border:none;'
+        nf.style.cssText = ('position:absolute;top:-40%;left:-40%;width:180%;height:180%;border:none;'
+          + 'will-change:transform;transform-origin:50% 50%;'
           + 'z-index:1;pointer-events:none;visibility:' + (_lpmVisible ? 'hidden' : 'visible') + ';');
         nf.onload = function() {
           if (_lpmPending !== nf) return;
           nf.style.visibility = 'visible';
           if (_lpmVisible && _lpmVisible.parentNode) _lpmVisible.parentNode.removeChild(_lpmVisible);
           _lpmVisible = nf; _lpmPending = null;
+          _lpmSync(map.getCenter(), map.getZoom(), false);   // bù phần map đã di chuyển trong lúc nạp
         };
         _lpmPending = nf;
         nf.src = src;
         map.getContainer().appendChild(nf);
       }
+      map.on('move', function() {
+        if (_curTileMode === 'lightpol') _lpmSync(map.getCenter(), map.getZoom(), false);
+      });
+      map.on('zoomanim', function(e) {
+        if (_curTileMode === 'lightpol') _lpmSync(e.center, e.zoom, true);
+      });
       map.on('moveend', function() {
-        if (_curTileMode === 'lightpol') { clearTimeout(_lpmTimer); _lpmTimer = setTimeout(_lpmShowAt, 350); }
+        if (_curTileMode === 'lightpol') { clearTimeout(_lpmTimer); _lpmTimer = setTimeout(_lpmShowAt, 150); }
       });
 
       function switchTile(mode) {
