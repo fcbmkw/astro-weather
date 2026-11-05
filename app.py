@@ -3125,29 +3125,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 
 
   // ── Light Map: lightpollutionmap.app Embed chính thức (iframe) ──────────────
-  var _lpmFrame = null;
   function _buildLpmSrc(lat, lon, zoom) {
     return 'https://lightpollutionmap.app/embed/'
       + '?lat=' + parseFloat(lat).toFixed(6)
       + '&lng=' + parseFloat(lon).toFixed(6)
       + '&zoom=' + Math.round(zoom)
       + '&opacity=60';
-  }
-  function _ensureLpmFrame(mapEl) {
-    if (_lpmFrame) return;
-    _lpmFrame = mapEl.querySelector('#astro-lpm-iframe');
-    if (_lpmFrame) return;
-    _lpmFrame = document.createElement('iframe');
-    _lpmFrame.id    = 'astro-lpm-iframe';
-    _lpmFrame.title = 'Light Pollution Map';
-    _lpmFrame.style.cssText = (
-      'position:absolute;top:0;left:0;width:100%;height:100%;'
-      + 'border:none;z-index:500;display:none;border-radius:inherit;'
-    );
-    _lpmFrame.setAttribute('allowfullscreen', '');
-    _lpmFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
-    mapEl.style.position = 'relative';
-    mapEl.appendChild(_lpmFrame);
   }
 
   var CombinedCtrl = L.Control.extend({
@@ -3573,18 +3556,55 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       window.addEventListener('focus', function() { _himRefresh(false); });
       window.addEventListener('online', function() { _himRefresh(true); });
 
+      // ── LPM: lightpollutionmap.app làm NỀN (iframe không nhận chuột) ──────────
+      // Leaflet vẫn điều khiển pan/zoom/click và vẽ marker (ngôi sao) + vòng tròn phía trên;
+      // khi map dừng di chuyển thì nạp lại embed theo tâm/zoom mới (2 iframe luân phiên → không nháy trắng).
+      var _curTileMode = null, _lpmVisible = null, _lpmPending = null, _lpmTimer = null;
+      function _lpmClear() {
+        clearTimeout(_lpmTimer);
+        [_lpmVisible, _lpmPending].forEach(function(f) { if (f && f.parentNode) f.parentNode.removeChild(f); });
+        _lpmVisible = null; _lpmPending = null;
+      }
+      function _lpmShowAt() {
+        var c = map.getCenter();
+        var z = Math.max(2, Math.min(18, Math.round(map.getZoom())));
+        var src = _buildLpmSrc(c.lat, c.lng, z);
+        var ref = _lpmPending || _lpmVisible;
+        if (ref && ref.getAttribute('data-src') === src) return;
+        if (_lpmPending && _lpmPending.parentNode) _lpmPending.parentNode.removeChild(_lpmPending);
+        var nf = document.createElement('iframe');
+        nf.setAttribute('data-src', src);
+        nf.title = 'Light Pollution Map';
+        nf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
+        nf.style.cssText = ('position:absolute;top:0;left:0;width:100%;height:100%;border:none;'
+          + 'z-index:1;pointer-events:none;visibility:' + (_lpmVisible ? 'hidden' : 'visible') + ';');
+        nf.onload = function() {
+          if (_lpmPending !== nf) return;
+          nf.style.visibility = 'visible';
+          if (_lpmVisible && _lpmVisible.parentNode) _lpmVisible.parentNode.removeChild(_lpmVisible);
+          _lpmVisible = nf; _lpmPending = null;
+        };
+        _lpmPending = nf;
+        nf.src = src;
+        map.getContainer().appendChild(nf);
+      }
+      map.on('moveend', function() {
+        if (_curTileMode === 'lightpol') { clearTimeout(_lpmTimer); _lpmTimer = setTimeout(_lpmShowAt, 350); }
+      });
+
       function switchTile(mode) {
         var mapEl = map.getContainer();
         var prevMode = _lsGet(LS_TILE, null);
+        _curTileMode = mode;
         _ensureWindyFrame(mapEl);
         // ── Disable/enable zoom buttons based on tile mode ─────────────────────
         var zoomIn  = mapEl.querySelector('.leaflet-control-zoom-in');
         var zoomOut = mapEl.querySelector('.leaflet-control-zoom-out');
-        var isWindy = (mode === 'windy' || mode === 'lightpol');
+        var isWindy = (mode === 'windy');
         if (zoomIn)  { zoomIn.style.opacity  = isWindy ? '0.35' : '1'; zoomIn.style.pointerEvents  = isWindy ? 'none' : 'auto'; zoomIn.style.cursor  = isWindy ? 'not-allowed' : ''; }
         if (zoomOut) { zoomOut.style.opacity = isWindy ? '0.35' : '1'; zoomOut.style.pointerEvents = isWindy ? 'none' : 'auto'; zoomOut.style.cursor = isWindy ? 'not-allowed' : ''; }
         _himCleanup();
-        if (_lpmFrame) _lpmFrame.style.display = 'none';
+        _lpmClear();
         if (ormLayer) { map.removeLayer(ormLayer); ormLayer = null; }
         if (mode === 'windy') {
           var c = map.getCenter();
@@ -3604,18 +3624,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (map.getZoom() > HIM_VIEW_MAXZ) map.setZoom(HIM_VIEW_MAXZ);
           _himEnter();
         } else if (mode === 'lightpol') {
-          // Light Map: nhúng lightpollutionmap.app (căn theo tâm + zoom hiện tại của map)
+          // LPM: nền = lightpollutionmap.app (xem phần _lpmShowAt); marker của app nằm phía trên
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); current = null; }
-          _ensureLpmFrame(mapEl);
-          var _lc = map.getCenter();
-          var _lz = Math.max(2, Math.min(18, Math.round(map.getZoom())));
-          var _lsrc = _buildLpmSrc(_lc.lat, _lc.lng, _lz);
-          if (_lpmFrame.getAttribute('data-src') !== _lsrc) {
-            _lpmFrame.setAttribute('data-src', _lsrc);
-            _lpmFrame.src = _lsrc;
-          }
-          _lpmFrame.style.display = 'block';
+          map.setMaxZoom(18);
+          if (map.getZoom() > 18) map.setZoom(18);
+          _lpmShowAt();
         } else {
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
@@ -3634,12 +3648,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         });
       }
 
-      ['windy','satellite','himawari','lightpol'].forEach(function(mode){
+      ['himawari','satellite','lightpol','windy'].forEach(function(mode){
         var btn = L.DomUtil.create('button', '', tileRow);
         btn.textContent = mode === 'windy' ? 'Windy'
-                        : mode === 'lightpol' ? 'Light Map'
+                        : mode === 'lightpol' ? 'LPM'
                         : mode.charAt(0).toUpperCase() + mode.slice(1);
-        if (mode === 'lightpol') btn.title = 'lightpollutionmap.app (embedded) — use its own zoom/pan';
+        if (mode === 'lightpol') btn.title = 'Light pollution map (lightpollutionmap.app)';
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
           + 'padding:3px 10px;font-size:12px;font-weight:600;'
           + 'transition:background 0.2s,color 0.2s;background:transparent;color:#94a3b8;';
