@@ -3123,6 +3123,33 @@ _COMBINED_CTRL_TEMPLATE = Template("""
     if (_windyFrame) { _windyFrame.src = _buildWindySrc(lat, lon, zoom); }
   };
 
+
+  // ── Light Map: lightpollutionmap.app Embed chính thức (iframe) ──────────────
+  var _lpmFrame = null;
+  function _buildLpmSrc(lat, lon, zoom) {
+    return 'https://lightpollutionmap.app/embed/'
+      + '?lat=' + parseFloat(lat).toFixed(6)
+      + '&lng=' + parseFloat(lon).toFixed(6)
+      + '&zoom=' + Math.round(zoom)
+      + '&opacity=60';
+  }
+  function _ensureLpmFrame(mapEl) {
+    if (_lpmFrame) return;
+    _lpmFrame = mapEl.querySelector('#astro-lpm-iframe');
+    if (_lpmFrame) return;
+    _lpmFrame = document.createElement('iframe');
+    _lpmFrame.id    = 'astro-lpm-iframe';
+    _lpmFrame.title = 'Light Pollution Map';
+    _lpmFrame.style.cssText = (
+      'position:absolute;top:0;left:0;width:100%;height:100%;'
+      + 'border:none;z-index:500;display:none;border-radius:inherit;'
+    );
+    _lpmFrame.setAttribute('allowfullscreen', '');
+    _lpmFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
+    mapEl.style.position = 'relative';
+    mapEl.appendChild(_lpmFrame);
+  }
+
   var CombinedCtrl = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd: function(map) {
@@ -3553,10 +3580,11 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         // ── Disable/enable zoom buttons based on tile mode ─────────────────────
         var zoomIn  = mapEl.querySelector('.leaflet-control-zoom-in');
         var zoomOut = mapEl.querySelector('.leaflet-control-zoom-out');
-        var isWindy = (mode === 'windy');
+        var isWindy = (mode === 'windy' || mode === 'lightpol');
         if (zoomIn)  { zoomIn.style.opacity  = isWindy ? '0.35' : '1'; zoomIn.style.pointerEvents  = isWindy ? 'none' : 'auto'; zoomIn.style.cursor  = isWindy ? 'not-allowed' : ''; }
         if (zoomOut) { zoomOut.style.opacity = isWindy ? '0.35' : '1'; zoomOut.style.pointerEvents = isWindy ? 'none' : 'auto'; zoomOut.style.cursor = isWindy ? 'not-allowed' : ''; }
         _himCleanup();
+        if (_lpmFrame) _lpmFrame.style.display = 'none';
         if (ormLayer) { map.removeLayer(ormLayer); ormLayer = null; }
         if (mode === 'windy') {
           var c = map.getCenter();
@@ -3576,17 +3604,18 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           if (map.getZoom() > HIM_VIEW_MAXZ) map.setZoom(HIM_VIEW_MAXZ);
           _himEnter();
         } else if (mode === 'lightpol') {
-          // Light Map: NASA VIIRS night lights (sáng hơn chế độ Himawari) + nhãn địa danh
+          // Light Map: nhúng lightpollutionmap.app (căn theo tâm + zoom hiện tại của map)
           if (_windyFrame) _windyFrame.style.display = 'none';
-          if (current) { map.removeLayer(current); }
-          current = _himBaseLayer();
-          current.addTo(map);
-          var _lpc = current.getContainer();
-          if (_lpc) _lpc.style.filter = 'brightness(1.7) contrast(1.15) saturate(1.2)';
-          himLabelLayer = L.tileLayer(HIM_LABELS, { maxZoom: 19, zIndex: 10, opacity: 0.9 });
-          himLabelLayer.addTo(map);   // được dọn bởi _himCleanup() khi đổi tab
-          map.setMaxZoom(HIM_VIEW_MAXZ);
-          if (map.getZoom() > HIM_VIEW_MAXZ) map.setZoom(HIM_VIEW_MAXZ);
+          if (current) { map.removeLayer(current); current = null; }
+          _ensureLpmFrame(mapEl);
+          var _lc = map.getCenter();
+          var _lz = Math.max(2, Math.min(18, Math.round(map.getZoom())));
+          var _lsrc = _buildLpmSrc(_lc.lat, _lc.lng, _lz);
+          if (_lpmFrame.getAttribute('data-src') !== _lsrc) {
+            _lpmFrame.setAttribute('data-src', _lsrc);
+            _lpmFrame.src = _lsrc;
+          }
+          _lpmFrame.style.display = 'block';
         } else {
           if (_windyFrame) _windyFrame.style.display = 'none';
           if (current) { map.removeLayer(current); }
@@ -3610,7 +3639,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         btn.textContent = mode === 'windy' ? 'Windy'
                         : mode === 'lightpol' ? 'Light Map'
                         : mode.charAt(0).toUpperCase() + mode.slice(1);
-        if (mode === 'lightpol') btn.title = 'Light pollution view (NASA VIIRS night lights)';
+        if (mode === 'lightpol') btn.title = 'lightpollutionmap.app (embedded) — use its own zoom/pan';
         btn.style.cssText = 'border:none;cursor:pointer;border-radius:5px;'
           + 'padding:3px 10px;font-size:12px;font-weight:600;'
           + 'transition:background 0.2s,color 0.2s;background:transparent;color:#94a3b8;';
