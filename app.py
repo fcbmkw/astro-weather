@@ -6047,10 +6047,6 @@ def _nk_star_fetch(lat3: float, lon3: float):
         raise ValueError("empty result")
     return out
 
-# index 0 (xám) → 4 (tốt nhất): (nền, chữ)
-_NK_CELL = {0: ("#374151", "#9ca3af"), 1: ("#1d4ed8", "#dbeafe"), 2: ("#0284c7", "#e0f2fe"),
-            3: ("#16a34a", "#dcfce7"), 4: ("#facc15", "#422006")}
-
 def _nk_hhmm(iso):
     return iso[11:16] if iso and len(iso) >= 16 else "–"
 
@@ -6067,11 +6063,15 @@ def _nk_cards_html(days):
         else:
             stars = ('<span style="color:#facc15;">' + "&#9733;" * ov + '</span>'
                      '<span style="color:#334155;">' + "&#9734;" * (4 - ov) + '</span>')
+        def _nk_vstars(i):
+            on, off = ("#facc15", "#334155") if i > 0 else ("#475569", "#475569")
+            return "".join(
+                f'<div style="color:{on if k < i else off};">{"&#9733;" if k < i else "&#9734;"}</div>'
+                for k in range(4))
         cells = "".join(
-            f'<div style="flex:1;min-width:0;text-align:center;">'
-            f'<div style="background:{_NK_CELL[i][0]};color:{_NK_CELL[i][1]};border-radius:3px;'
-            f'font-size:10px;line-height:18px;font-weight:700;">{i}</div>'
-            f'<div style="font-size:9px;color:#64748b;margin-top:1px;">{dt[11:13]}</div></div>'
+            f'<div style="flex:1;min-width:0;text-align:center;font-size:13px;line-height:14px;">'
+            f'{_nk_vstars(i)}'
+            f'<div style="font-size:9px;color:#64748b;margin-top:3px;line-height:12px;">{dt[11:13]}</div></div>'
             for dt, i in d["hours"])
         moon = f' · Moon age {d["moon_age"]}' if d.get("moon_age") else ""
         cards.append(
@@ -6083,10 +6083,7 @@ def _nk_cards_html(days):
             f'<div style="font-size:11px;color:#94a3b8;margin:2px 0 8px;">{ov}/4 · '
             f'Sun {_nk_hhmm(d.get("sun_in"))} → {_nk_hhmm(d.get("sun_out"))}{moon}</div>'
             f'<div style="display:flex;gap:2px;">{cells}</div></div>')
-    return ('<div style="display:flex;flex-wrap:wrap;gap:10px;">' + "".join(cards) + '</div>'
-            '<div style="font-size:11px;color:#64748b;margin-top:6px;">Hourly 18:00–06:00 · 0 (grey) → 4 (best) · '
-            'Source: <a href="https://s.n-kishou.co.jp/w/charge/hosizora/hosizora" target="_blank" '
-            'rel="noopener" style="color:#93c5fd;text-decoration:none;">お天気ナビゲータ (Nippon Kishou)</a></div>')
+    return '<div style="display:flex;flex-wrap:wrap;gap:10px;">' + "".join(cards) + '</div>'
 # ── END STAR INDEX FUNCS ──────────────────────────────────────────────────────────
 
 st.markdown("---")
