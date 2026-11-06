@@ -1672,7 +1672,7 @@ def _half_star_html(v):
         if v >= k + 1:
             parts.append('<span style="color:#facc15;">&#9733;</span>')
         elif v >= k + 0.5:
-            parts.append('<span style="position:relative;display:inline-block;color:#e2e8f0;">&#9734;'
+            parts.append('<span style="position:relative;display:inline-block;color:#f8fafc;">&#9733;'
                          '<span style="position:absolute;left:0;top:0;width:50%;overflow:hidden;'
                          'white-space:nowrap;color:#facc15;">&#9733;</span></span>')
         else:
@@ -5781,7 +5781,7 @@ with col_left:
                 f'<td style="padding:8px 8px;overflow:hidden;">{cloud_cell}</td>'
                 f'<td style="padding:8px 8px;color:#fb923c;">{humid_val}</td>'
                 f'<td style="padding:8px 8px;color:#fb923c;">{wind_cell}</td>'
-                f'<td style="padding:8px 8px;font-size:16px;letter-spacing:1px;">{stars}</td>'
+                f'<td style="padding:8px 8px;font-size:22px;line-height:1;letter-spacing:1px;">{stars}</td>'
                 f'</tr>'
             )
 
