@@ -6066,8 +6066,8 @@ def _nk_cards_html(days):
         def _nk_vstars(i):
             on, off = ("#facc15", "#334155") if i > 0 else ("#475569", "#475569")
             return "".join(
-                f'<div style="color:{on if k < i else off};">{"&#9733;" if k < i else "&#9734;"}</div>'
-                for k in range(4))
+                f'<div style="color:{on if k >= 4 - i else off};">{"&#9733;" if k >= 4 - i else "&#9734;"}</div>'
+                for k in range(4))   # sao vàng đầy từ DƯỚI lên
         cells = "".join(
             f'<div style="flex:1;min-width:0;text-align:center;font-size:13px;line-height:14px;">'
             f'{_nk_vstars(i)}'
@@ -6087,7 +6087,7 @@ def _nk_cards_html(days):
 # ── END STAR INDEX FUNCS ──────────────────────────────────────────────────────────
 
 st.markdown("---")
-st.markdown(f'### ⭐ Star Index 3 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
+st.markdown(f'### ⭐ Nippon Kishou Star Index 3 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
 try:
     _nk_days = _nk_star_fetch(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3))
     st.markdown(_nk_cards_html(_nk_days), unsafe_allow_html=True)
