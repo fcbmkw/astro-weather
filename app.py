@@ -6018,6 +6018,85 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
                      if sel_a <= datetime(day.year, day.month, day.day, h) < sel_b), 0)
     return "".join(p), _sel_idx, n
 
+# ── STAR INDEX 3 NGÀY (お天気ナビゲータ / Nippon Kishou) ────────────────────────────
+# API: GET weather-api-prod.n-kishou.co.jp/get-star-index?lat=&lon=&alt=  → 3 ngày × (đánh giá 0–4 sao + chỉ số theo giờ)
+_NK_API = "https://weather-api-prod.n-kishou.co.jp/get-star-index"
+_NK_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://s.n-kishou.co.jp/",
+    "Origin": "https://s.n-kishou.co.jp",
+}
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _nk_star_fetch(lat3: float, lon3: float):
+    """Lỗi (mạng/HTTP/JSON) sẽ raise → cache_data KHÔNG lưu kết quả lỗi."""
+    r = requests.get(_NK_API, params={"lat": lat3, "lon": lon3, "alt": 2}, headers=_NK_HEADERS, timeout=8)
+    r.raise_for_status()
+    days = r.json()["result_list"]["data"]
+    out = []
+    for d in days[:3]:
+        out.append({
+            "start": d.get("start_datetime", ""),
+            "overall": max(0, min(4, int(d.get("overall_review") or 0))),
+            "hours": [(x.get("datetime", ""), max(0, min(4, int(x.get("index") or 0))))
+                      for x in d.get("starlight_index", [])],
+            "sun_in": d.get("sun_in"), "sun_out": d.get("sun_out"), "moon_age": d.get("moon_age"),
+        })
+    if not out:
+        raise ValueError("empty result")
+    return out
+
+# index 0 (xám) → 4 (tốt nhất): (nền, chữ)
+_NK_CELL = {0: ("#374151", "#9ca3af"), 1: ("#1d4ed8", "#dbeafe"), 2: ("#0284c7", "#e0f2fe"),
+            3: ("#16a34a", "#dcfce7"), 4: ("#facc15", "#422006")}
+
+def _nk_hhmm(iso):
+    return iso[11:16] if iso and len(iso) >= 16 else "–"
+
+def _nk_cards_html(days):
+    cards = []
+    for d in days:
+        try:
+            label = datetime.fromisoformat(d["start"]).strftime("%m/%d (%a)")
+        except Exception:
+            label = (d.get("start") or "")[:10]
+        ov = d["overall"]
+        if ov == 0:
+            stars = '<span style="color:#475569;">&#9734;&#9734;&#9734;&#9734;</span>'
+        else:
+            stars = ('<span style="color:#facc15;">' + "&#9733;" * ov + '</span>'
+                     '<span style="color:#334155;">' + "&#9734;" * (4 - ov) + '</span>')
+        cells = "".join(
+            f'<div style="flex:1;min-width:0;text-align:center;">'
+            f'<div style="background:{_NK_CELL[i][0]};color:{_NK_CELL[i][1]};border-radius:3px;'
+            f'font-size:10px;line-height:18px;font-weight:700;">{i}</div>'
+            f'<div style="font-size:9px;color:#64748b;margin-top:1px;">{dt[11:13]}</div></div>'
+            for dt, i in d["hours"])
+        moon = f' · Moon age {d["moon_age"]}' if d.get("moon_age") else ""
+        cards.append(
+            '<div style="flex:1 1 280px;min-width:0;background:#0f172a;border:1px solid #1e293b;'
+            'border-radius:10px;padding:10px 12px;">'
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;">'
+            f'<span style="font-weight:700;color:#e2e8f0;font-size:14px;">{label}</span>'
+            f'<span style="font-size:18px;letter-spacing:2px;">{stars}</span></div>'
+            f'<div style="font-size:11px;color:#94a3b8;margin:2px 0 8px;">{ov}/4 · '
+            f'Sun {_nk_hhmm(d.get("sun_in"))} → {_nk_hhmm(d.get("sun_out"))}{moon}</div>'
+            f'<div style="display:flex;gap:2px;">{cells}</div></div>')
+    return ('<div style="display:flex;flex-wrap:wrap;gap:10px;">' + "".join(cards) + '</div>'
+            '<div style="font-size:11px;color:#64748b;margin-top:6px;">Hourly 18:00–06:00 · 0 (grey) → 4 (best) · '
+            'Source: <a href="https://s.n-kishou.co.jp/w/charge/hosizora/hosizora" target="_blank" '
+            'rel="noopener" style="color:#93c5fd;text-decoration:none;">お天気ナビゲータ (Nippon Kishou)</a></div>')
+# ── END STAR INDEX FUNCS ──────────────────────────────────────────────────────────
+
+st.markdown("---")
+st.markdown(f'### ⭐ Star Index 3 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
+try:
+    _nk_days = _nk_star_fetch(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3))
+    st.markdown(_nk_cards_html(_nk_days), unsafe_allow_html=True)
+except Exception as _nk_e:
+    st.caption(f"Star Index (お天気ナビゲータ) is unavailable for this location right now ({type(_nk_e).__name__}).")
+
 st.markdown("---")
 st.markdown(f'### 🌌 Clear Sky Forecast 7 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
