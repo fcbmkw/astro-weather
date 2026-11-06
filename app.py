@@ -5510,7 +5510,7 @@ with col_right:
         _html = (
             '<div style="margin-top:8px;">'
             '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
-            '\U0001f31f TODAY HIGHLIGHT</div>'
+            '\U0001f31f HIGHLIGHT TODAY</div>'
             f'<div style="display:flex;flex-direction:column;gap:2px;width:100%;">{_th_rows}</div>'
             '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
             '<span style="color:#6ee7b7;">&#9679;</span> Perfect &nbsp;'
@@ -6019,7 +6019,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     return "".join(p), _sel_idx, n
 
 st.markdown("---")
-st.markdown(f'### 🌌 Clear Sky Forecast "{_disp_name_html(st.session_state.location_name)}" (7 days)', unsafe_allow_html=True)
+st.markdown(f'### 🌌 Clear Sky Forecast 7 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
 _csc_res = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
                            _loc_utc_offset, target_date, _csc_now_local)
@@ -6224,7 +6224,7 @@ def _cam_card_html(img_src, link, sub, title, stamp, btn_label, extra=""):
             f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;">'
             f'{_lc_html_mod.escape(title)}<span style="color:#64748b;font-weight:500;'
             f'font-size:12px;"> · {stamp}</span></div>'
-            f'<a href="{link}" target="_blank" rel="noopener" style="{_lc_btn}">{btn_label}</a>{extra}</div>')
+            f'{extra}</div>')
 
 _CAM_H = 595   # chiều cao iframe của thẻ camera (ảnh tối đa 420px + chú thích)
 
@@ -6253,7 +6253,7 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
   <div class="bar"><i id="bar"></i></div>
   <div class="sub">__SUB__</div>
   <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
-  <a href="__LINK__" target="_blank" rel="noopener" style="__LCBTN__">__BTNLABEL__</a>__EXTRA__
+  __EXTRA__
 </div>
 <script>
 (function(){
@@ -6346,7 +6346,7 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
         cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}], "contrast": True}
     return _cam_anim_doc(cfg, link, sub, cam_name, "" if cfg["mode"] == "probe" else (_lc_ts_label(ts) if ts else ""), "Open on Weathernews ↗")
 
-st.markdown(f'### 📹 Live Sky Camera: near {_disp_name_html(st.session_state.location_name)}', unsafe_allow_html=True)
+st.markdown(f'### 📹 Live Sky Camera near {_disp_name_html(st.session_state.location_name)}', unsafe_allow_html=True)
 _lc_kind, _lc_pref = _lc_resolve()
 _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
             "font-family:sans-serif;")
