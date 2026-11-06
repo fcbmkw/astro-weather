@@ -1745,7 +1745,8 @@ sources_used = set(sources_used)  # trả về từ cache là frozenset hoặc s
 
 # Label thực tế đã dùng — phân biệt auto-fallback với user chọn tay
 if use_blend:
-    active_source_label = "🔀 Blend (JMA+ECMWF+GFS)"
+    active_source_label = ("🔀 Nippon Kishou & JMA+ECMWF+GFS" if st.session_state.day_offset < 3
+                           else "🔀 JMA+ECMWF+GFS")
 elif "ECMWF" in sources_used:
     active_source_label = "EU (ECMWF IFS025)"
 elif "JMA" in sources_used and "GFS" in sources_used:
@@ -5479,8 +5480,15 @@ with col_right:
     if cur_src not in source_options:
         cur_src = "JMA"
     src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('🔀','')}"
+    def _src_disp(v):
+        # Chỉ đổi cách HIỂN THỊ (giá trị lưu vẫn là "🔀 Blend (JMA+ECMWF+GFS)")
+        if v == "🔀 Blend (JMA+ECMWF+GFS)":
+            return ("🔀 Nippon Kishou & JMA+ECMWF+GFS" if st.session_state.day_offset < 3
+                    else "🔀 JMA+ECMWF+GFS")
+        return v
     chosen = st.selectbox("src", source_options,
                           index=source_options.index(cur_src),
+                          format_func=_src_disp,
                           label_visibility="collapsed", key=src_key)
     if chosen != st.session_state.weather_source:
         st.session_state.weather_source = chosen
@@ -5786,7 +5794,7 @@ with col_left:
         <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:20%;">🌤️</th>
         <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:13%;">💧</th>
         <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
-        <th title="{'Average of Nippon Kishou Star Index and Blend (JMA+ECMWF+GFS)' if _nk_hits else ''}" style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
+        <th title="{'Average of Nippon Kishou Star Index and JMA+ECMWF+GFS' if _nk_hits else ''}" style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
       </tr>
     </thead>
     <tbody>{rows_html}</tbody>
