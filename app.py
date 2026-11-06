@@ -6087,14 +6087,6 @@ def _nk_cards_html(days):
 # ── END STAR INDEX FUNCS ──────────────────────────────────────────────────────────
 
 st.markdown("---")
-st.markdown(f'### ⭐ Nippon Kishou Star Index 3 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
-try:
-    _nk_days = _nk_star_fetch(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3))
-    st.markdown(_nk_cards_html(_nk_days), unsafe_allow_html=True)
-except Exception as _nk_e:
-    st.caption(f"Star Index (お天気ナビゲータ) is unavailable for this location right now ({type(_nk_e).__name__}).")
-
-st.markdown("---")
 st.markdown(f'### 🌌 Clear Sky Forecast 7 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
 _csc_now_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_loc_utc_offset)
 _csc_res = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.lon,
@@ -6893,6 +6885,15 @@ st.plotly_chart(fig, use_container_width=True,
                         'showAxisDragHandles': False})
 
 # Legend note
+
+# ── NIPPON KISHOU STAR INDEX (cuối trang) ─────────────────────────────────────────
+st.markdown("---")
+st.markdown(f'### ⭐ Nippon Kishou Star Index 3 days for "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
+try:
+    _nk_days = _nk_star_fetch(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3))
+    st.markdown(_nk_cards_html(_nk_days), unsafe_allow_html=True)
+except Exception as _nk_e:
+    st.caption(f"Star Index (お天気ナビゲータ) is unavailable for this location right now ({type(_nk_e).__name__}).")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
