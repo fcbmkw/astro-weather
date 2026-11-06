@@ -6346,7 +6346,7 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
         cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}], "contrast": True}
     return _cam_anim_doc(cfg, link, sub, cam_name, "" if cfg["mode"] == "probe" else (_lc_ts_label(ts) if ts else ""), "Open on Weathernews ↗")
 
-st.markdown(f'### 📹 Live Sky Camera near {_disp_name_html(st.session_state.location_name)}', unsafe_allow_html=True)
+st.markdown(f'### 📹 Live Sky Camera near "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
 _lc_kind, _lc_pref = _lc_resolve()
 _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
             "font-family:sans-serif;")
@@ -6699,8 +6699,7 @@ def _cam_render():
             _sub = (f"Nearest road camera (approx. position): {_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
                     f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})"
                     f"<br><span style='color:#64748b;'>geocoded: {_lc_html_mod.escape(str(_mn))}</span>")
-            _extra = (f' <a href="{_road_url}" target="_blank" rel="noopener" '
-                      f'style="color:#93c5fd;font-size:12px;text-decoration:none;margin-left:8px;">Map ↗</a>')
+            _extra = ""   # đã bỏ link "Map ↗"
             _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames, "contrast": True,
                                      "ckey": "astro_cam_contrast_road"}, _detail, _sub, _cam[1],
                                     "", "Open on MLIT ↗", _extra))
