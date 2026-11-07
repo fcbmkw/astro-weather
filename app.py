@@ -5491,9 +5491,6 @@ with col_right:
                           index=source_options.index(cur_src),
                           format_func=_src_disp,
                           label_visibility="collapsed", key=src_key)
-    if not _nk_ok:
-        st.markdown('<div style="font-size:11px;color:#64748b;margin:-8px 0 4px;">'
-                    '⭐ Nippon Kishou options: nights 1–3 only</div>', unsafe_allow_html=True)
     if chosen != cur_src:
         if chosen in _MODE_OF:
             st.session_state.weather_source = _BLEND
