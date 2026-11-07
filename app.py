@@ -361,7 +361,7 @@ st.markdown("""
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("map_center", [35.6895, 139.6917]), ("zoom", 7),
              ("day_offset", 0), ("location_name", "Tokyo, Japan"),
-             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"),
+             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"), ("star_mode", "both"),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
@@ -1666,17 +1666,21 @@ def _star_value(own, nk):
     return own if nk is None else (own + nk) / 2
 
 def _half_star_html(v):
-    """4 ngôi sao; v bội của 0.5. Sao đầy = vàng; nửa sao = nửa trái vàng + nửa phải trắng; rỗng = trắng."""
+    """4 ngôi sao; v bội của 0.5. Đầy = vàng; nửa sao = nửa TRÁI vàng, nửa PHẢI không màu (chỉ viền); rỗng = chỉ viền.
+    Hai lớp dùng cùng glyph ★ (viền bằng text-stroke) nên clip 50% khớp đúng giữa ngôi sao."""
+    S = "&#9733;"
+    gold  = "color:#facc15;-webkit-text-stroke:1.2px #facc15;"
+    empty = "color:transparent;-webkit-text-stroke:1.2px #cbd5e1;"
+    box   = "display:inline-block;margin-right:2px;"
     parts = []
     for k in range(4):
         if v >= k + 1:
-            parts.append('<span style="color:#facc15;">&#9733;</span>')
+            parts.append(f'<span style="{box}{gold}">{S}</span>')
         elif v >= k + 0.5:
-            parts.append('<span style="position:relative;display:inline-block;color:#f8fafc;">&#9733;'
-                         '<span style="position:absolute;left:0;top:0;width:50%;overflow:hidden;'
-                         'white-space:nowrap;color:#facc15;">&#9733;</span></span>')
+            parts.append(f'<span style="{box}position:relative;{empty}">{S}'
+                         f'<span style="position:absolute;left:0;top:0;clip-path:inset(0 50% 0 0);{gold}">{S}</span></span>')
         else:
-            parts.append('<span style="color:#e2e8f0;">&#9734;</span>')
+            parts.append(f'<span style="{box}{empty}">{S}</span>')
     return "".join(parts)
 # ── END NK STAR FUNCS ─────────────────────────────────────────────────────────────
 
@@ -5475,23 +5479,29 @@ with col_right:
 
     # Weather source selectbox + source label
     # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
-    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "🔀 Blend (JMA+ECMWF+GFS)"]
-    cur_src = st.session_state.weather_source
-    if cur_src not in source_options:
-        cur_src = "JMA"
-    src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('🔀','')}"
+    # 3 lựa chọn cuối đều dùng dữ liệu Blend (JMA+ECMWF+GFS) cho mây/độ ẩm/gió...; chỉ khác cách tính SAO:
+    #   MODEL = sao của mô hình | NK = sao Nippon Kishou (3 đêm đầu) | NK+MODEL = trung bình hai bên
+    _BLEND = "🔀 Blend (JMA+ECMWF+GFS)"
+    _MODE_OF = {"MODEL": "model", "NK": "nk", "NK+MODEL": "both"}
+    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "MODEL", "NK", "NK+MODEL"]
+    if st.session_state.weather_source == _BLEND:
+        cur_src = {"model": "MODEL", "nk": "NK", "both": "NK+MODEL"}.get(st.session_state.get("star_mode"), "NK+MODEL")
+    else:
+        cur_src = st.session_state.weather_source if st.session_state.weather_source in source_options else "JMA"
+    src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('+', 'p')}"
     def _src_disp(v):
-        # Chỉ đổi cách HIỂN THỊ (giá trị lưu vẫn là "🔀 Blend (JMA+ECMWF+GFS)")
-        if v == "🔀 Blend (JMA+ECMWF+GFS)":
-            return ("🔀 Nippon Kishou & JMA+ECMWF+GFS" if st.session_state.day_offset < 3
-                    else "🔀 JMA+ECMWF+GFS")
-        return v
+        return {"MODEL": "🔀 JMA+ECMWF+GFS", "NK": "⭐ Nippon Kishou",
+                "NK+MODEL": "🔀 Nippon Kishou & JMA+ECMWF+GFS"}.get(v, v)
     chosen = st.selectbox("src", source_options,
                           index=source_options.index(cur_src),
                           format_func=_src_disp,
                           label_visibility="collapsed", key=src_key)
-    if chosen != st.session_state.weather_source:
-        st.session_state.weather_source = chosen
+    if chosen != cur_src:
+        if chosen in _MODE_OF:
+            st.session_state.weather_source = _BLEND
+            st.session_state.star_mode = _MODE_OF[chosen]
+        else:
+            st.session_state.weather_source = chosen
         st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
         st.rerun()
 
@@ -5750,14 +5760,18 @@ with col_left:
             else:        icon,col = '','#f97316'
             return f'<span style="color:{col}">{icon} {ws_str}</span>'
 
-        # 3 đêm đầu + nguồn Blend: sao mỗi giờ = (mô hình Blend + Nippon Kishou) / 2; còn lại: chỉ mô hình.
+        # Sao mỗi giờ theo chế độ: model = mô hình | nk = Nippon Kishou (3 đêm đầu, sau đó dùng mô hình)
+        # | both = trung bình hai bên (3 đêm đầu), sau đó chỉ mô hình. Mây/ẩm/gió luôn từ JMA+ECMWF+GFS.
+        _smode = st.session_state.get("star_mode", "both")
         _nk_map = {}
-        if st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)":
+        if st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)" and _smode in ("nk", "both"):
             try:
                 _nk_map = _nk_star_fetch(round(float(st.session_state.lat), 3),
                                          round(float(st.session_state.lon), 3))
             except Exception:
                 _nk_map = {}
+        _star_tip = ("Nippon Kishou Star Index (nights 1–3; JMA+ECMWF+GFS afterwards)" if _smode == "nk"
+                     else "Average of Nippon Kishou Star Index and JMA+ECMWF+GFS")
         _night_d = target_date.date()
         _nk_hits = 0
         rows_html = ''
@@ -5774,14 +5788,15 @@ with col_left:
             _key = f"{(_night_d if _hh >= 18 else _night_d + timedelta(days=1)):%Y-%m-%d}T{_hh:02d}"
             _nk_v = _nk_map.get(_key)
             _nk_hits += _nk_v is not None
-            stars = _half_star_html(_star_value(_own, _nk_v))
+            _sv = (_nk_v if _nk_v is not None else _own) if _smode == "nk" else _star_value(_own, _nk_v)
+            stars = _half_star_html(_sv)
             rows_html += (
                 f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
                 f'<td style="padding:8px 8px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
                 f'<td style="padding:8px 8px;overflow:hidden;">{cloud_cell}</td>'
                 f'<td style="padding:8px 8px;color:#fb923c;">{humid_val}</td>'
                 f'<td style="padding:8px 8px;color:#fb923c;">{wind_cell}</td>'
-                f'<td style="padding:8px 8px;font-size:22px;line-height:1;letter-spacing:1px;">{stars}</td>'
+                f'<td style="padding:8px 8px;font-size:22px;line-height:1;letter-spacing:0;">{stars}</td>'
                 f'</tr>'
             )
 
@@ -5794,7 +5809,7 @@ with col_left:
         <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:20%;">🌤️</th>
         <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:13%;">💧</th>
         <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
-        <th title="{'Average of Nippon Kishou Star Index and JMA+ECMWF+GFS' if _nk_hits else ''}" style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
+        <th title="{_star_tip if _nk_hits else ''}" style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
       </tr>
     </thead>
     <tbody>{rows_html}</tbody>
