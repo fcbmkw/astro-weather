@@ -6885,70 +6885,114 @@ st.plotly_chart(fig, use_container_width=True,
 
 # Legend note
 
-# ── JMA MSM GPV (weather-gpv.info): Kanto · 雨量・雲量 · 詳細(39h) — khung cuối trang ─────────────
-# Ảnh: http://weather-gpv.info/msm/msm_cp_kt_{N}.{HH}Z{DD}{MON}{YYYY}.png   (N = 1..40; HH = giờ UTC của thời điểm dự báo
-# = giờ khởi đầu + N − 1). Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
-_GPV_BASE = "http://weather-gpv.info/msm/"
+# ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
+# Ảnh: {base}{prefix}{N}.{HH}Z{DD}{MON}{YYYY}.png  (N = 1..; HH = giờ UTC của thời điểm dự báo = giờ khởi đầu + N − 1)
+# Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
+_GPV_MODELS = {
+    "msm": {"label": "Kanto · 39h", "title": "JMA MSM GPV · Kanto · Rain & Cloud (39h)",
+            "base": "http://weather-gpv.info/msm/", "prefix": "msm_cp_kt_", "step_h": 3, "tries": 7, "frames": 40},
+    "gsm": {"label": "East Japan · 264h", "title": "JMA GSM GPV · East Japan · Rain & Cloud (264h)",
+            "base": "http://s3.weather-gpv.info/gsm/", "prefix": "gsm_cp_e_", "step_h": 6, "tries": 7, "frames": None},
+}
 _GPV_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
                 "Referer": "http://weather-gpv.info/"}
 _GPV_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-_GPV_FRAMES = 40          # 詳細(39時間): init + 0..39h
+_GPV_GSM_CAP = 265        # 広域(264時間): init + 0..264h
 
-def _gpv_url(init_utc, n):
+def _gpv_url(model, init_utc, n):
+    m = _GPV_MODELS[model]
     v = init_utc + timedelta(hours=n - 1)
-    return f"{_GPV_BASE}msm_cp_kt_{n}.{v:%H}Z{v:%d}{_GPV_MON[v.month - 1]}{v.year}.png"
+    return f"{m['base']}{m['prefix']}{n}.{v:%H}Z{v:%d}{_GPV_MON[v.month - 1]}{v.year}.png"
+
+def _gpv_exists(model, init_utc, n):
+    try:
+        r = requests.get(_gpv_url(model, init_utc, n), headers=_GPV_HEADERS, timeout=6, stream=True)
+        ok = (r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"))
+        r.close()
+        return ok
+    except Exception:
+        return False
+
+def _gpv_find_max(exists, cap):
+    """Khung lớn nhất tồn tại trong 1..cap (giả định các khung liên tục: có khung k thì có khung < k)."""
+    if exists(cap):
+        return cap
+    lo, hi = 1, cap
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if exists(mid):
+            lo = mid
+        else:
+            hi = mid
+    return lo
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _gpv_latest_init(_bucket: int):
-    """Lần chạy MSM mới nhất đã có ảnh (mỗi 3 giờ: 00,03,...,21 UTC). Thử lùi dần tối đa 18 giờ."""
+def _gpv_latest_init(model: str, _bucket: int):
+    """Lần chạy mới nhất đã có ảnh (MSM mỗi 3h, GSM mỗi 6h; UTC). Thử lùi dần."""
+    m = _GPV_MODELS[model]
     now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-    base = now - timedelta(hours=now.hour % 3)
-    for k in range(7):
-        init = base - timedelta(hours=3 * k)
-        try:
-            r = requests.get(_gpv_url(init, 1), headers=_GPV_HEADERS, timeout=6, stream=True)
-            ok = (r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"))
-            r.close()
-            if ok:
-                return init.isoformat()
-        except Exception:
-            pass
+    base = now - timedelta(hours=now.hour % m["step_h"])
+    for k in range(m["tries"]):
+        init = base - timedelta(hours=m["step_h"] * k)
+        if _gpv_exists(model, init, 1):
+            return init.isoformat()
     return None
 
-@st.cache_data(ttl=1800, max_entries=120, show_spinner=False)
-def _gpv_frame(init_iso: str, n: int):
+@st.cache_data(ttl=1800, show_spinner=False)
+def _gpv_nframes(model: str, init_iso: str):
+    m = _GPV_MODELS[model]
+    if m["frames"]:
+        return m["frames"]
+    init = datetime.fromisoformat(init_iso)
+    return _gpv_find_max(lambda n: _gpv_exists(model, init, n), _GPV_GSM_CAP)
+
+@st.cache_data(ttl=1800, max_entries=150, show_spinner=False)
+def _gpv_frame(model: str, init_iso: str, n: int):
     """PNG bytes của khung n. Lỗi → raise (cache_data không lưu lỗi)."""
-    r = requests.get(_gpv_url(datetime.fromisoformat(init_iso), n), headers=_GPV_HEADERS, timeout=10)
+    r = requests.get(_gpv_url(model, datetime.fromisoformat(init_iso), n), headers=_GPV_HEADERS, timeout=10)
     r.raise_for_status()
     if not r.headers.get("Content-Type", "").startswith("image"):
         raise ValueError("not an image")
     return r.content
 
 def _gpv_step(d):
-    st.session_state.gpv_n = max(1, min(_GPV_FRAMES, st.session_state.get("gpv_n", 1) + d))
+    st.session_state.gpv_n = max(1, min(st.session_state.get("gpv_max", 1), st.session_state.get("gpv_n", 1) + d))
 
 _gpv_fragment = (getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda f: f))
 
 @_gpv_fragment
 def _gpv_viewer():
     import time as _t
-    init_iso = _gpv_latest_init(int(_t.time() // 600))
-    if not init_iso:
-        st.caption("JMA MSM GPV is unavailable right now.")
-        return
-    init = datetime.fromisoformat(init_iso)
-    if st.session_state.get("gpv_init") != init_iso:       # lần chạy mới → nhảy tới khung gần giờ hiện tại nhất
-        st.session_state.gpv_init = init_iso
-        _h = (datetime.utcnow() - init).total_seconds() / 3600.0
-        st.session_state.gpv_n = max(1, min(_GPV_FRAMES, int(round(_h)) + 1))
-    c1, c2, c3 = st.columns([1, 1, 14])
-    c1.button("<", key="gpv_prev", on_click=_gpv_step, args=(-1,), use_container_width=True)
-    c2.button(">", key="gpv_next", on_click=_gpv_step, args=(1,), use_container_width=True)
-    c3.select_slider("gpv_time", options=list(range(1, _GPV_FRAMES + 1)), key="gpv_n",
-                     format_func=lambda n: (init + timedelta(hours=n - 1 + 9)).strftime("%m/%d (%a) %H:%M JST"),
-                     label_visibility="collapsed")
+    _labels = {k: v["label"] for k, v in _GPV_MODELS.items()}
+    if st.session_state.get("gpv_model") not in _GPV_MODELS:
+        st.session_state.gpv_model = "msm"
+    model = st.session_state.gpv_model
+    st.markdown(f"### ☁️ {_GPV_MODELS[model]['title']}")
+    with st.container(key="gpv_box"):
+        # hàng 1: chọn chế độ/vùng; hàng 2: ⬅️ [thanh trượt giờ] ➡️ — nằm trong cùng một khung, không xuống dòng trên iPhone
+        st.radio("gpv_mode", list(_GPV_MODELS), key="gpv_model", horizontal=True,
+                 format_func=lambda k: _labels[k], label_visibility="collapsed")
+        model = st.session_state.gpv_model
+        init_iso = _gpv_latest_init(model, int(_t.time() // 600))
+        if not init_iso:
+            st.caption("JMA GPV is unavailable right now.")
+            return
+        init = datetime.fromisoformat(init_iso)
+        nmax = _gpv_nframes(model, init_iso)
+        st.session_state.gpv_max = nmax
+        if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy mới → khung gần giờ hiện tại
+            st.session_state.gpv_sig = (model, init_iso)
+            _h = (datetime.utcnow() - init).total_seconds() / 3600.0
+            st.session_state.gpv_n = max(1, min(nmax, int(round(_h)) + 1))
+        st.session_state.gpv_n = max(1, min(nmax, st.session_state.get("gpv_n", 1)))
+        with st.container(key="gpv_nav"):
+            st.button("⬅️", key="gpv_prev", on_click=_gpv_step, args=(-1,))
+            st.select_slider("gpv_time", options=list(range(1, nmax + 1)), key="gpv_n",
+                             format_func=lambda n: (init + timedelta(hours=n - 1 + 9)).strftime("%m/%d (%a) %H:%M"),
+                             label_visibility="collapsed")
+            st.button("➡️", key="gpv_next", on_click=_gpv_step, args=(1,))
     try:
-        _img = _gpv_frame(init_iso, int(st.session_state.gpv_n))
+        _img = _gpv_frame(model, init_iso, int(st.session_state.gpv_n))
         try:
             st.image(_img, use_container_width=True)
         except TypeError:
@@ -6957,7 +7001,25 @@ def _gpv_viewer():
         st.caption(f"This frame is unavailable ({type(_e).__name__}).")
 
 st.markdown("---")
-st.markdown("### ☁️ JMA MSM GPV · Kanto · Rain & Cloud (39h)")
+st.markdown("""<style>
+/* GPV box: khung ngoài (radio + hàng điều hướng), giống nav_box phía trên bảng */
+.st-key-gpv_box > div > [data-testid="stVerticalBlock"] {
+    display: flex !important; flex-direction: column !important; gap: 6px !important;
+    width: 100% !important; box-sizing: border-box;
+    background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px; padding: 6px 10px;
+}
+.st-key-gpv_box [data-testid="stElementContainer"] { margin: 0 !important; }
+/* hàng ⬅️ slider ➡️: luôn 1 hàng (no-wrap), kể cả iPhone */
+.st-key-gpv_nav [data-testid="stVerticalBlock"] {
+    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
+    align-items: center !important; gap: 6px !important; width: 100% !important;
+}
+.st-key-gpv_nav [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
+.st-key-gpv_nav [data-testid="stButton"] button { width: 44px !important; min-width: 0 !important; padding: 0 !important; }
+.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px; }
+.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stSlider"]) { flex: 1 1 auto; min-width: 0; }
+.st-key-gpv_box [data-testid="stRadio"] label p { font-size: 13px; }
+</style>""", unsafe_allow_html=True)
 _gpv_viewer()
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
