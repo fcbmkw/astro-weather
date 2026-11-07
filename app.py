@@ -5415,15 +5415,6 @@ with col_right:
         <div class="metric-card">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
-                <a href="{_lpm_url}" target="_blank" rel="noopener" title="Light Pollution Map"
-                   style="display:inline-flex;align-items:center;justify-content:center;
-                          background:rgba(124,58,237,0.18);border:1.5px solid rgba(124,58,237,0.55);
-                          border-radius:5px;padding:2px 7px;text-decoration:none;
-                          color:#a78bfa;font-size:10px;font-weight:700;
-                          white-space:nowrap;cursor:pointer;flex-shrink:0;
-                          transition:background 0.2s;"
-                   onmouseover="this.style.background='rgba(124,58,237,0.38)'"
-                   onmouseout="this.style.background='rgba(124,58,237,0.18)'">LPM</a>
             </div>
             <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
             <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
@@ -5483,9 +5474,13 @@ with col_right:
     #   MODEL = sao của mô hình | NK = sao Nippon Kishou (3 đêm đầu) | NK+MODEL = trung bình hai bên
     _BLEND = "🔀 Blend (JMA+ECMWF+GFS)"
     _MODE_OF = {"MODEL": "model", "NK": "nk", "NK+MODEL": "both"}
-    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "MODEL", "NK", "NK+MODEL"]
+    _nk_ok = st.session_state.day_offset < 3      # Nippon Kishou chỉ có dữ liệu 3 đêm đầu
+    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "MODEL"] + (["NK", "NK+MODEL"] if _nk_ok else [])
     if st.session_state.weather_source == _BLEND:
-        cur_src = {"model": "MODEL", "nk": "NK", "both": "NK+MODEL"}.get(st.session_state.get("star_mode"), "NK+MODEL")
+        _pm = st.session_state.get("star_mode", "both")
+        if not _nk_ok and _pm in ("nk", "both"):
+            _pm = "model"      # từ đêm 4: tự chuyển sang JMA+ECMWF+GFS (lựa chọn gốc vẫn được giữ khi quay lại đêm 1–3)
+        cur_src = {"model": "MODEL", "nk": "NK", "both": "NK+MODEL"}.get(_pm, "NK+MODEL")
     else:
         cur_src = st.session_state.weather_source if st.session_state.weather_source in source_options else "JMA"
     src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('+', 'p')}"
@@ -5496,6 +5491,9 @@ with col_right:
                           index=source_options.index(cur_src),
                           format_func=_src_disp,
                           label_visibility="collapsed", key=src_key)
+    if not _nk_ok:
+        st.markdown('<div style="font-size:11px;color:#64748b;margin:-8px 0 4px;">'
+                    '⭐ Nippon Kishou options: nights 1–3 only</div>', unsafe_allow_html=True)
     if chosen != cur_src:
         if chosen in _MODE_OF:
             st.session_state.weather_source = _BLEND
@@ -5763,6 +5761,8 @@ with col_left:
         # Sao mỗi giờ theo chế độ: model = mô hình | nk = Nippon Kishou (3 đêm đầu, sau đó dùng mô hình)
         # | both = trung bình hai bên (3 đêm đầu), sau đó chỉ mô hình. Mây/ẩm/gió luôn từ JMA+ECMWF+GFS.
         _smode = st.session_state.get("star_mode", "both")
+        if st.session_state.day_offset >= 3:
+            _smode = "model"            # Nippon Kishou chỉ có 3 đêm đầu
         _nk_map = {}
         if st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)" and _smode in ("nk", "both"):
             try:
@@ -6320,9 +6320,6 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 .ctl{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center;}
 .pp{background:rgba(15,23,42,.78);color:#e2e8f0;border:1px solid #475569;border-radius:8px;font-size:12px;padding:4px 10px;cursor:pointer;}
 .cnt{background:rgba(15,23,42,.78);color:#cbd5e1;border-radius:8px;font-size:11px;padding:4px 8px;}
-.cn{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(15,23,42,.78);border:1px solid #475569;border-radius:8px;padding:3px 8px;color:#cbd5e1;font-size:11px;}
-.cn input{width:88px;accent-color:#fb923c;margin:0;cursor:pointer;}
-.cn b{min-width:18px;text-align:right;font-weight:600;}
 .bar{height:3px;background:#1e293b;border-radius:2px;margin:6px 0 8px;overflow:hidden;}
 .bar>i{display:block;height:100%;width:0;background:#fb923c;}
 .sub{color:#94a3b8;font-size:12px;margin-bottom:4px;min-height:34px;line-height:17px;}
@@ -6331,8 +6328,7 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 </style></head><body>
 <div class="card">
   <div class="shot"><a href="__LINK__" target="_blank" rel="noopener"><img id="im" referrerpolicy="no-referrer" alt="Camera image unavailable — open the source page"></a>
-    <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div>
-    <div class="cn" id="cn" style="display:none" title="Dim image — drag left = darker, double-click to reset"><span>🌙</span><input id="ct" type="range" min="0" max="100" value="100" step="1" aria-label="Contrast"><b id="cv">0</b></div></div>
+    <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div></div>
   <div class="bar"><i id="bar"></i></div>
   <div class="sub">__SUB__</div>
   <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
@@ -6342,8 +6338,7 @@ html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
 (function(){
 var CFG=__CFG__;
 var img=document.getElementById('im'),st=document.getElementById('st'),pp=document.getElementById('pp'),
-    bar=document.getElementById('bar'),cnt=document.getElementById('cnt'),ctl=document.getElementById('ctl'),
-    ct=document.getElementById('ct'),cv=document.getElementById('cv'),cn=document.getElementById('cn');
+    bar=document.getElementById('bar'),cnt=document.getElementById('cnt'),ctl=document.getElementById('ctl');
 var frames=[],idx=0,timer=null,playing=false;
 // Nhãn thời gian: "● LIVE · 4 min ago" (tính theo đồng hồ trình duyệt, tự cập nhật) thay cho giờ tuyệt đối.
 function age(e,last){var m=Math.max(0,Math.round((Date.now()-e)/60000));
@@ -6353,13 +6348,6 @@ function age(e,last){var m=Math.max(0,Math.round((Date.now()-e)/60000));
 function label(i){var f=frames[i];if(f.e==null){st.style.color='';return f.l;}
   var r=age(f.e,i===frames.length-1);st.style.color=r.c;return r.t;}
 setInterval(function(){if(frames.length)st.textContent=label(idx);},20000);
-// Thanh contrast (chỉ bật khi CFG.contrast): tăng sáng + tương phản để thấy sao/mây lúc đêm. Nhớ giá trị qua localStorage.
-function applyC(p){p=(p===undefined||p===null||isNaN(+p))?100:+p;img.style.filter=p>=100?'none':('brightness('+(0.15+0.85*p/100).toFixed(2)+')');cv.textContent=p;}
-var CK=(CFG.ckey||'astro_cam_contrast')+'_dim';
-if(CFG.contrast){cn.style.display='flex';var s0=100;try{var q=localStorage.getItem(CK);if(q!==null)s0=+q;}catch(e){}
-  ct.value=s0;applyC(s0);ct.oninput=function(){applyC(ct.value);};
-  ct.onchange=function(){try{localStorage.setItem(CK,ct.value);}catch(e){}};
-  ct.ondblclick=function(){ct.value=100;applyC(100);ct.onchange();};}
 function show(i){idx=i;img.src=frames[i].s;st.textContent=label(i);
   bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
 function tick(){var n=(idx+1)%frames.length;show(n);timer=setTimeout(tick,n===frames.length-1?1600:450);}
@@ -6424,9 +6412,9 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
     m = re.search(r"/livecam/([0-9A-Za-z]+)/640/(\d{14})\.(jpg|webp)", img_url or "")
     if m:
         cfg = {"mode": "probe", "base": img_url[:img_url.rindex("/") + 1], "ext": m.group(3),
-               "anchor": m.group(2), "minutes": 50, "max": 10, "contrast": True}
+               "anchor": m.group(2), "minutes": 50, "max": 10}
     else:
-        cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}], "contrast": True}
+        cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}]}
     return _cam_anim_doc(cfg, link, sub, cam_name, "" if cfg["mode"] == "probe" else (_lc_ts_label(ts) if ts else ""), "Open on Weathernews ↗")
 
 st.markdown(f'### 📹 Live Sky Camera near "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
@@ -6783,8 +6771,7 @@ def _cam_render():
                     f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})"
                     f"<br><span style='color:#64748b;'>geocoded: {_lc_html_mod.escape(str(_mn))}</span>")
             _extra = ""   # đã bỏ link "Map ↗"
-            _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames, "contrast": True,
-                                     "ckey": "astro_cam_contrast_road"}, _detail, _sub, _cam[1],
+            _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
                                     "", "Open on MLIT ↗", _extra))
         else:   # không lấy được camera gần -> quay về bản đồ như cũ
             if _rd_diag:
