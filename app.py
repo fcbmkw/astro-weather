@@ -6885,6 +6885,81 @@ st.plotly_chart(fig, use_container_width=True,
 
 # Legend note
 
+# ── JMA MSM GPV (weather-gpv.info): Kanto · 雨量・雲量 · 詳細(39h) — khung cuối trang ─────────────
+# Ảnh: http://weather-gpv.info/msm/msm_cp_kt_{N}.{HH}Z{DD}{MON}{YYYY}.png   (N = 1..40; HH = giờ UTC của thời điểm dự báo
+# = giờ khởi đầu + N − 1). Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
+_GPV_BASE = "http://weather-gpv.info/msm/"
+_GPV_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
+                "Referer": "http://weather-gpv.info/"}
+_GPV_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+_GPV_FRAMES = 40          # 詳細(39時間): init + 0..39h
+
+def _gpv_url(init_utc, n):
+    v = init_utc + timedelta(hours=n - 1)
+    return f"{_GPV_BASE}msm_cp_kt_{n}.{v:%H}Z{v:%d}{_GPV_MON[v.month - 1]}{v.year}.png"
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _gpv_latest_init(_bucket: int):
+    """Lần chạy MSM mới nhất đã có ảnh (mỗi 3 giờ: 00,03,...,21 UTC). Thử lùi dần tối đa 18 giờ."""
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    base = now - timedelta(hours=now.hour % 3)
+    for k in range(7):
+        init = base - timedelta(hours=3 * k)
+        try:
+            r = requests.get(_gpv_url(init, 1), headers=_GPV_HEADERS, timeout=6, stream=True)
+            ok = (r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"))
+            r.close()
+            if ok:
+                return init.isoformat()
+        except Exception:
+            pass
+    return None
+
+@st.cache_data(ttl=1800, max_entries=120, show_spinner=False)
+def _gpv_frame(init_iso: str, n: int):
+    """PNG bytes của khung n. Lỗi → raise (cache_data không lưu lỗi)."""
+    r = requests.get(_gpv_url(datetime.fromisoformat(init_iso), n), headers=_GPV_HEADERS, timeout=10)
+    r.raise_for_status()
+    if not r.headers.get("Content-Type", "").startswith("image"):
+        raise ValueError("not an image")
+    return r.content
+
+def _gpv_step(d):
+    st.session_state.gpv_n = max(1, min(_GPV_FRAMES, st.session_state.get("gpv_n", 1) + d))
+
+_gpv_fragment = (getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda f: f))
+
+@_gpv_fragment
+def _gpv_viewer():
+    import time as _t
+    init_iso = _gpv_latest_init(int(_t.time() // 600))
+    if not init_iso:
+        st.caption("JMA MSM GPV is unavailable right now.")
+        return
+    init = datetime.fromisoformat(init_iso)
+    if st.session_state.get("gpv_init") != init_iso:       # lần chạy mới → nhảy tới khung gần giờ hiện tại nhất
+        st.session_state.gpv_init = init_iso
+        _h = (datetime.utcnow() - init).total_seconds() / 3600.0
+        st.session_state.gpv_n = max(1, min(_GPV_FRAMES, int(round(_h)) + 1))
+    c1, c2, c3 = st.columns([1, 1, 14])
+    c1.button("<", key="gpv_prev", on_click=_gpv_step, args=(-1,), use_container_width=True)
+    c2.button(">", key="gpv_next", on_click=_gpv_step, args=(1,), use_container_width=True)
+    c3.select_slider("gpv_time", options=list(range(1, _GPV_FRAMES + 1)), key="gpv_n",
+                     format_func=lambda n: (init + timedelta(hours=n - 1 + 9)).strftime("%m/%d (%a) %H:%M JST"),
+                     label_visibility="collapsed")
+    try:
+        _img = _gpv_frame(init_iso, int(st.session_state.gpv_n))
+        try:
+            st.image(_img, use_container_width=True)
+        except TypeError:
+            st.image(_img, use_column_width=True)
+    except Exception as _e:
+        st.caption(f"This frame is unavailable ({type(_e).__name__}).")
+
+st.markdown("---")
+st.markdown("### ☁️ JMA MSM GPV · Kanto · Rain & Cloud (39h)")
+_gpv_viewer()
+
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
 
