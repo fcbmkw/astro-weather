@@ -6999,23 +6999,26 @@ def _gpv_viewer():
 
 st.markdown("---")
 st.markdown("""<style>
-/* GPV box: khung ngoài (radio + hàng điều hướng), giống nav_box phía trên bảng */
-.st-key-gpv_box > div > [data-testid="stVerticalBlock"],
-[data-testid="stVerticalBlock"].st-key-gpv_box {
+/* GPV: 2 khung KHÁC NHAU, mỗi selector chỉ trúng đúng 1 khối (không dùng "> div >" vì sẽ trúng cả khối lồng bên trong).
+   Hỗ trợ cả 2 kiểu DOM của Streamlit: class nằm TRÊN stVerticalBlock, hoặc nằm trên wrapper bao ngoài nó. */
+/* Khung ngoài (radio + hàng điều hướng): viền bo + xếp cột */
+div.st-key-gpv_box[data-testid="stVerticalBlock"],
+div.st-key-gpv_box > [data-testid="stVerticalBlock"] {
     display: flex !important; flex-direction: column !important; gap: 6px !important;
-    width: 100% !important; box-sizing: border-box;
+    width: 100% !important; box-sizing: border-box !important;
     background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px; padding: 6px 10px;
 }
 .st-key-gpv_box [data-testid="stElementContainer"] { margin: 0 !important; }
-/* hàng ⬅️ ➡️ [slider ngắn]: LUÔN 1 hàng (PC và iPhone). Độ rộng cố định → không phụ thuộc cách Streamlit co giãn */
-[data-testid="stVerticalBlock"].st-key-gpv_nav,
-.st-key-gpv_nav [data-testid="stVerticalBlock"] {
+/* Hàng điều hướng ⬅️ ➡️ [slider]: KHÔNG viền/padding, luôn 1 hàng (PC & iPhone) */
+div.st-key-gpv_nav[data-testid="stVerticalBlock"],
+div.st-key-gpv_nav > [data-testid="stVerticalBlock"] {
     display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
-    align-items: center !important; justify-content: flex-start !important; gap: 6px !important; width: 100% !important;
+    align-items: center !important; justify-content: flex-start !important; gap: 6px !important;
+    width: 100% !important; border: 0 !important; padding: 0 !important; background: none !important;
 }
 .st-key-gpv_nav [data-testid="stElementContainer"] { margin: 0 !important; width: auto !important; flex: 0 0 auto !important; }
-.st-key-gpv_nav [data-testid="stButton"] button { width: 44px !important; min-width: 0 !important; padding: 0 !important; }
 .st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px !important; width: 44px !important; }
+.st-key-gpv_nav [data-testid="stButton"] button { width: 44px !important; min-width: 0 !important; padding: 0 !important; }
 .st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stSlider"]) {
     flex: 0 0 150px !important; width: 150px !important; min-width: 0 !important; max-width: calc(100vw - 170px) !important;
 }
