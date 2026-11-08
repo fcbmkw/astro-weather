@@ -5678,6 +5678,13 @@ with col_left:
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
 
+/* Thẻ camera (iframe srcdoc có chữ "ANIM"): màn hình nhỏ → chiều cao ước lượng theo bề rộng thay vì 595px cố định.
+   (Nếu JS trong thẻ chạy được thì JS đặt chiều cao chính xác bằng !important inline và thắng quy tắc này.) */
+@media (max-width: 640px) {
+    iframe[srcdoc*="ANIM"] { height: calc((100vw - 64px) * 0.5625 + 260px) !important; min-height: 0 !important; }
+    [data-testid="stElementContainer"]:has(iframe[srcdoc*="ANIM"]) { height: auto !important; min-height: 0 !important; }
+}
+
 </style>""", unsafe_allow_html=True)
 
     # Nav controls — chỉ còn nav1: ⬅️  date  ➡️
@@ -6384,8 +6391,20 @@ else{
 }
 // Tự chỉnh chiều cao iframe theo thẻ (iframe cố định 595px chỉ hợp màn hình rộng → trên iPhone thừa khoảng trống lớn)
 var card=document.querySelector('.card');
-function fit(){try{var h=Math.ceil(card.getBoundingClientRect().height)+2;
-  if(window.frameElement&&h>40)window.frameElement.style.height=h+'px';}catch(e){}}
+function fit(){try{
+  var h=Math.ceil(card.getBoundingClientRect().height)+2, f=window.frameElement;
+  if(!f||h<40)return;
+  var old=f.getBoundingClientRect().height;
+  f.style.setProperty('height',h+'px','important'); f.style.setProperty('min-height','0','important'); f.setAttribute('height',h);
+  // Streamlit có thể giữ chiều cao cố định ở khối bao ngoài iframe → đặt lại cho các khối đó (tới stElementContainer)
+  var a=f.parentElement,n=0;
+  while(a&&n<6){
+    var ah=a.getBoundingClientRect().height;
+    if(a.style.height||Math.abs(ah-old)<4){a.style.setProperty('height',h+'px','important');a.style.setProperty('min-height','0','important');}
+    if(a.getAttribute&&a.getAttribute('data-testid')==='stElementContainer')break;
+    a=a.parentElement;n++;
+  }
+}catch(e){}}
 fit(); window.addEventListener('load',fit); window.addEventListener('resize',fit); img.addEventListener('load',fit);
 if(window.ResizeObserver)new ResizeObserver(fit).observe(card);
 })();
