@@ -5427,7 +5427,6 @@ with col_right:
             <div style="flex:1;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌙 MOON PHASE</span>
                 <div style="font-size:28px;font-weight:bold;color:#fbbf24;margin-top:5px;">{moon_pct}%</div>
-                <div style="font-size:12px;color:#cbd5e1;margin-top:4px;font-style:italic;">{moon_text}</div>
             </div>
             <div style="flex:1;border-left:1px solid #334155;padding-left:10px;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">📍 COORDINATE</span>
@@ -5678,12 +5677,6 @@ with col_left:
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
 
-/* Thẻ camera (iframe srcdoc có chữ "ANIM"): màn hình nhỏ → chiều cao ước lượng theo bề rộng thay vì 595px cố định.
-   (Nếu JS trong thẻ chạy được thì JS đặt chiều cao chính xác bằng !important inline và thắng quy tắc này.) */
-@media (max-width: 640px) {
-    iframe[srcdoc*="ANIM"] { height: calc((100vw - 64px) * 0.5625 + 260px) !important; min-height: 0 !important; }
-    [data-testid="stElementContainer"]:has(iframe[srcdoc*="ANIM"]) { height: auto !important; min-height: 0 !important; }
-}
 
 </style>""", unsafe_allow_html=True)
 
@@ -6389,24 +6382,6 @@ else{
   }
   setTimeout(finish,9000);
 }
-// Tự chỉnh chiều cao iframe theo thẻ (iframe cố định 595px chỉ hợp màn hình rộng → trên iPhone thừa khoảng trống lớn)
-var card=document.querySelector('.card');
-function fit(){try{
-  var h=Math.ceil(card.getBoundingClientRect().height)+2, f=window.frameElement;
-  if(!f||h<40)return;
-  var old=f.getBoundingClientRect().height;
-  f.style.setProperty('height',h+'px','important'); f.style.setProperty('min-height','0','important'); f.setAttribute('height',h);
-  // Streamlit có thể giữ chiều cao cố định ở khối bao ngoài iframe → đặt lại cho các khối đó (tới stElementContainer)
-  var a=f.parentElement,n=0;
-  while(a&&n<6){
-    var ah=a.getBoundingClientRect().height;
-    if(a.style.height||Math.abs(ah-old)<4){a.style.setProperty('height',h+'px','important');a.style.setProperty('min-height','0','important');}
-    if(a.getAttribute&&a.getAttribute('data-testid')==='stElementContainer')break;
-    a=a.parentElement;n++;
-  }
-}catch(e){}}
-fit(); window.addEventListener('load',fit); window.addEventListener('resize',fit); img.addEventListener('load',fit);
-if(window.ResizeObserver)new ResizeObserver(fit).observe(card);
 })();
 </script></body></html>"""
 
@@ -6420,9 +6395,25 @@ def _cam_anim_doc(cfg, link, sub, title, stamp, btn_label, extra=""):
         doc = doc.replace(k, v)
     return doc
 
-def _cam_show(content):
+def _is_mobile_ua():
+    try:
+        _ua = (st.context.headers.get("User-Agent") or "").lower()
+    except Exception:
+        return False
+    return ("iphone" in _ua) or ("android" in _ua and "mobile" in _ua)
+
+def _cam_show(content, kind="sky"):
     if isinstance(content, str) and content.startswith("<!--ANIM-->"):
-        _lc_components.html(content, height=_CAM_H)
+        # Streamlit mới: st.iframe tự đo chiều cao nội dung (hết khoảng trống trên màn hình nhỏ)
+        if hasattr(st, "iframe"):
+            try:
+                st.iframe(content, height="content")
+                return
+            except Exception:
+                pass
+        # Streamlit cũ: chiều cao cố định, ngắn hơn trên điện thoại (ảnh hẹp → thẻ thấp hơn)
+        _h = (340 if kind == "sky" else 390) if _is_mobile_ua() else _CAM_H
+        _lc_components.html(content, height=_h)
     else:
         st.markdown(content, unsafe_allow_html=True)
 
@@ -6436,7 +6427,7 @@ def _lc_card_html(cam_name, page_path, sub, img_url, ts):
         cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}]}
     return _cam_anim_doc(cfg, link, sub, cam_name, "" if cfg["mode"] == "probe" else (_lc_ts_label(ts) if ts else ""), "Open on Weathernews ↗")
 
-st.markdown(f'### 📹 Live Sky Camera near "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
+st.markdown(f'### 📹 Live Camera near "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
 _lc_kind, _lc_pref = _lc_resolve()
 _lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
             "font-family:sans-serif;")
@@ -6787,11 +6778,10 @@ def _cam_render():
             _detail = _RD_DETAIL.format(cid=_cam[0])
             _frames = _rd_frames(_cam, _b, _mime)
             _sub = (f"Nearest road camera (approx. position): {_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
-                    f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})"
-                    f"<br><span style='color:#64748b;'>geocoded: {_lc_html_mod.escape(str(_mn))}</span>")
+                    f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
             _extra = ""   # đã bỏ link "Map ↗"
             _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
-                                    "", "Open on MLIT ↗", _extra))
+                                    "", "Open on MLIT ↗", _extra), kind="road")
         else:   # không lấy được camera gần -> quay về bản đồ như cũ
             if _rd_diag:
                 st.caption(f"ℹ️ {_rd_diag}")
@@ -6803,110 +6793,6 @@ def _cam_render():
                 unsafe_allow_html=True)
 
 _cam_render()
-# ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
-st.markdown("---")
-st.markdown("### 📊 Moon, Sun & Milkyway Altitude (°)")
-
-import plotly.graph_objects as go
-
-# ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
-# Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
-def _sun_bright_opacity(sun_alt):
-    if sun_alt <= -13:
-        return 0.0
-    op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
-    return round(min(max(op, 0.0), 0.50), 3)
-
-fig = go.Figure()
-
-# ── Background brightness bands (vrect per slot) ─────────────────────────────
-_x_positions = list(range(len(hours_labels)))
-for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
-    _op = _sun_bright_opacity(_sa)
-    if _op > 0.005:
-        fig.add_vrect(
-            x0=_i - 0.5, x1=_i + 0.5,
-            fillcolor="rgba(251,146,60,1.0)",
-            opacity=_op,
-            layer="below",
-            line_width=0,
-        )
-
-# ── Moon: filled area ─────────────────────────────────────────────────────────
-fig.add_trace(go.Scatter(
-    x=_x_positions, y=moon_altitudes,
-    mode='lines',
-    name='🌙 Moon',
-    line=dict(color='#fbbf24', width=4),
-    fill='tozeroy',
-    fillcolor='rgba(251,191,36,0.20)',
-    hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
-    customdata=hours_labels,
-))
-
-# ── Sun: dashed blue line ─────────────────────────────────────────────────────
-fig.add_trace(go.Scatter(
-    x=_x_positions, y=sun_altitudes,
-    mode='lines',
-    name='☀️ Sun',
-    line=dict(color='#38bdf8', width=4, dash='dash'),
-    hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
-    customdata=hours_labels,
-))
-
-# ── Milky Way GC: dashed purple ───────────────────────────────────────────────
-fig.add_trace(go.Scatter(
-    x=_x_positions, y=milkyway_altitudes,
-    mode='lines',
-    name='🌌 Milkyway',
-    line=dict(color='#a78bfa', width=3.5, dash='dash'),
-    hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
-    customdata=hours_labels,
-))
-
-# ── Horizon rule ──────────────────────────────────────────────────────────────
-fig.add_hline(y=0, line=dict(color='#64748b', dash='dot', width=1.5))
-
-# ── -13° rule ─────────────────────────────────────────────────────────────────
-fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.70)', dash='dot', width=1.5),
-              annotation_text="−13°", annotation_font_color="rgba(251,146,60,0.7)",
-              annotation_position="bottom right")
-
-# ── Layout ────────────────────────────────────────────────────────────────────
-fig.update_layout(
-    height=480,
-    paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(15,23,42,0.0)',
-    font=dict(color='#94a3b8', size=12),
-    xaxis=dict(
-        tickmode='array',
-        tickvals=_x_positions,
-        ticktext=hours_labels,
-        gridcolor='rgba(71,85,105,0.3)',
-        fixedrange=True,
-    ),
-    yaxis=dict(
-        gridcolor='rgba(71,85,105,0.3)',
-        title=None,
-        zeroline=False,
-        fixedrange=True,
-    ),
-    legend=dict(
-        orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
-        font=dict(color='#cbd5e1'),
-        bgcolor='rgba(0,0,0,0)',
-    ),
-    margin=dict(l=50, r=20, t=40, b=40),
-    hovermode='x unified',
-    dragmode=False,
-)
-
-st.plotly_chart(fig, use_container_width=True,
-                config={'displayModeBar': False, 'scrollZoom': False, 'doubleClick': False,
-                        'showAxisDragHandles': False})
-
-# Legend note
-
 # ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
 # Ảnh: {base}{prefix}{N}.{HH}Z{DD}{MON}{YYYY}.png  (N = 1..; HH = giờ UTC của thời điểm dự báo = giờ khởi đầu + N − 1)
 # Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
@@ -7050,6 +6936,110 @@ div.st-key-gpv_nav > [data-testid="stVerticalBlock"] {
 .st-key-gpv_box [data-testid="stRadio"] label p { font-size: 13px; }
 </style>""", unsafe_allow_html=True)
 _gpv_viewer()
+
+# ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
+st.markdown("---")
+st.markdown("### 📊 Milkyway Altitude")
+
+import plotly.graph_objects as go
+
+# ── Sun brightness: opacity gradient theo Sun altitude ────────────────────────
+# Sun > 0°  → cam đậm | Sun 0°~-13° → mờ dần | Sun <= -13° → tắt hẳn (full dark)
+def _sun_bright_opacity(sun_alt):
+    if sun_alt <= -13:
+        return 0.0
+    op = (sun_alt + 13) / 23.0 * 0.50   # -13°→0.0, 0°→0.28, +10°→0.50
+    return round(min(max(op, 0.0), 0.50), 3)
+
+fig = go.Figure()
+
+# ── Background brightness bands (vrect per slot) ─────────────────────────────
+_x_positions = list(range(len(hours_labels)))
+for _i, (_lbl, _sa) in enumerate(zip(hours_labels, sun_altitudes)):
+    _op = _sun_bright_opacity(_sa)
+    if _op > 0.005:
+        fig.add_vrect(
+            x0=_i - 0.5, x1=_i + 0.5,
+            fillcolor="rgba(251,146,60,1.0)",
+            opacity=_op,
+            layer="below",
+            line_width=0,
+        )
+
+# ── Moon: filled area ─────────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=moon_altitudes,
+    mode='lines',
+    name='🌙 Moon',
+    line=dict(color='#fbbf24', width=4),
+    fill='tozeroy',
+    fillcolor='rgba(251,191,36,0.20)',
+    hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Sun: dashed blue line ─────────────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=sun_altitudes,
+    mode='lines',
+    name='☀️ Sun',
+    line=dict(color='#38bdf8', width=4, dash='dash'),
+    hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Milky Way GC: dashed purple ───────────────────────────────────────────────
+fig.add_trace(go.Scatter(
+    x=_x_positions, y=milkyway_altitudes,
+    mode='lines',
+    name='🌌 Milkyway',
+    line=dict(color='#a78bfa', width=3.5, dash='dash'),
+    hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
+    customdata=hours_labels,
+))
+
+# ── Horizon rule ──────────────────────────────────────────────────────────────
+fig.add_hline(y=0, line=dict(color='#64748b', dash='dot', width=1.5))
+
+# ── -13° rule ─────────────────────────────────────────────────────────────────
+fig.add_hline(y=-13, line=dict(color='rgba(251,146,60,0.70)', dash='dot', width=1.5),
+              annotation_text="−13°", annotation_font_color="rgba(251,146,60,0.7)",
+              annotation_position="bottom right")
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+fig.update_layout(
+    height=480,
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(15,23,42,0.0)',
+    font=dict(color='#94a3b8', size=12),
+    xaxis=dict(
+        tickmode='array',
+        tickvals=_x_positions,
+        ticktext=hours_labels,
+        gridcolor='rgba(71,85,105,0.3)',
+        fixedrange=True,
+    ),
+    yaxis=dict(
+        gridcolor='rgba(71,85,105,0.3)',
+        title=None,
+        zeroline=False,
+        fixedrange=True,
+    ),
+    legend=dict(
+        orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0,
+        font=dict(color='#cbd5e1'),
+        bgcolor='rgba(0,0,0,0)',
+    ),
+    margin=dict(l=50, r=20, t=40, b=40),
+    hovermode='x unified',
+    dragmode=False,
+)
+
+st.plotly_chart(fig, use_container_width=True,
+                config={'displayModeBar': False, 'scrollZoom': False, 'doubleClick': False,
+                        'showAxisDragHandles': False})
+
+# Legend note
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
