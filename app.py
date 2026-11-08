@@ -5566,11 +5566,8 @@ with col_right:
         _html = (
             '<div style="margin-top:8px;">'
             '<div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:6px;letter-spacing:0.5px;">'
-            '\U0001f31f HIGHLIGHT TODAY</div>'
+            '\U0001f31f HIGHLIGHT TONIGHT</div>'
             f'<div style="display:flex;flex-direction:column;gap:2px;width:100%;">{_th_rows}</div>'
-            '<div style="font-size:10px;color:#475569;margin-top:5px;text-align:right;">'
-            '<span style="color:#6ee7b7;">&#9679;</span> Perfect &nbsp;'
-            '<span style="color:#93c5fd;">&#9679;</span> Good &nbsp;(tonight)</div>'
             '</div>')
         return _html
 
@@ -6987,10 +6984,10 @@ def _gpv_viewer():
         st.session_state.gpv_n = max(1, min(nmax, st.session_state.get("gpv_n", 1)))
         with st.container(key="gpv_nav"):
             st.button("⬅️", key="gpv_prev", on_click=_gpv_step, args=(-1,))
+            st.button("➡️", key="gpv_next", on_click=_gpv_step, args=(1,))
             st.select_slider("gpv_time", options=list(range(1, nmax + 1)), key="gpv_n",
                              format_func=lambda n: (init + timedelta(hours=n - 1 + 9)).strftime("%m/%d (%a) %H:%M"),
                              label_visibility="collapsed")
-            st.button("➡️", key="gpv_next", on_click=_gpv_step, args=(1,))
     try:
         _img = _gpv_frame(model, init_iso, int(st.session_state.gpv_n))
         try:
@@ -7003,21 +7000,25 @@ def _gpv_viewer():
 st.markdown("---")
 st.markdown("""<style>
 /* GPV box: khung ngoài (radio + hàng điều hướng), giống nav_box phía trên bảng */
-.st-key-gpv_box > div > [data-testid="stVerticalBlock"] {
+.st-key-gpv_box > div > [data-testid="stVerticalBlock"],
+[data-testid="stVerticalBlock"].st-key-gpv_box {
     display: flex !important; flex-direction: column !important; gap: 6px !important;
     width: 100% !important; box-sizing: border-box;
     background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px; padding: 6px 10px;
 }
 .st-key-gpv_box [data-testid="stElementContainer"] { margin: 0 !important; }
-/* hàng ⬅️ slider ➡️: luôn 1 hàng (no-wrap), kể cả iPhone */
+/* hàng ⬅️ ➡️ [slider ngắn]: LUÔN 1 hàng (PC và iPhone). Độ rộng cố định → không phụ thuộc cách Streamlit co giãn */
+[data-testid="stVerticalBlock"].st-key-gpv_nav,
 .st-key-gpv_nav [data-testid="stVerticalBlock"] {
     display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
-    align-items: center !important; gap: 6px !important; width: 100% !important;
+    align-items: center !important; justify-content: flex-start !important; gap: 6px !important; width: 100% !important;
 }
-.st-key-gpv_nav [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
+.st-key-gpv_nav [data-testid="stElementContainer"] { margin: 0 !important; width: auto !important; flex: 0 0 auto !important; }
 .st-key-gpv_nav [data-testid="stButton"] button { width: 44px !important; min-width: 0 !important; padding: 0 !important; }
-.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px; }
-.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stSlider"]) { flex: 1 1 auto; min-width: 0; }
+.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px !important; width: 44px !important; }
+.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stSlider"]) {
+    flex: 0 0 150px !important; width: 150px !important; min-width: 0 !important; max-width: calc(100vw - 170px) !important;
+}
 .st-key-gpv_box [data-testid="stRadio"] label p { font-size: 13px; }
 </style>""", unsafe_allow_html=True)
 _gpv_viewer()
