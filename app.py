@@ -6382,6 +6382,12 @@ else{
   }
   setTimeout(finish,9000);
 }
+// Tự chỉnh chiều cao iframe theo thẻ (iframe cố định 595px chỉ hợp màn hình rộng → trên iPhone thừa khoảng trống lớn)
+var card=document.querySelector('.card');
+function fit(){try{var h=Math.ceil(card.getBoundingClientRect().height)+2;
+  if(window.frameElement&&h>40)window.frameElement.style.height=h+'px';}catch(e){}}
+fit(); window.addEventListener('load',fit); window.addEventListener('resize',fit); img.addEventListener('load',fit);
+if(window.ResizeObserver)new ResizeObserver(fit).observe(card);
 })();
 </script></body></html>"""
 
@@ -6964,7 +6970,7 @@ def _gpv_viewer():
     if st.session_state.get("gpv_model") not in _GPV_MODELS:
         st.session_state.gpv_model = "msm"
     model = st.session_state.gpv_model
-    st.markdown(f"### ☁️ {_GPV_MODELS[model]['title']}")
+    st.markdown("### ☁️ GPV Weather")
     with st.container(key="gpv_box"):
         # hàng 1: chọn chế độ/vùng; hàng 2: ⬅️ [thanh trượt giờ] ➡️ — nằm trong cùng một khung, không xuống dòng trên iPhone
         st.radio("gpv_mode", list(_GPV_MODELS), key="gpv_model", horizontal=True,
@@ -7020,7 +7026,7 @@ div.st-key-gpv_nav > [data-testid="stVerticalBlock"] {
 .st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px !important; width: 44px !important; }
 .st-key-gpv_nav [data-testid="stButton"] button { width: 44px !important; min-width: 0 !important; padding: 0 !important; }
 .st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stSlider"]) {
-    flex: 0 0 150px !important; width: 150px !important; min-width: 0 !important; max-width: calc(100vw - 170px) !important;
+    flex: 0 0 260px !important; width: 260px !important; min-width: 0 !important; max-width: calc(100vw - 160px) !important;
 }
 .st-key-gpv_box [data-testid="stRadio"] label p { font-size: 13px; }
 </style>""", unsafe_allow_html=True)
