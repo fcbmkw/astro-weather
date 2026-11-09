@@ -5405,20 +5405,58 @@ st.markdown("""
         [data-testid="stTable"] td:nth-child(5), [data-testid="stTable"] th:nth-child(5) { width: 35% !important; }
     </style>
 """, unsafe_allow_html=True)
+# ── TEMPERATURE hiện tại (Open-Meteo "current": cập nhật mỗi 15 phút, cả ngày lẫn đêm) ────────────────────
+@st.cache_data(ttl=600, show_spinner=False)
+def _current_temp(lat3: float, lon3: float):
+    """Nhiệt độ 2 m hiện tại tại toạ độ (lỗi → raise, cache_data không lưu lỗi)."""
+    r = requests.get("https://api.open-meteo.com/v1/forecast",
+                     params={"latitude": lat3, "longitude": lon3,
+                             "current": "temperature_2m,apparent_temperature", "timezone": "auto"},
+                     timeout=6)
+    r.raise_for_status()
+    c = r.json()["current"]
+    return {"t": float(c["temperature_2m"]), "feels": c.get("apparent_temperature"), "time": str(c.get("time", ""))}
+
+_sky_temp_fragment = st.fragment(run_every="10m") if hasattr(st, "fragment") else (lambda f: f)
+
+@_sky_temp_fragment
+def _sky_temp_card(lat3, lon3, left_html):
+    """Khung: [SKY QUALITY | TEMPERATURE]. Chạy lại mỗi 10 phút (không tải lại cả trang)."""
+    try:
+        d = _current_temp(lat3, lon3)
+        _tv = d["t"]
+        _col = "#93c5fd" if _tv < 5 else ("#fbbf24" if _tv < 25 else "#fb923c")
+        _feels = f"Feels {round(float(d['feels']))}° · " if d.get("feels") is not None else ""
+        _hhmm = d["time"][11:16] if len(d["time"]) >= 16 else ""
+        _big = f'{_tv:.1f}°C'
+        _small = f'{_feels}{_hhmm}'
+    except Exception:
+        _col, _big, _small = "#64748b", "--", "unavailable"
+    _bl = "border-left:1px solid #334155;padding-left:10px;" if left_html else ""
+    st.markdown(f"""
+        <div class="metric-card">
+            <div style="display:flex;gap:10px;">
+                {left_html}
+                <div style="flex:1;min-width:0;{_bl}">
+                    <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌡️ TEMPERATURE</span>
+                    <div style="font-size:28px;font-weight:bold;color:{_col};margin-top:5px;line-height:1.2;">{_big}</div>
+                    <div style="font-size:12px;color:#94a3b8;margin-top:3px;">{_small}</div>
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
 col_left, col_right = st.columns([2.5, 1.1])
 
 with col_right:
-    # Bortle — model chỉ chính xác trong lãnh thổ Nhật Bản, ẩn nếu ở ngoài
+    # Bortle — model chỉ chính xác trong lãnh thổ Nhật Bản, ẩn nếu ở ngoài (khi đó khung chỉ còn TEMPERATURE)
     _in_japan = (24.0 <= st.session_state.lat <= 46.0 and 122.0 <= st.session_state.lon <= 154.0)
-    if _in_japan:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+    _sq_left = (
+        f'''<div style="flex:1;min-width:0;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
-            </div>
-            <div style="font-size:28px;font-weight:bold;color:#38bdf8;margin-top:5px;">Bortle Class {bortle_class}</div>
-            <div style="font-size:14px;color:#e2e8f0;margin-top:2px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
-        </div>""", unsafe_allow_html=True)
+                <div style="font-size:20px;font-weight:bold;color:#38bdf8;margin-top:5px;line-height:1.2;">Bortle Class {bortle_class}</div>
+                <div style="font-size:12px;color:#e2e8f0;margin-top:3px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
+            </div>''' if _in_japan else "")
+    _sky_temp_card(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3), _sq_left)
 
     # Moon Phase + Coordinate — 1 block, trái/phải
     st.markdown(f"""
@@ -6977,7 +7015,7 @@ fig.add_trace(go.Scatter(
     x=_x_positions, y=moon_altitudes,
     mode='lines',
     name='🌙 Moon',
-    line=dict(color='#fbbf24', width=4),
+    line=dict(color='#fbbf24', width=4, shape='spline', smoothing=1.0),
     fill='tozeroy',
     fillcolor='rgba(251,191,36,0.20)',
     hovertemplate='%{customdata}<br>Moon: %{y:.1f}°<extra></extra>',
@@ -6989,7 +7027,7 @@ fig.add_trace(go.Scatter(
     x=_x_positions, y=sun_altitudes,
     mode='lines',
     name='☀️ Sun',
-    line=dict(color='#38bdf8', width=4, dash='dash'),
+    line=dict(color='#38bdf8', width=4, dash='dash', shape='spline', smoothing=1.0),
     hovertemplate='%{customdata}<br>Sun: %{y:.1f}°<extra></extra>',
     customdata=hours_labels,
 ))
@@ -6999,7 +7037,7 @@ fig.add_trace(go.Scatter(
     x=_x_positions, y=milkyway_altitudes,
     mode='lines',
     name='🌌 Milkyway',
-    line=dict(color='#a78bfa', width=3.5, dash='dash'),
+    line=dict(color='#a78bfa', width=3.5, dash='dash', shape='spline', smoothing=1.0),
     hovertemplate='%{customdata}<br>Milkyway: %{y:.1f}°<extra></extra>',
     customdata=hours_labels,
 ))
