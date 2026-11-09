@@ -5774,6 +5774,12 @@ with col_left:
             time_lbl = row['⏰']
             cloud_cell = _cloud_icon_cell(row['☁️'], row.get('_precip', 0.0), row.get('_temp'))
             humid_val  = row['💧']
+            try:
+                _tt = f"{int(round(float(row.get('_temp'))))}°"
+            except (TypeError, ValueError):
+                _tt = ""
+            humid_cell = (f'<span style="color:#fde68a;">{_tt}</span><span style="color:#9a6a45;">/</span>{humid_val}'
+                          if _tt else humid_val)
             wind_cell  = _wind_icon(row['💨'])
             _own = row.get('_stars')
             if _own is None:
@@ -5786,11 +5792,11 @@ with col_left:
             stars = _half_star_html(_sv)
             rows_html += (
                 f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
-                f'<td style="padding:8px 8px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
-                f'<td style="padding:8px 8px;overflow:hidden;">{cloud_cell}</td>'
-                f'<td style="padding:8px 8px;color:#fb923c;">{humid_val}</td>'
-                f'<td style="padding:8px 8px;color:#fb923c;">{wind_cell}</td>'
-                f'<td style="padding:8px 8px;font-size:22px;line-height:1;letter-spacing:0;">{stars}</td>'
+                f'<td style="padding:8px 6px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
+                f'<td style="padding:8px 6px;overflow:hidden;">{cloud_cell}</td>'
+                f'<td style="padding:8px 6px;color:#fb923c;font-size:13px;white-space:nowrap;">{humid_cell}</td>'
+                f'<td style="padding:8px 6px;color:#fb923c;">{wind_cell}</td>'
+                f'<td style="padding:8px 4px;font-size:22px;line-height:1;letter-spacing:0;white-space:nowrap;">{stars}</td>'
                 f'</tr>'
             )
 
@@ -5799,11 +5805,11 @@ with col_left:
   <table style="width:100%;border-collapse:collapse;font-size:14px;font-family:'Segoe UI',sans-serif;table-layout:fixed;">
     <thead>
       <tr style="background:linear-gradient(90deg,rgba(154,52,18,0.90),rgba(120,40,10,0.75));border-bottom:2px solid rgba(234,88,12,0.55);">
-        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:14%;">⏰</th>
-        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:20%;">🌤️</th>
-        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:13%;">💧</th>
-        <th style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
-        <th title="{_star_tip if _nk_hits else ''}" style="padding:10px 8px;text-align:left;color:#fb923c;font-weight:700;width:37%;">📸</th>
+        <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:14%;">⏰</th>
+        <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:18%;">🌤️</th>
+        <th title="Temperature / Humidity" style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:21%;white-space:nowrap;">🌡️/💧</th>
+        <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
+        <th title="{_star_tip if _nk_hits else ''}" style="padding:10px 4px;text-align:left;color:#fb923c;font-weight:700;width:31%;">📸</th>
       </tr>
     </thead>
     <tbody>{rows_html}</tbody>
