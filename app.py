@@ -2395,7 +2395,7 @@ def tool_check_location_darkness(location_name: str) -> dict:
     needle = location_name.strip().lower()
     match = next(((n, c) for n, c in LOCATION_DATABASE.items() if needle in n.lower()), None)
     if not match:
-        return {"found": False, "reason": f"Không tìm thấy địa điểm khớp '{location_name}' trong database."}
+        return {"found": False, "reason": f"No location matching '{location_name}' was found in the database."}
     name, (lat, lon) = match
     bortle, sqm = calculate_accurate_bortle(lat, lon)
     return {"found": True, "matched_name": name, "lat": lat, "lon": lon,
@@ -2463,7 +2463,7 @@ def tool_check_location_tonight(location_name: str) -> dict:
     region = _infer_region_from_loc_name(name)
     result = _night_verdict_for_single_loc(lat, lon, day_off=0)
     if not result:
-        return {"found": False, "reason": f"Không lấy được dữ liệu thời tiết cho {name}."}
+        return {"found": False, "reason": f"Could not get weather data for {name}."}
     verdict = result["verdict"]
     tier_rank = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}.get(verdict["tier"], 0)
     return {
@@ -2543,10 +2543,12 @@ def ask_astro_ai(user_question: str):
         "— bạn không cần tự lọc lại, các địa điểm tool trả về cho 'kanto' đều là đất "
         "liền/đi ô tô được. Nếu user hỏi riêng về 1 đảo xa cụ thể theo tên, cứ gọi "
         "tool_check_location_darkness/tool_check_location_tonight với đúng tên đảo đó.\n\n"
-        "Trả lời ngắn gọn (3-5 câu), thân thiện, bằng tiếng Việt. Nếu địa điểm ban "
-        "đầu xấu và bạn đề xuất chỗ khác, nói rõ kiểu: 'Jogashima thời tiết không "
-        "tốt, các địa điểm có thời tiết tốt hơn là Kamikochi, JAXA...' kèm lý do "
-        "(mây %, trăng %, Bortle).\n\n"
+        "Reply briefly (3-5 sentences) in a friendly tone, in the SAME language as the user's LATEST message "
+        "(English question → English answer, Vietnamese → Vietnamese, Japanese → Japanese, and so on; if the "
+        "latest message is mixed, use the language the user mainly wrote in). Place names stay as they are. "
+        "If the original location is poor and you suggest other places, say so clearly (in the user's language), "
+        "e.g. 'The weather at Jogashima is not good; better options are Kamikochi, JAXA...', with the reasons "
+        "(cloud %, moon %, Bortle).\n\n"
         "QUAN TRỌNG — ĐỒNG BỘ BẢN ĐỒ/LỊCH: khi bạn dùng tool trả về "
         "{\"found\": true, \"best\": {...}, \"alternatives\": [...]} (hoặc 1 địa điểm "
         "đơn từ tool_check_location_*), hãy trình bày địa điểm '1.' trong câu trả lời "
@@ -2601,7 +2603,7 @@ def ask_astro_ai(user_question: str):
                         tools=wrapped_tools,
                     ),
                 )
-                answer_text = response.text or "(AI không trả lời được, thử lại câu hỏi khác nhé.)"
+                answer_text = response.text or "(The AI could not answer. Please try another question.)"
                 break
             except Exception as e:
                 last_err = e
@@ -2620,9 +2622,9 @@ def ask_astro_ai(user_question: str):
  
     if answer_text is None:
         if last_err and ("429" in str(last_err) or "RESOURCE_EXHAUSTED" in str(last_err)):
-            return ("⏳ AI đang bị giới hạn tần suất (free tier Gemini chỉ 5-15 "
-                     "request/phút). Đợi khoảng 30 giây rồi hỏi lại nhé."), None
-        return f"⚠️ Lỗi gọi AI (đã thử {len(ASTRO_AI_MODEL_CANDIDATES)} model): {last_err}", None
+            return ("⏳ The AI is rate-limited (Gemini free tier: only 5–15 "
+                     "requests/minute). Please wait about 30 seconds and ask again."), None
+        return f"⚠️ AI request failed (tried {len(ASTRO_AI_MODEL_CANDIDATES)} models): {last_err}", None
 
     # Tách dòng "[[PICK:N]]" ở cuối câu trả lời — đây là chỉ số (ẩn, không hiển thị
     # cho user) cho biết AI đã chọn CANDIDATE NÀO (trong best/alternatives do tool
@@ -2920,7 +2922,7 @@ with st.container(key="astro_newchat_btn"):
     if st.button("", key="astro_new_chat", icon=":material/edit_square:", help="New chat", use_container_width=True):
         st.session_state.astro_ai_history = []
         st.session_state.astro_ai_answer = None
-        st.session_state.astro_last_question = "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway..."
+        st.session_state.astro_last_question = "Ask AI for the best places & times to shoot the Milky Way..."
         st.session_state.astro_last_processed_query = None
         st.rerun()
 
@@ -3021,7 +3023,7 @@ st.markdown(
 # --- KHUNG CHAT: input trên, khung kết quả bên dưới ---
 _placeholder_text = st.session_state.get(
     "astro_last_question",
-    "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
+    "Ask AI for the best places & times to shoot the Milky Way...",
 )
 
 
@@ -3056,7 +3058,7 @@ if _ai_question and _ai_question.strip():
         st.session_state.astro_last_question = user_query
 
         with _answer_slot:
-            st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
+            st.caption("⏳ AI is checking the weather & locations...")
 
         answer, fly_to = ask_astro_ai(user_query)
         st.session_state.astro_ai_answer = answer
