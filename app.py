@@ -1649,17 +1649,37 @@ _NK_HEADERS = {
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _nk_star_fetch(lat3: float, lon3: float):
-    """Trả {'YYYY-MM-DDTHH': index 0–4} cho 3 đêm. Lỗi (mạng/HTTP/JSON) → raise, cache_data không lưu lỗi."""
+def _nk_raw(lat3: float, lon3: float):
+    """Danh sách 3 ngày thô từ API (lỗi mạng/HTTP/JSON → raise, cache_data không lưu lỗi)."""
     r = requests.get(_NK_API, params={"lat": lat3, "lon": lon3, "alt": 2}, headers=_NK_HEADERS, timeout=8)
     r.raise_for_status()
+    days = r.json()["result_list"]["data"][:3]
+    if not days:
+        raise ValueError("empty result")
+    return days
+
+def _nk_star_fetch(lat3: float, lon3: float):
+    """{'YYYY-MM-DDTHH': index 0–4} cho 3 đêm (dùng cho bảng theo giờ)."""
     out = {}
-    for d in r.json()["result_list"]["data"][:3]:
+    for d in _nk_raw(lat3, lon3):
         for x in d.get("starlight_index", []):
             out[str(x.get("datetime", ""))[:13]] = max(0, min(4, int(x.get("index") or 0)))
     if not out:
         raise ValueError("empty result")
     return out
+
+def _nk_night_value(lat, lon, d):
+    """Điểm Nippon Kishou (0–4) của CẢ ĐÊM bắt đầu vào ngày d tại (lat, lon); không có (ngoài 3 đêm/lỗi) → None."""
+    try:
+        if lat is None or lon is None or d is None:
+            return None
+        key = d.strftime("%Y-%m-%d")
+        for day in _nk_raw(round(float(lat), 3), round(float(lon), 3)):
+            if str(day.get("start_datetime", ""))[:10] == key:
+                return max(0, min(4, int(day.get("overall_review") or 0)))
+    except Exception:
+        return None
+    return None
 
 def _star_value(own, nk):
     """own: 0–4 (mô hình); nk: 0–4 hoặc None. Có cả hai → chia đôi (kết quả bội của 0.5)."""
@@ -2307,12 +2327,12 @@ def _serialize_scan_result(result):
     """Chuẩn hoá output của _run_best_scan / _run_tonight_scan thành dict JSON-safe,
     bỏ các field chỉ dùng cho UI (color/border/bg/anim)."""
     if result is None:
-        return {"found": False, "reason": "Không có dữ liệu — có thể do lỗi tải thời tiết."}
+        return {"found": False, "reason": "No data available — the weather data may have failed to load."}
     if result.get("_fallback"):
         return {
             "found": False,
-            "reason": f"Không có đêm nào đủ đẹp trong khoảng quét. "
-                      f"Điều kiện phổ biến nhất: {result.get('_fallback_label', 'không rõ')}.",
+            "reason": f"No night was good enough within the scanned range. "
+                      f"Most common condition: {result.get('_fallback_label', 'unknown')}.",
         }
 
     def _one(d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend=None):
@@ -2328,6 +2348,8 @@ def _serialize_scan_result(result):
             "clear_hours": verdict.get("good_hours"),
             "moon_illumination_pct": round(moon_illum, 1) if moon_illum is not None else None,
             "is_weekend": bool(is_weekend) if is_weekend is not None else None,
+            # điểm Nippon Kishou cho cả đêm (0–4; chỉ có cho 3 đêm đầu)
+            "nippon_kishou_star_index": _nk_night_value(loc_coords[0], loc_coords[1], d if hasattr(d, "strftime") else None),
         }
 
     top3 = result.get("top3", [])
@@ -2458,7 +2480,7 @@ def tool_check_location_tonight(location_name: str) -> dict:
     needle = location_name.strip().lower()
     match = next(((n, c) for n, c in LOCATION_DATABASE.items() if needle in n.lower()), None)
     if not match:
-        return {"found": False, "reason": f"Không tìm thấy địa điểm khớp '{location_name}' trong database."}
+        return {"found": False, "reason": f"No location matching '{location_name}' was found in the database."}
     name, (lat, lon) = match
     region = _infer_region_from_loc_name(name)
     result = _night_verdict_for_single_loc(lat, lon, day_off=0)
@@ -2477,6 +2499,7 @@ def tool_check_location_tonight(location_name: str) -> dict:
         "clear_hours": verdict.get("good_hours"),
         "moon_illumination_pct": round(result["moon_illum"], 1) if result["moon_illum"] is not None else None,
         "is_good": tier_rank >= 1,
+        "nippon_kishou_star_index": _nk_night_value(lat, lon, _night_base_jst),
     }
 
 
@@ -2499,8 +2522,19 @@ def _ai_panel_row(c):
             bortle = calculate_accurate_bortle(c["lat"], c["lon"])[0]
         except Exception:
             bortle = None
+    # sao: (mô hình + Nippon Kishou)/2 cho 3 đêm đầu, theo chế độ đang chọn ở bảng giờ (model | nk | both)
+    _own = str(c.get("stars") or "").count("⭐") if c.get("stars") else None
+    _sm = st.session_state.get("star_mode", "both")
+    _nk = _nk_night_value(c.get("lat"), c.get("lon"), d) if (d and _sm != "model") else None
+    if _own is None:
+        _sv = _nk
+    elif _nk is None:
+        _sv = _own
+    else:
+        _sv = _nk if _sm == "nk" else (_own + _nk) / 2
     return {"name": short.strip(), "pref": pref.strip(),
             "date": f"{d.month}/{d.day} {_EN_WD_AI[d.weekday()]}" if d else "",
+            "stars_val": _sv, "nk": _nk,
             "tier": c.get("sky_tier"), "stars": c.get("stars") or "",
             "detail": c.get("detail") or "", "moon": c.get("moon_illumination_pct"),
             "wk": bool(c.get("is_weekend")), "bortle": bortle}
@@ -2548,7 +2582,8 @@ def ask_astro_ai(user_question: str):
         "latest message is mixed, use the language the user mainly wrote in). Place names stay as they are. "
         "If the original location is poor and you suggest other places, say so clearly (in the user's language), "
         "e.g. 'The weather at Jogashima is not good; better options are Kamikochi, JAXA...', with the reasons "
-        "(cloud %, moon %, Bortle).\n\n"
+        "(cloud %, moon %, Bortle). If a result includes 'nippon_kishou_star_index' (0-4: the Nippon Kishou "
+        "nightly star rating, only available for the first 3 nights), mention it too.\n\n"
         "QUAN TRỌNG — ĐỒNG BỘ BẢN ĐỒ/LỊCH: khi bạn dùng tool trả về "
         "{\"found\": true, \"best\": {...}, \"alternatives\": [...]} (hoặc 1 địa điểm "
         "đơn từ tool_check_location_*), hãy trình bày địa điểm '1.' trong câu trả lời "
@@ -4878,6 +4913,10 @@ if _ai_rows:
                 _bits.append(f'Bortle {float(_r["bortle"]):g}')
             except (TypeError, ValueError):
                 pass
+        if _r.get("nk") is not None:
+            _bits.append(f'Nippon Kishou {_r["nk"]}/4')
+        _stars_html = (_half_star_html(_r["stars_val"]) if _r.get("stars_val") is not None
+                       else _aih.escape(str(_r.get("stars", ""))))
         _bdr = "" if _i == len(_ai_rows) - 1 else "border-bottom:1px solid rgba(103,232,249,0.20);"
         _ai_parts.append(
             f'<div style="padding:5px 0;{_bdr}">'
@@ -4887,7 +4926,7 @@ if _ai_rows:
             f'text-overflow:ellipsis;white-space:nowrap;">{_aih.escape(_r.get("name", ""))}'
             f'<span style="color:#64748b;font-weight:500;font-size:10px;"> {_aih.escape(_r.get("pref", ""))}</span></span>'
             f'<span style="color:{"#fcd34d" if _r.get("wk") else "#94a3b8"};font-size:11px;flex-shrink:0;">{_aih.escape(_r.get("date", ""))}</span>'
-            f'<span style="color:#fbbf24;font-size:12px;flex-shrink:0;">{_aih.escape(str(_r.get("stars", "")))}</span>'
+            f'<span style="font-size:14px;line-height:1;flex-shrink:0;white-space:nowrap;">{_stars_html}</span>'
             f'</div>'
             f'<div style="color:#94a3b8;font-size:10px;margin:2px 0 0 23px;line-height:1.35;">{" · ".join(_bits)}</div>'
             f'</div>')
