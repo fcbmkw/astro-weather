@@ -6009,7 +6009,8 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     lab = "font-family:Consolas,'Courier New',monospace;font-size:11px;line-height:13px;color:#e2e8f0;white-space:nowrap;"
 
     def _cell(i, bg, tip, h_px=13):
-        return f'<div title="{tip}" style="height:{h_px}px;background:{bg};{_edge(i)}"></div>'
+        _m = ' data-m="1"' if (cols[i][2] == 0 and cols[i][0] > 0) else ''
+        return f'<div data-i="{i}"{_m} title="{tip}" style="height:{h_px}px;background:{bg};{_edge(i)}"></div>'
 
     def _na(i, name):
         return _cell(i, hatch, f"{_tt(i)} {name}: n/a")
@@ -6147,20 +6148,44 @@ _csc_res = _csc_build_html(hourly_data, st.session_state.lat, st.session_state.l
 if _csc_res:
     import streamlit.components.v1 as _csc_components
     _csc_html, _csc_sel, _csc_n = _csc_res
+    _csc_d0 = datetime.strptime(hourly_data["time"][0][:10], "%Y-%m-%d")
+    _csc_start_ms = int(((_csc_d0 - datetime(1970, 1, 1)).total_seconds() - _loc_utc_offset) * 1000)   # 00:00 địa phương của cột đầu, theo epoch UTC
+    _csc_js = (r'''(function(){var sc=document.getElementById("sc");if(!sc)return;
+var down=false,sx=0,sl=0;
+sc.addEventListener("mousedown",function(e){down=true;sx=e.pageX;sl=sc.scrollLeft;sc.style.cursor="grabbing";});
+window.addEventListener("mouseup",function(){down=false;sc.style.cursor="grab";});
+window.addEventListener("mousemove",function(e){if(!down)return;e.preventDefault();sc.scrollLeft=sl-(e.pageX-sx);});
+var SEL=__SEL__,N=__N__,START=__START__,LAB=105,cur=-1;
+function nowIdx(){var i=Math.floor((Date.now()-START)/3600000);return Math.max(0,Math.min(N-1,i));}
+function cellX(i){var c=sc.querySelector('[data-i="'+i+'"]');return c?c.getBoundingClientRect().left-sc.getBoundingClientRect().left+sc.scrollLeft:0;}
+function colW(){var a=sc.querySelector('[data-i="0"]');return a?a.getBoundingClientRect().width:10;}
+function base(c){c.style.boxShadow=c.getAttribute('data-m')?'inset 2px 0 0 0 #ef4444':'';}
+function mark(i){
+  if(cur>=0){sc.querySelectorAll('[data-i="'+cur+'"]').forEach(base);}
+  sc.querySelectorAll('[data-i="'+i+'"]').forEach(function(c){c.style.boxShadow='inset 4px 0 0 0 #facc15';});
+  cur=i;
+}
+// Mỗi giờ: vạch vàng "now" dịch sang cột mới; nếu khung đang căn theo "now" thì cuộn để "now" luôn là cột đầu tiên
+function tick(first){
+  var i=nowIdx(); if(!first&&i===cur)return;
+  var aligned=first||Math.abs(sc.scrollLeft-Math.max(0,cellX(cur)-LAB))<=colW()*1.5;
+  mark(i);
+  if(aligned){sc.scrollTo({left:Math.max(0,cellX(i)-LAB),behavior:first?"auto":"smooth"});}
+}
+sc.querySelectorAll('[data-i]').forEach(base);          // bỏ vạch "now" do Python vẽ sẵn
+if(SEL>=60){mark(nowIdx());sc.scrollLeft=Math.max(0,SEL/N*sc.scrollWidth-sc.clientWidth*0.25);}   // đêm chọn ở xa: giữ như cũ
+else{tick(true);}
+setInterval(function(){tick(false);},30000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)tick(false);});
+})();'''
+               .replace("__SEL__", str(int(_csc_sel))).replace("__N__", str(int(_csc_n)))
+               .replace("__START__", str(_csc_start_ms)))
     _csc_doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
         'html,body{margin:0;padding:0;background:transparent;}'
         '#sc{scrollbar-width:thin;scrollbar-color:#475569 #0f172a;}'
         '#sc::-webkit-scrollbar{height:8px;}#sc::-webkit-scrollbar-thumb{background:#475569;border-radius:4px;}'
-        '</style></head><body>' + _csc_html +
-        '<script>(function(){var sc=document.getElementById("sc");if(!sc)return;'
-        'var down=false,sx=0,sl=0;'
-        'sc.addEventListener("mousedown",function(e){down=true;sx=e.pageX;sl=sc.scrollLeft;sc.style.cursor="grabbing";});'
-        'window.addEventListener("mouseup",function(){down=false;sc.style.cursor="grab";});'
-        'window.addEventListener("mousemove",function(e){if(!down)return;e.preventDefault();sc.scrollLeft=sl-(e.pageX-sx);});'
-        'var SEL=' + str(int(_csc_sel)) + ',N=' + str(int(_csc_n)) + ';'
-        'if(SEL>=60){sc.scrollLeft=Math.max(0,SEL/N*sc.scrollWidth-sc.clientWidth*0.25);}'
-        '})();</script></body></html>')
+        '</style></head><body>' + _csc_html + '<script>' + _csc_js + '</script></body></html>')
     _csc_components.html(_csc_doc, height=255)
 else:
     st.caption("Clear Sky Forecast: weather data unavailable.")
@@ -6844,16 +6869,30 @@ _GPV_MODELS = {
     "msm": {"label": "Kanto · 39h", "title": "JMA MSM GPV · Kanto · Rain & Cloud (39h)",
             "base": "http://weather-gpv.info/msm/", "prefix": "msm_cp_kt_", "step_h": 3, "tries": 7, "frames": 40},
     "gsm": {"label": "East Japan · 264h", "title": "JMA GSM GPV · East Japan · Rain & Cloud (264h)",
-            "base": "http://s3.weather-gpv.info/gsm/", "prefix": "gsm_cp_e_", "step_h": 6, "tries": 7, "frames": None},
+            "base": "http://s3.weather-gpv.info/gsm/", "prefix": "gsm_cp_e_", "step_h": 12, "tries": 5, "frames": None},
+    "gsmw": {"label": "West Japan · 264h", "title": "JMA GSM GPV · West Japan · Rain & Cloud (264h)",
+             "base": "http://weather-gpv.info/gsm/", "prefix": "gsm_cp_w_", "step_h": 12, "tries": 5, "frames": None},
 }
 _GPV_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
                 "Referer": "http://weather-gpv.info/"}
 _GPV_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-_GPV_GSM_CAP = 265        # 広域(264時間): init + 0..264h
+_GPV_GSM_CAP = 177        # 広域(264時間): N=1..133 cách 1h (+0..+132h), N=134..177 cách 3h (+135..+264h)
+
+def _gpv_off(model, n):
+    """Giờ dự báo (so với giờ khởi đầu) của khung n."""
+    if model == "msm" or n <= 133:
+        return n - 1
+    return 3 * n - 267          # GSM: N=134 → +135h, ..., N=177 → +264h
+
+def _gpv_n_from_hours(model, h):
+    """Khung gần nhất với h giờ sau giờ khởi đầu."""
+    if model == "msm" or h <= 132:
+        return int(round(h)) + 1
+    return int(round((h + 267) / 3.0))
 
 def _gpv_url(model, init_utc, n):
     m = _GPV_MODELS[model]
-    v = init_utc + timedelta(hours=n - 1)
+    v = init_utc + timedelta(hours=_gpv_off(model, n))
     return f"{m['base']}{m['prefix']}{n}.{v:%H}Z{v:%d}{_GPV_MON[v.month - 1]}{v.year}.png"
 
 def _gpv_exists(model, init_utc, n):
@@ -6935,13 +6974,13 @@ def _gpv_viewer():
         if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy mới → khung gần giờ hiện tại
             st.session_state.gpv_sig = (model, init_iso)
             _h = (datetime.utcnow() - init).total_seconds() / 3600.0
-            st.session_state.gpv_n = max(1, min(nmax, int(round(_h)) + 1))
+            st.session_state.gpv_n = max(1, min(nmax, _gpv_n_from_hours(model, _h)))
         st.session_state.gpv_n = max(1, min(nmax, st.session_state.get("gpv_n", 1)))
         with st.container(key="gpv_nav"):
             st.button("⬅️", key="gpv_prev", on_click=_gpv_step, args=(-1,))
             st.button("➡️", key="gpv_next", on_click=_gpv_step, args=(1,))
             st.select_slider("gpv_time", options=list(range(1, nmax + 1)), key="gpv_n",
-                             format_func=lambda n: (init + timedelta(hours=n - 1 + 9)).strftime("%m/%d (%a) %H:%M"),
+                             format_func=lambda n: (init + timedelta(hours=_gpv_off(model, n) + 9)).strftime("%m/%d (%a) %H:%M"),
                              label_visibility="collapsed")
     try:
         _img = _gpv_frame(model, init_iso, int(st.session_state.gpv_n))
