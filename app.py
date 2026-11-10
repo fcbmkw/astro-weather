@@ -6803,7 +6803,8 @@ def _rd_nearest(pref, lat, lon, top=5):
     for code in codes:
         cams += _rd_list(code)
     if not cams:
-        _rd_diag = f"Không đọc được danh sách camera MLIT (mã vùng {', '.join(codes) or '?'}) — kiểm tra _RD_REGION."
+        _rd_diag = (f"Could not load the MLIT road-camera list (region code {', '.join(codes) or '?'}).  \n"
+                    f"MLIT道路カメラの一覧を取得できませんでした（地域コード {', '.join(codes) or '?'}）。")
         return []
     allowed = tuple(sorted({x for c in codes for x in _RD_REGION_JA.get(c, ())}))
     keys = tuple(sorted({q for q in (_rd_query(c[1]) for c in cams) if q}))
@@ -6845,10 +6846,12 @@ def _rd_nearest(pref, lat, lon, top=5):
         ranked.append((d, c, f"{q} → {tt}"))
     ranked.sort(key=lambda x: x[0])
     if not ranked:
-        _rd_diag = f"Đọc được {len(cams)} camera nhưng không geocode được vị trí nào."
+        _rd_diag = (f"Loaded {len(cams)} cameras, but none could be located on the map.  \n"
+                    f"{len(cams)}台のカメラを取得しましたが、位置を特定できませんでした。")
     elif ranked[0][0] > _RD_MAX_KM:
-        _rd_diag = (f"Camera gần nhất: {ranked[0][1][1]} (~{ranked[0][0]:.0f} km) — xa hơn {_RD_MAX_KM} km "
-                    f"nên hiển thị bản đồ.")
+        _rd_diag = (f"Nearest camera: {ranked[0][1][1]} (~{ranked[0][0]:.0f} km) — farther than {_RD_MAX_KM} km, "
+                    f"so the map is shown instead.  \n"
+                    f"最寄りのカメラ: {ranked[0][1][1]}（約{ranked[0][0]:.0f} km）— {_RD_MAX_KM} kmより遠いため、地図を表示します。")
     return ranked[:top]
 
 def _rd_build():
