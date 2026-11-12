@@ -361,7 +361,7 @@ st.markdown("""
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
              ("map_center", [35.6895, 139.6917]), ("zoom", 7),
              ("day_offset", 0), ("location_name", "Tokyo, Japan"),
-             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF+GFS)"), ("star_mode", "both"),
+             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF)"), ("star_mode", "both"),
              ("active_source_used", "JMA"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
@@ -1312,15 +1312,15 @@ def calculate_accurate_bortle(lat, lon):
 
 # ── WEATHER FETCH ─────────────────────────────────────────────────────────────
 # Các endpoint fallback theo thứ tự ưu tiên:
-#   1. Primary: tất cả 3 models (JMA + ECMWF + GFS) — đầy đủ nhất
-#   2. Fallback A: chỉ GFS + ECMWF (bỏ JMA) — nhẹ hơn, ít lỗi hơn
-#   3. Fallback B: chỉ GFS — luôn hoạt động, không phụ thuộc Japan server
+#   1. Primary: JMA MSM + ECMWF — đầy đủ nhất
+#   2. Fallback A: chỉ ECMWF (bỏ JMA) — nhẹ hơn, không phụ thuộc Japan server
+#   3. Fallback B: chỉ JMA MSM — khi ECMWF lỗi
 _FIELDS = "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_2m,wind_speed_10m,temperature_2m,precipitation"
 _ENDPOINTS = [
     # (label, url_suffix)
-    ("full",    f"&hourly={_FIELDS}&models=jma_msm,gfs_seamless,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
-    ("no_jma",  f"&hourly={_FIELDS}&models=gfs_seamless,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
-    ("gfs_only",f"&hourly={_FIELDS}&models=gfs_seamless&wind_speed_unit=ms&timezone=auto"),
+    ("full",     f"&hourly={_FIELDS}&models=jma_msm,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
+    ("no_jma",   f"&hourly={_FIELDS}&models=ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
+    ("jma_only", f"&hourly={_FIELDS}&models=jma_msm&wind_speed_unit=ms&timezone=auto"),
 ]
 
 @st.cache_resource
@@ -1368,11 +1368,15 @@ def _fetch_weather_raw_impl(lat, lon):
         for attempt in range(3):   # 3 lần thử mỗi endpoint (network có thể chập chờn)
             try:
                 # Multi-model request (full/no_jma) nặng hơn, cần timeout dài hơn
-                _timeout = 12 if ep_label != "gfs_only" else 8
+                _timeout = 12 if ep_label == "full" else 8
                 res = requests.get(url, headers=headers, timeout=_timeout)
                 if res.status_code == 200:
                     j = res.json()
-                    return j.get("hourly", {}), j.get("utc_offset_seconds", 32400), ep_label, None
+                    hrly = j.get("hourly", {})
+                    _sfx = {"no_jma": "_ecmwf_ifs025", "jma_only": "_jma_msm"}.get(ep_label)
+                    if _sfx:   # request 1 model → key không có hậu tố model; thêm vào cho thống nhất với phần còn lại
+                        hrly = {(k if (k == "time" or k.endswith(_sfx)) else k + _sfx): v for k, v in hrly.items()}
+                    return hrly, j.get("utc_offset_seconds", 32400), ep_label, None
                 # 5xx = server lỗi → thử endpoint tiếp theo ngay
                 last_error = f"HTTP {res.status_code}"
                 if res.status_code >= 500:
@@ -1397,13 +1401,13 @@ def fetch_weather_7days(lat, lon, source="JMA"):
 def get_val(hourly, field, idx, prefer_jma=True):
     """
     Extract a single numeric value for a field at index idx.
-    If prefer_jma: try _jma_msm first, fallback to _gfs_seamless.
-    Else: try _gfs_seamless first, fallback to _jma_msm.
+    If prefer_jma: try _jma_msm first, fallback to _ecmwf_ifs025.
+    Else: try _ecmwf_ifs025 first, fallback to _jma_msm.
     Also tries bare key as last resort.
-    Returns (float_value, source_used: 'JMA'|'GFS'|None)
+    Returns (float_value, source_used: 'JMA'|'ECMWF'|None)
     """
-    order = ["_jma_msm", "_gfs_seamless"] if prefer_jma else ["_gfs_seamless", "_jma_msm"]
-    labels = ["JMA", "GFS"] if prefer_jma else ["GFS", "JMA"]
+    order = ["_jma_msm", "_ecmwf_ifs025"] if prefer_jma else ["_ecmwf_ifs025", "_jma_msm"]
+    labels = ["JMA", "ECMWF"] if prefer_jma else ["ECMWF", "JMA"]
     for suffix, label in zip(order, labels):
         lst = hourly.get(f"{field}{suffix}", [])
         if idx < len(lst) and lst[idx] is not None:
@@ -1423,22 +1427,21 @@ def _get_raw(hourly, field, suffix, idx):
 
 def get_val_blended(hourly, field, idx, day_offset):
     """
-    Weighted blend of JMA + ECMWF + GFS based on day_offset.
-    Day 0-3: JMA x0.60 + ECMWF x0.30 + GFS x0.10  (JMA MSM 3km grid, best short-range for Japan)
-    Day 4-7: ECMWF x0.55 + GFS x0.30 + JMA x0.15  (JMA MSM coverage ends ~day 3.5)
+    Weighted blend of JMA + ECMWF based on day_offset (GFS đã bỏ).
+    Day 0-3: JMA x0.44 + ECMWF x0.56  (JMA MSM lưới 5 km, tốt nhất ngắn hạn cho Nhật)
+    Day 4-7: ECMWF x0.80 + JMA x0.20  (JMA MSM chỉ phủ ~3,5 ngày → sau đó tự dùng ECMWF)
     Re-normalises weights if any model has missing data.
     Returns (float_value, label_string)
     """
     jma   = _get_raw(hourly, field, "_jma_msm",      idx)
     ecmwf = _get_raw(hourly, field, "_ecmwf_ifs025",  idx)
-    gfs   = _get_raw(hourly, field, "_gfs_seamless",  idx)
 
     if day_offset <= 3:
-        weights = {"jma": 0.40, "ecmwf": 0.50, "gfs": 0.10}
+        weights = {"jma": 0.44, "ecmwf": 0.56}
     else:
-        weights = {"jma": 0.14, "ecmwf": 0.56, "gfs": 0.30}
+        weights = {"jma": 0.20, "ecmwf": 0.80}
 
-    vals  = {"jma": jma, "ecmwf": ecmwf, "gfs": gfs}
+    vals  = {"jma": jma, "ecmwf": ecmwf}
     avail = {k: v for k, v in vals.items() if v is not None}
     if not avail:
         return 0.0, None
@@ -1482,8 +1485,12 @@ next_date   = target_date + timedelta(days=1)
 
 moon_pct, moon_text = get_moon_phase_percent(target_date)
 
-prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
+# Lựa chọn nguồn cũ đã lưu (US (GFS) / Blend có GFS) → chuyển sang Blend JMA+ECMWF
+if st.session_state.weather_source in ("US (GFS)", "🔀 Blend (JMA+ECMWF+" + "GFS)"):
+    st.session_state.weather_source = "🔀 Blend (JMA+ECMWF)"
+
+prefer_jma = (st.session_state.weather_source != "EU (ECMWF)")
+use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(
     st.session_state.lat, st.session_state.lon, st.session_state.weather_source
@@ -1491,7 +1498,7 @@ hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(
 
 # ── AUTO-DETECT JMA COVERAGE cho ngày được chọn ───────────────────────────────
 # JMA MSM chỉ có ~3-4 ngày. Nếu user chọn JMA nhưng ngày đó JMA toàn null
-# → tự động dùng GFS thay thế (prefer_jma=False) mà không cần user đổi tay.
+# → tự động dùng ECMWF thay thế (prefer_jma=False) mà không cần user đổi tay.
 def _jma_has_data_for_date(hourly, date_prefix):
     """Trả về True nếu JMA có ít nhất 1 giá trị không-None cho ngày date_prefix."""
     times = hourly.get("time", [])
@@ -1504,15 +1511,15 @@ def _jma_has_data_for_date(hourly, date_prefix):
 # Auto-switch: chỉ can thiệp khi đang dùng JMA đơn lẻ, không đụng Blend
 if st.session_state._source_auto and hourly_data:
     _cur = st.session_state.weather_source
-    if _cur not in ("🔀 Blend (JMA+ECMWF+GFS)", "US (GFS)", "EU (ECMWF)"):
+    if _cur not in ("🔀 Blend (JMA+ECMWF)", "EU (ECMWF)"):
         jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
                   _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
         if not jma_ok:
-            st.session_state.weather_source = "US (GFS)"
+            st.session_state.weather_source = "EU (ECMWF)"
 
 # Sau auto-switch, cập nhật lại flags theo source hiện tại
-prefer_jma = (st.session_state.weather_source not in ["US (GFS)", "EU (ECMWF)"])
-use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)")
+prefer_jma = (st.session_state.weather_source != "EU (ECMWF)")
+use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)")
 use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
 
 # UTC offset của location hiện tại (tính bằng giây) — dùng cho moon altitude
@@ -1545,8 +1552,8 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
     # hourly_data_frozen là tuple-of-items để hashable
     hourly = dict(hourly_data_frozen) if hourly_data_frozen else {}
 
-    _prefer_jma = weather_source not in ["US (GFS)", "EU (ECMWF)"]
-    _use_blend  = weather_source == "🔀 Blend (JMA+ECMWF+GFS)"
+    _prefer_jma = weather_source != "EU (ECMWF)"
+    _use_blend  = weather_source == "🔀 Blend (JMA+ECMWF)"
     _use_ecmwf  = weather_source == "EU (ECMWF)"
 
     # day_offset chỉ ảnh hưởng blend weight — dùng slot index 0 làm proxy
@@ -1769,17 +1776,15 @@ sources_used = set(sources_used)  # trả về từ cache là frozenset hoặc s
 
 # Label thực tế đã dùng — phân biệt auto-fallback với user chọn tay
 if use_blend:
-    active_source_label = ("🔀 Nippon Kishou & JMA+ECMWF+GFS" if st.session_state.day_offset < 3
-                           else "🔀 JMA+ECMWF+GFS")
+    active_source_label = ("🔀 Nippon Kishou & JMA+ECMWF" if st.session_state.day_offset < 3
+                           else "🔀 JMA+ECMWF")
+elif "ECMWF" in sources_used and "JMA" in sources_used:
+    active_source_label = "JMA + EU (ECMWF)"
+elif "ECMWF" in sources_used and prefer_jma:
+    # User chọn JMA nhưng JMA không có data → auto-fallback sang ECMWF
+    active_source_label = "EU (ECMWF IFS025) [auto-fallback]"
 elif "ECMWF" in sources_used:
     active_source_label = "EU (ECMWF IFS025)"
-elif "JMA" in sources_used and "GFS" in sources_used:
-    active_source_label = "JMA + US (GFS)"
-elif "GFS" in sources_used and prefer_jma:
-    # User chọn JMA nhưng JMA không có data → auto-fallback
-    active_source_label = "US (GFS) [auto-fallback]"
-elif "GFS" in sources_used:
-    active_source_label = "US (GFS)"
 elif "JMA" in sources_used:
     active_source_label = "JMA"
 else:
@@ -5584,24 +5589,24 @@ with col_right:
         </div>""", unsafe_allow_html=True)
 
     # Weather source selectbox + source label
-    # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang GFS
-    # 3 lựa chọn cuối đều dùng dữ liệu Blend (JMA+ECMWF+GFS) cho mây/độ ẩm/gió...; chỉ khác cách tính SAO:
+    # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang ECMWF
+    # 3 lựa chọn cuối đều dùng dữ liệu Blend (JMA+ECMWF) cho mây/độ ẩm/gió...; chỉ khác cách tính SAO:
     #   MODEL = sao của mô hình | NK = sao Nippon Kishou (3 đêm đầu) | NK+MODEL = trung bình hai bên
-    _BLEND = "🔀 Blend (JMA+ECMWF+GFS)"
+    _BLEND = "🔀 Blend (JMA+ECMWF)"
     _MODE_OF = {"MODEL": "model", "NK": "nk", "NK+MODEL": "both"}
     _nk_ok = st.session_state.day_offset < 3      # Nippon Kishou chỉ có dữ liệu 3 đêm đầu
-    source_options = ["JMA", "US (GFS)", "EU (ECMWF)", "MODEL"] + (["NK", "NK+MODEL"] if _nk_ok else [])
+    source_options = ["JMA", "EU (ECMWF)", "MODEL"] + (["NK", "NK+MODEL"] if _nk_ok else [])
     if st.session_state.weather_source == _BLEND:
         _pm = st.session_state.get("star_mode", "both")
         if not _nk_ok and _pm in ("nk", "both"):
-            _pm = "model"      # từ đêm 4: tự chuyển sang JMA+ECMWF+GFS (lựa chọn gốc vẫn được giữ khi quay lại đêm 1–3)
+            _pm = "model"      # từ đêm 4: tự chuyển sang JMA+ECMWF (lựa chọn gốc vẫn được giữ khi quay lại đêm 1–3)
         cur_src = {"model": "MODEL", "nk": "NK", "both": "NK+MODEL"}.get(_pm, "NK+MODEL")
     else:
         cur_src = st.session_state.weather_source if st.session_state.weather_source in source_options else "JMA"
     src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('+', 'p')}"
     def _src_disp(v):
-        return {"MODEL": "🔀 JMA+ECMWF+GFS", "NK": "⭐ Nippon Kishou",
-                "NK+MODEL": "🔀 Nippon Kishou & JMA+ECMWF+GFS"}.get(v, v)
+        return {"MODEL": "🔀 JMA+ECMWF", "NK": "⭐ Nippon Kishou",
+                "NK+MODEL": "🔀 Nippon Kishou & JMA+ECMWF"}.get(v, v)
     chosen = st.selectbox("src", source_options,
                           index=source_options.index(cur_src),
                           format_func=_src_disp,
@@ -5832,12 +5837,12 @@ with col_left:
         if _ep_label == "no_jma":
             st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
                         'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                        '⚠️ JMA MSM サーバーエラー — 代わりに <b>ECMWF + GFS</b> を使用しています</div>',
+                        '⚠️ JMA MSM サーバーエラー — 代わりに <b>ECMWF のみ</b> を使用しています</div>',
                         unsafe_allow_html=True)
-        elif _ep_label == "gfs_only":
+        elif _ep_label == "jma_only":
             st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
                         'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                        '⚠️ JMA/ECMWF サーバーエラー — 代わりに <b>GFS のみ</b> を使用しています</div>',
+                        '⚠️ ECMWF サーバーエラー — 代わりに <b>JMA のみ</b> を使用しています</div>',
                         unsafe_allow_html=True)
         def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None):
             pct = int(pct_str.replace('%',''))
@@ -5869,19 +5874,19 @@ with col_left:
             return f'<span style="color:{col}">{icon} {ws_str}</span>'
 
         # Sao mỗi giờ theo chế độ: model = mô hình | nk = Nippon Kishou (3 đêm đầu, sau đó dùng mô hình)
-        # | both = trung bình hai bên (3 đêm đầu), sau đó chỉ mô hình. Mây/ẩm/gió luôn từ JMA+ECMWF+GFS.
+        # | both = trung bình hai bên (3 đêm đầu), sau đó chỉ mô hình. Mây/ẩm/gió luôn từ JMA+ECMWF.
         _smode = st.session_state.get("star_mode", "both")
         if st.session_state.day_offset >= 3:
             _smode = "model"            # Nippon Kishou chỉ có 3 đêm đầu
         _nk_map = {}
-        if st.session_state.weather_source == "🔀 Blend (JMA+ECMWF+GFS)" and _smode in ("nk", "both"):
+        if st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)" and _smode in ("nk", "both"):
             try:
                 _nk_map = _nk_star_fetch(round(float(st.session_state.lat), 3),
                                          round(float(st.session_state.lon), 3))
             except Exception:
                 _nk_map = {}
-        _star_tip = ("Nippon Kishou Star Index (nights 1–3; JMA+ECMWF+GFS afterwards)" if _smode == "nk"
-                     else "Average of Nippon Kishou Star Index and JMA+ECMWF+GFS")
+        _star_tip = ("Nippon Kishou Star Index (nights 1–3; JMA+ECMWF afterwards)" if _smode == "nk"
+                     else "Average of Nippon Kishou Star Index and JMA+ECMWF")
         _night_d = target_date.date()
         _nk_hits = 0
         rows_html = ''
@@ -6047,7 +6052,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     illum = {d: get_moon_phase_percent(d0 + timedelta(days=d))[0] for d in range(_CSC_DAYS)}
     cols = [(d, d0 + timedelta(days=d), h) for d in range(_CSC_DAYS) for h in range(24)]
     n = len(cols)
-    ALL = ("_jma_msm", "_ecmwf_ifs025", "_gfs_seamless")
+    ALL = ("_jma_msm", "_ecmwf_ifs025")
 
     recs = []
     for d, day, h in cols:
@@ -6055,12 +6060,12 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
         r = {"cloud": None, "src": "", "ecm": None, "hum": None, "wind": None, "temp": None}
         if idx is not None:
             c_jma = _csc_get(hourly, "cloud_cover", idx, ("_jma_msm",), bare=False)
-            c_gfs = _csc_get(hourly, "cloud_cover", idx, ("_gfs_seamless",), bare=True)
+            c_ecm = _csc_get(hourly, "cloud_cover", idx, ("_ecmwf_ifs025",), bare=False)
             if c_jma is not None:
                 r["cloud"], r["src"] = c_jma, "JMA"
-            elif c_gfs is not None:
-                r["cloud"], r["src"] = c_gfs, "GFS"
-            r["ecm"] = _csc_get(hourly, "cloud_cover", idx, ("_ecmwf_ifs025",), bare=False)
+            elif c_ecm is not None:
+                r["cloud"], r["src"] = c_ecm, "ECMWF"
+            r["ecm"] = c_ecm
             r["hum"] = _csc_get(hourly, "relative_humidity_2m", idx, ALL)
             r["wind"] = _csc_get(hourly, "wind_speed_10m", idx, ALL)
             r["temp"] = _csc_get(hourly, "temperature_2m", idx, ALL)
