@@ -5739,10 +5739,11 @@ with col_left:
 /* ── Date selectbox: shrink to fit content ── */
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
     width: fit-content !important;
-    min-width: 0 !important;
+    /* đủ rộng cho "11月13日夜(金) → 11月14日朝(土)"; màn hình hẹp thì tự co lại */
+    min-width: min(285px, calc(100vw - 150px)) !important;
 }
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] {
-    width: fit-content !important;
+    width: 100% !important;
     min-width: 0 !important;
 }
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child {
@@ -5885,7 +5886,7 @@ with col_left:
             return (f'<div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">'
                     f'<span style="font-size:15px;line-height:1;">{icon}</span>'
                     f'<span style="font-size:11px;color:{col};font-weight:600;">{pct_str}</span>'
-                    + (f'<span title="JMA vs ECMWF differ by {int(round(spread))}% - model disagreement" '
+                    + (f'<span title="JMAとECMWFの差：{int(round(spread))}%" '
                        f'style="font-size:11px;color:#f59e0b;cursor:help;">\u26a0</span>'
                        if (spread is not None and spread > _SPREAD_WARN_PCT) else '')
                     + '</div>')
