@@ -6952,11 +6952,11 @@ _cam_render()
 # Ảnh: {base}{prefix}{N}.{HH}Z{DD}{MON}{YYYY}.png  (N = 1..; HH = giờ UTC của thời điểm dự báo = giờ khởi đầu + N − 1)
 # Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
 _GPV_MODELS = {
-    "msm": {"label": "Kanto · 39h", "title": "JMA MSM GPV · Kanto · Rain & Cloud (39h)",
+    "msm": {"label": "関東 39h", "title": "JMA MSM GPV · Kanto · Rain & Cloud (39h)",
             "base": "http://weather-gpv.info/msm/", "prefix": "msm_cp_kt_", "step_h": 3, "tries": 7, "frames": 40},
-    "gsm": {"label": "East Japan · 264h", "title": "JMA GSM GPV · East Japan · Rain & Cloud (264h)",
+    "gsm": {"label": "東日本 264h", "title": "JMA GSM GPV · East Japan · Rain & Cloud (264h)",
             "base": "http://s3.weather-gpv.info/gsm/", "prefix": "gsm_cp_e_", "step_h": 12, "tries": 5, "frames": None},
-    "gsmw": {"label": "West Japan · 264h", "title": "JMA GSM GPV · West Japan · Rain & Cloud (264h)",
+    "gsmw": {"label": "西日本 264h", "title": "JMA GSM GPV · West Japan · Rain & Cloud (264h)",
              "base": "http://weather-gpv.info/gsm/", "prefix": "gsm_cp_w_", "step_h": 12, "tries": 5, "frames": None},
 }
 _GPV_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
