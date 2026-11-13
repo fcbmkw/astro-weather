@@ -5765,7 +5765,11 @@ with col_left:
     min-width: 235px !important;
 }
 @media (max-width: 480px) {
-    .st-key-sel_date input { min-width: calc(100vw - 205px) !important; font-size: 10.5px !important; }
+    /* iPhone: nút ⬅️➡️ nhỏ lại + gap hẹp để cả 3 phần nằm trên 1 hàng */
+    .st-key-nav1 [data-testid="stVerticalBlock"] { gap: 4px !important; }
+    .st-key-nav1 [data-testid="stButton"] button { width: 34px !important; }
+    .st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 34px !important; }
+    .st-key-sel_date input { min-width: calc(100vw - 196px) !important; font-size: clamp(9.5px, 2.7vw, 10.5px) !important; }
 }
 
 /* LPM button is now a floating map control (bottomright) */
