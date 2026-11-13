@@ -5759,6 +5759,15 @@ with col_left:
     font-size: 12px !important;
 }
 
+/* Streamlit mới dùng react-aria ComboBox (không còn <select>/baseweb) → chọn theo key "sel_date".
+   Ô nhập cần ≥ ~220px để hiện đủ "11月13日夜(金) → 11月14日朝(土)"; màn hình hẹp thì tự co lại. */
+.st-key-sel_date input {
+    min-width: 235px !important;
+}
+@media (max-width: 480px) {
+    .st-key-sel_date input { min-width: calc(100vw - 205px) !important; font-size: 10.5px !important; }
+}
+
 /* LPM button is now a floating map control (bottomright) */
 
 /* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
