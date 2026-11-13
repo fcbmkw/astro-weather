@@ -1425,21 +1425,33 @@ def _get_raw(hourly, field, suffix, idx):
         return float(lst[idx])
     return None
 
-def get_val_blended(hourly, field, idx, day_offset):
+# ── BLEND JMA + ECMWF theo SỐ GIỜ DỰ BÁO CÒN LẠI (lead time), không theo "ngày" ──────────
+#   lead ≤ 39h : JMA MSM 0.70 / ECMWF 0.30  (MSM 5 km đang ở vùng chính xác nhất)
+#   39h → 78h  : trọng số JMA giảm tuyến tính 0.70 → 0 (làm mượt, không nhảy bậc)
+#   ≥ 78h      : ECMWF 100% (MSM hết dữ liệu; thiếu model nào thì tự chuẩn hóa lại)
+_BLEND_JMA_W0   = 0.70
+_BLEND_RAMP_START_H = 39.0
+_BLEND_RAMP_END_H   = 78.0
+_SPREAD_WARN_PCT    = 40.0   # |JMA − ECMWF| mây > 40% → cờ ⚠ "models disagree"
+
+def _jma_weight(lead_h):
+    if lead_h is None or lead_h <= _BLEND_RAMP_START_H:
+        return _BLEND_JMA_W0
+    if lead_h >= _BLEND_RAMP_END_H:
+        return 0.0
+    return _BLEND_JMA_W0 * (_BLEND_RAMP_END_H - lead_h) / (_BLEND_RAMP_END_H - _BLEND_RAMP_START_H)
+
+def get_val_blended(hourly, field, idx, lead_h):
     """
-    Weighted blend of JMA + ECMWF based on day_offset (GFS đã bỏ).
-    Day 0-3: JMA x0.44 + ECMWF x0.56  (JMA MSM lưới 5 km, tốt nhất ngắn hạn cho Nhật)
-    Day 4-7: ECMWF x0.80 + JMA x0.20  (JMA MSM chỉ phủ ~3,5 ngày → sau đó tự dùng ECMWF)
-    Re-normalises weights if any model has missing data.
+    Weighted blend of JMA MSM + ECMWF theo lead_h (số giờ từ bây giờ tới slot; xem _jma_weight).
+    Re-normalises weights if any model has missing data (vd. MSM hết dữ liệu → 100% ECMWF).
     Returns (float_value, label_string)
     """
     jma   = _get_raw(hourly, field, "_jma_msm",      idx)
     ecmwf = _get_raw(hourly, field, "_ecmwf_ifs025",  idx)
 
-    if day_offset <= 3:
-        weights = {"jma": 0.44, "ecmwf": 0.56}
-    else:
-        weights = {"jma": 0.20, "ecmwf": 0.80}
+    wj = _jma_weight(lead_h)
+    weights = {"jma": wj, "ecmwf": 1.0 - wj}
 
     vals  = {"jma": jma, "ecmwf": ecmwf}
     avail = {k: v for k, v in vals.items() if v is not None}
@@ -1447,8 +1459,19 @@ def get_val_blended(hourly, field, idx, day_offset):
         return 0.0, None
 
     total_w = sum(weights[k] for k in avail)
-    blended = sum(weights[k] * v for k, v in avail.items()) / total_w
+    if total_w <= 0:   # vd. wj=0 nhưng chỉ còn JMA → dùng JMA
+        blended = sum(avail.values()) / len(avail)
+    else:
+        blended = sum(weights[k] * v for k, v in avail.items()) / total_w
     return round(blended, 1), "Blend"
+
+def _cloud_spread(hourly, idx):
+    """|JMA − ECMWF| của cloud_cover tại idx (None nếu thiếu 1 trong 2 model)."""
+    j = _get_raw(hourly, "cloud_cover", "_jma_msm", idx)
+    e = _get_raw(hourly, "cloud_cover", "_ecmwf_ifs025", idx)
+    if j is None or e is None:
+        return None
+    return abs(j - e)
 
 # ── COMPUTED STATE ────────────────────────────────────────────────────────────
 bortle_class, sqm_val = calculate_accurate_bortle(st.session_state.lat, st.session_state.lon)
@@ -1556,14 +1579,8 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
     _use_blend  = weather_source == "🔀 Blend (JMA+ECMWF)"
     _use_ecmwf  = weather_source == "EU (ECMWF)"
 
-    # day_offset chỉ ảnh hưởng blend weight — dùng slot index 0 làm proxy
-    _day_offset_proxy = 0
-    if slots:
-        yr0, mo0, dy0 = slots[0][0], slots[0][1], slots[0][2]
-        from datetime import date as _date
-        _today = _date.today()
-        _day_offset_proxy = (_date(yr0, mo0, dy0) - _today).days
-        _day_offset_proxy = max(0, min(6, _day_offset_proxy))
+    # Blend weight tính theo lead time của TỪNG slot (giờ UTC của slot − giờ UTC hiện tại)
+    _now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
     out_table  = []
     out_hours  = []
@@ -1590,15 +1607,18 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
         if idx == -1:
             continue
 
+        _lead_h = (datetime(yr, mo, dy, hr_local) - timedelta(hours=loc_utc_offset_h) - _now_utc).total_seconds() / 3600.0
+        _spread = None
         if _use_blend:
-            avg_cloud, src1 = get_val_blended(hourly, "cloud_cover",          idx, _day_offset_proxy)
-            low_c,     _    = get_val_blended(hourly, "cloud_cover_low",       idx, _day_offset_proxy)
-            mid_c,     _    = get_val_blended(hourly, "cloud_cover_mid",       idx, _day_offset_proxy)
-            high_c,    _    = get_val_blended(hourly, "cloud_cover_high",      idx, _day_offset_proxy)
-            humid,     _    = get_val_blended(hourly, "relative_humidity_2m",  idx, _day_offset_proxy)
-            wind_speed,_    = get_val_blended(hourly, "wind_speed_10m",        idx, _day_offset_proxy)
-            temp_val,  _    = get_val_blended(hourly, "temperature_2m",        idx, _day_offset_proxy)
-            precip_val,_    = get_val_blended(hourly, "precipitation",         idx, _day_offset_proxy)
+            _spread = _cloud_spread(hourly, idx)
+            avg_cloud, src1 = get_val_blended(hourly, "cloud_cover",          idx, _lead_h)
+            low_c,     _    = get_val_blended(hourly, "cloud_cover_low",       idx, _lead_h)
+            mid_c,     _    = get_val_blended(hourly, "cloud_cover_mid",       idx, _lead_h)
+            high_c,    _    = get_val_blended(hourly, "cloud_cover_high",      idx, _lead_h)
+            humid,     _    = get_val_blended(hourly, "relative_humidity_2m",  idx, _lead_h)
+            wind_speed,_    = get_val_blended(hourly, "wind_speed_10m",        idx, _lead_h)
+            temp_val,  _    = get_val_blended(hourly, "temperature_2m",        idx, _lead_h)
+            precip_val,_    = get_val_blended(hourly, "precipitation",         idx, _lead_h)
             if src1: out_srcs.add(src1)
         elif _use_ecmwf:
             avg_cloud  = _get_raw(hourly, "cloud_cover",          "_ecmwf_ifs025", idx) or 0.0
@@ -1641,6 +1661,7 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
             "_stars": _stars_n,
             "_temp": temp_val,
             "_precip": precip_val,
+            "_spread": _spread,
         })
 
     return out_table, out_hours, out_moon, out_sun, out_mw, out_debug, out_srcs
@@ -5844,7 +5865,7 @@ with col_left:
                         'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
                         '⚠️ ECMWF サーバーエラー — 代わりに <b>JMA のみ</b> を使用しています</div>',
                         unsafe_allow_html=True)
-        def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None):
+        def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None, spread=None):
             pct = int(pct_str.replace('%',''))
             if precip_val is not None and precip_val > 0.5:
                 if temp_val is not None and temp_val < 1.0:
@@ -5864,7 +5885,10 @@ with col_left:
             return (f'<div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">'
                     f'<span style="font-size:15px;line-height:1;">{icon}</span>'
                     f'<span style="font-size:11px;color:{col};font-weight:600;">{pct_str}</span>'
-                    f'</div>')
+                    + (f'<span title="JMA vs ECMWF differ by {int(round(spread))}% - model disagreement" '
+                       f'style="font-size:11px;color:#f59e0b;cursor:help;">\u26a0</span>'
+                       if (spread is not None and spread > _SPREAD_WARN_PCT) else '')
+                    + '</div>')
 
         def _wind_icon(ws_str):
             ws = float(ws_str.replace('m/s',''))
@@ -5893,7 +5917,7 @@ with col_left:
         for i, row in enumerate(weather_table_data):
             bg = 'rgba(234,88,12,0.10)' if i % 2 == 0 else 'rgba(194,65,12,0.06)'
             time_lbl = row['⏰']
-            cloud_cell = _cloud_icon_cell(row['☁️'], row.get('_precip', 0.0), row.get('_temp'))
+            cloud_cell = _cloud_icon_cell(row['☁️'], row.get('_precip', 0.0), row.get('_temp'), row.get('_spread'))
             humid_val  = row['💧']
             try:
                 _tt = f"{int(round(float(row.get('_temp'))))}°"
