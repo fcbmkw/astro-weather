@@ -6622,7 +6622,7 @@ def _lc_build_sky():
                     _cam, _km, _area = _near
                     _iu, _ts = _lc_latest_image(_cam[2])
                     if _iu:
-                        _where = (f"Nearest camera area: {_area} (~{_km:.0f} km from "
+                        _where = (f"{_area} (~{_km:.0f} km from "
                                   f"{_disp_name(st.session_state.location_name)})") if _area else \
                                  f"{_lc_pref} · camera in the same prefecture"
                         _lc_out = _lc_card_html(_cam[1], _cam[2], _where, _iu, _ts)
@@ -6932,7 +6932,7 @@ def _cam_render():
             _cam, _km, _mn, _b, _mime = _rd
             _detail = _RD_DETAIL.format(cid=_cam[0])
             _frames = _rd_frames(_cam, _b, _mime)
-            _sub = (f"Nearest road camera (approx. position): {_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
+            _sub = (f"{_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
                     f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
             _extra = ""   # đã bỏ link "Map ↗"
             _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
