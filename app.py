@@ -7143,12 +7143,29 @@ def _gpv_frame(model: str, init_iso: str, n: int):
 def _gpv_step(d):
     st.session_state.gpv_n = max(1, min(st.session_state.get("gpv_max", 1), st.session_state.get("gpv_n", 1) + d))
 
+def _gpv_auto_model(lat, lon):
+    """Chế độ GPV phù hợp với vị trí đang chọn.
+    • Trong khung bản đồ Kanto 39h (34.5–37.25°N, 137–141°E: Tokyo, Kanagawa, Saitama, Chiba, Nagano, Yamanashi,
+      Shizuoka, Tochigi, Ibaraki, Gunma) → 'msm' (Kanto 39h).
+    • Phía bắc Kanto (Tohoku, Hokkaido, Niigata...) hoặc phía đông-nam (đảo Izu/Ogasawara) → 'gsm' (East Japan).
+    • Phía tây/nam (Chubu phía tây, Kinki, Chugoku, Shikoku, Kyushu, Okinawa) → 'gsmw' (West Japan)."""
+    if 34.5 <= lat <= 37.25 and 137.0 <= lon <= 141.0:
+        return "msm"
+    if lat > 37.25:
+        return "gsm" if lon >= 137.0 else "gsmw"
+    return "gsm" if lon >= 138.0 else "gsmw"
+
 _gpv_fragment = (getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda f: f))
 
 @_gpv_fragment
 def _gpv_viewer():
     import time as _t
     _labels = {k: v["label"] for k, v in _GPV_MODELS.items()}
+    # Đổi địa điểm → tự chọn chế độ theo vị trí (sau đó bạn vẫn đổi tay được; chỉ đặt lại khi đổi địa điểm)
+    _loc_sig = (round(float(st.session_state.lat), 2), round(float(st.session_state.lon), 2))
+    if st.session_state.get("gpv_loc_sig") != _loc_sig:
+        st.session_state.gpv_loc_sig = _loc_sig
+        st.session_state.gpv_model = _gpv_auto_model(*_loc_sig)
     if st.session_state.get("gpv_model") not in _GPV_MODELS:
         st.session_state.gpv_model = "msm"
     model = st.session_state.gpv_model
