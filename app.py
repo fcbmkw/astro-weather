@@ -10,7 +10,6 @@ from collections import Counter
 import ephem
 import re
 import time
-import random
 #------------------------------------------------------------------------------
 # KHỐI A — DÁN NGAY DƯỚI DÒNG "import ephem" (dòng 9, đầu file)
 # ------------------------------------------------------------------------------
@@ -31,284 +30,106 @@ ASTRO_AI_MODEL_CANDIDATES = [
 # ------------------------------------------------------------------------------ (hết KHỐI A)
 # --- CƠ SỞ DỮ LIỆU ĐỊA ĐIỂM ---
 LOCATION_DATABASE = {
-    "1. Jogashima 馬の背, Kanagawa": [35.1313, 139.6179],
-    "2. Tateyama ゴルフ場, Chiba": [34.9517, 139.8103],
-    "3. Shirahama 白浜の屏風岩, Chiba": [34.9088, 139.8294],
-    "4. Onjuku 大波月海岸, Chiba": [35.1795, 140.3729],
-    "5. Isumi 雀島, Chiba": [35.3196, 140.4091],
-    "6. Manazuru 真鶴岬, Kanagawa": [35.1408, 139.1609],
-    "7. Shimoda 灯台, Shizuoka": [34.6588, 138.9868],
-    "8. Cape Aiai 愛の鐘, Shizuoka": [34.6073, 138.8284],
-    "9. Matsuzaki 千貫門ビーチ, Shizuoka": [34.7213, 138.7431],
-    "10. Okuoikojo 奥大井湖上駅展望台, Shizuoka": [35.1704, 138.1811],
-    "11. Asagiri Plateau 朝霧高原, Shizuoka": [35.4224, 138.5927],
-    "12. Shoji-ko, Yamanashi": [35.4912, 138.6049],
-    "13. Hanamomo-no-sato, Nagano": [35.4457, 137.6617],
-    "14. Ontake 御嶽山, Nagano": [35.8989, 137.4887],
-    "15. Kamikochi 上高地, Nagano": [36.2502, 137.6392],
-    "16. Enzan-so 燕山荘/イルカ岩, Nagano": [36.3991, 137.7151],
-    "17. Utsukushihara 美ヶ原, Nagano": [36.2274, 138.1296],
-    "18. JAXA宇宙アンテナ, Nagano": [36.1408, 138.3537],
-    "19. カラマツの丘 Tsumagoi, Gunma": [36.4773, 138.4646],
-    "20. Yugama/Shibutoge 渋峠, Gunma": [36.6534, 138.5274],
-    "21. Sakura 上発知のシダレザクラ, Gunma": [36.7325, 139.0601],
-    "22. Oku-Nikko 湯ノ湖畔, Tochigi": [36.8036, 139.4236],
-    "23. Hoshinomura 天地人橋, Fukushima": [37.3427, 140.6756],
-    "24. Azuma-kofuji 浄土平, Fukushima": [37.7230, 140.2551],
-    "25. Okama 御釜, Zao, Miyagi": [38.1361, 140.4468],
-    "26. Higashinamekawa 東滑川海浜緑地, Ibaraki": [36.6144, 140.6802],
-    "27. Okutama 奥多摩湖, Tokyo": [35.7920, 139.0475],
-    "28. Choshi Inubosaki 犬吠埼灯台, Chiba": [35.7077, 140.8685],
-    "29. Kujukuri Beach 九十九里浜, Chiba": [35.5002, 140.4315],
-    "30. Awa Shirahama 安房白浜港灯台, Chiba": [34.9146, 139.9355],
-    "31. Oarai Isosaki 神磯の鳥居, Ibaraki": [36.3151, 140.5894],
-    "32. Fukuroda Falls 袋田の滝, Ibaraki": [36.7641, 140.4062],
-    "33. Plateau Satomi プラトーさとみ, Ibaraki": [36.7992, 140.5364],
-    "34. Oze Numata 尾瀬ヶ原, Gunma": [36.9306, 139.2150],
-    "35. Tanbara Highlands 玉原高原, Gunma": [36.7833, 139.0830],
-    "36. Chichibu Misotsuchi 三十槌氷柱周辺, Saitama": [35.9563, 138.9255],
-    "37. Nakatsu Gorge 中津峡, Saitama": [35.9977, 139.0124],
-    "38. Kozushima Maehama 前浜海岸, Tokyo": [34.2086, 139.1358],
-    "39. Mikurajima Observatory 御蔵島展望地, Tokyo": [33.8740, 139.5950],
-    "40. Hachijojima Nambara 南原千畳岩海岸, Tokyo": [33.1003, 139.7706],
-    "41. Yamanakako Panorama 山中湖パノラマ台, Yamanashi": [35.4154, 138.8758],
-    "42. Kiyosato Seisenryo 清泉寮, Yamanashi": [35.9245, 138.4214],
-    "43. Shindo Pass 新道峠, Yamanashi": [35.5466, 138.7318],
-    "44. Nobeyama Radio Observatory 野辺山, Nagano": [35.9414, 138.4704],
-    "45. Takabocchi Highlands 高ボッチ高原, Nagano": [36.1319, 138.0350],
-    "46. Soni Highlands 曽爾高原, Nara": [34.5346, 136.1506],
-    "47. Norikura Tatamidaira 乗鞍畳平, Gifu": [36.1068, 137.5538],
-    "48. Hirayu Pass 平湯峠, Gifu": [36.1808, 137.5303],
-    "49. Shinhotaka Ropeway 新穂高, Gifu": [36.2854, 137.5743],
-    "50. Shirakawago, Gifu": [36.2573, 136.9060],
-    "51. Chirihama Beach 千里浜なぎさドライブウェイ, Ishikawa": [36.8157, 136.7448],
-    "52. Mikatagoko Rainbow Line 三方五湖, Fukui": [35.5945, 135.8824],
-    "53. Kumano Oni-ga-jo 鬼ヶ城, Mie": [33.8930, 136.1113],
-    "54. Daiozaki Lighthouse 大王崎, Mie": [34.2708, 136.8964],
-    "55. Odaigahara Driveway 大台ヶ原, Nara": [34.1856, 136.1090],
-    "56. Tenkawa Miroku Pass 天川村, Nara": [34.2460, 135.8680],
-    "57. Nishiharima Observatory 西はりま天文台, Hyogo": [35.0258, 134.3553],
-    "58. Bisei Observatory 美星天文台, Okayama": [34.6712, 133.5483],
-    "59. Hiruzen Highlands 蒜山高原, Okayama": [35.2770, 133.6740],
-    "60. Tottori Sand Dunes 鳥取砂丘, Tottori": [35.5397, 134.2383],
-    "61. Misasa Onsen 三朝温泉周辺, Tottori": [35.4105, 133.8924],
-    "62. Akiyoshidai Karst 秋吉台, Yamaguchi": [34.2576, 131.3070],
-    "63. Shikoku Karst 四国カルスト, Ehime": [33.3804, 132.9536],
-    "64. Ashizuri Cape 足摺岬, Kochi": [32.7196, 133.0182],
-    "65. Sata Cape 佐多岬, Kagoshima": [30.9924, 130.6595], 
-    "66. Aso Kusasenri 草千里ヶ浜, Kumamoto": [32.8845, 131.0808],
-    "67. Daikanbo 大観峰, Kumamoto": [32.99963, 131.0671],
-    "68. Ikitsuki Island 生月島, Nagasaki": [33.3720, 129.3988],
-    "69. Yobuko Cape Hado 波戸岬, Saga": [33.5528, 129.8527],
-    "70. Amaterasu Railway 高千穂, Miyazaki": [32.7147, 131.3083],
-    "71. Cape Toi 都井岬, Miyazaki": [31.3674, 131.3458],
-    "72. Kaimondake 開聞岳周辺, Kagoshima": [31.1805, 130.5284],
-    "73. Yoron Island 百合ヶ浜, Kagoshima": [27.0452, 128.4246],
-    "74. Ishigaki Hirakubozaki 平久保崎, Okinawa": [24.6053, 124.3427],
-    "75. Tamatorizaki Observatory 玉取崎展望台, Okinawa": [24.4553, 124.2520],
-    "76. Iriomote Hoshizuna Beach 星砂の浜, Okinawa": [24.4078, 123.7575],
-    "77. Hateruma Observatory 波照間島, Okinawa": [24.0558, 123.8060],
-    "78. Cape Zanpa 残波岬, Okinawa": [26.4360, 127.7045],
-    "79. Kouri Bridge 古宇利大橋, Okinawa": [26.7069, 128.0188],
-    "80. Cape Hedo 辺戸岬, Okinawa": [26.8716, 128.2695],
-    "81. Miyakojima Higashi-Hennazaki 東平安名崎, Okinawa": [24.7353, 125.4672],
-    "82. Kurima Bridge 来間大橋, Okinawa": [24.7248, 125.2478],
-    "83. Aogashima Observatory 青ヶ島展望公園, Tokyo": [32.4542, 139.7618],
-    "84. Niijima Habushiura 羽伏浦海岸, Tokyo": [34.3872, 139.2878],
-    "85. Shikinejima Tomari Beach 泊海岸, Tokyo": [34.3265, 139.2158],
-    "86. Ogasawara Weather Station 小笠原, Tokyo": [27.0944, 142.1917],
-    "87. Kirigamine Highlands 霧ヶ峰, Nagano": [36.1030, 138.1946],
-    "88. Shirakoma Pond 白駒池, Nagano": [36.0510, 138.3597],
-    "89. Yachiho Plateau 八千穂高原, Nagano": [36.0694, 138.3806],
-    "90. Senjojiki Cirque 千畳敷カール, Nagano": [35.7725, 137.8173],
-    "91. Happo Pond 八方池, Nagano": [36.6940, 137.7844],
-    "92. Tsugaike Nature Park 栂池自然園, Nagano": [36.7582, 137.8758],
-    "93. Hakuba Iwatake 白馬岩岳, Nagano": [36.7167, 137.8594],
-    "94. Shiga Highlands 志賀高原, Nagano": [36.7182, 138.4921],
-    "95. Mt. Myoko 妙高高原, Niigata": [36.8917, 138.1708],
-    "96. Yahiko Skyline 弥彦山, Niigata": [37.7052, 138.8178],
-    "97. Senami Coast 瀬波海岸, Niigata": [38.2410, 139.4628],
-    "98. Gassan Hachigome 月山八合目, Yamagata": [38.5484, 140.0264],
-    "99. Toriumi Observatory 鳥海山鉾立, Akita": [39.0933, 140.0497],
-    "100. Cape Tappi 龍飛崎, Aomori": [41.2570, 140.3495],
-    
-    "101. Cape Notoro 能取岬, Hokkaido": [44.0174, 144.2740],
-    "102. Lake Mashu 摩周湖, Hokkaido": [43.5763, 144.5360],
-    "103. Bihoro Pass 美幌峠, Hokkaido": [43.7398, 144.2570],
-    "104. Lake Kussharo 屈斜路湖, Hokkaido": [43.6110, 144.3320],
-    "105. Cape Kiritappu 霧多布岬, Hokkaido": [43.0808, 145.1174],
-    "106. Cape Erimo 襟裳岬, Hokkaido": [41.9272, 143.2473],
-    "107. Notsuke Peninsula 野付半島, Hokkaido": [43.5765, 145.2765],
-    "108. Lake Saroma サロマ湖, Hokkaido": [44.1257, 143.9060],
-    "109. Shiretoko Pass 知床峠, Hokkaido": [44.0702, 145.1110],
-    "110. Cape Kamui 神威岬, Hokkaido": [43.3318, 140.3495],
-    "111. Omazaki 大間崎, Aomori": [41.5265, 140.9125],
-    "112. Hotokegaura 仏ヶ浦, Aomori": [41.3273, 140.8365],
-    "113. Lake Towada 十和田湖, Aomori": [40.4405, 140.8885],
-    "114. Hakkoda 八甲田山, Aomori": [40.6530, 140.8770],
-    "115. Nyuto Onsen 乳頭温泉郷, Akita": [39.7992, 140.8020],
-    "116. Tazawako 田沢湖, Akita": [39.7264, 140.6954],
-    "117. Oga Nyudozaki 入道崎, Akita": [39.9922, 139.7105],
-    "118. Jodogahama 浄土ヶ浜, Iwate": [39.6440, 141.9800],
-    "119. Kitayamazaki 北山崎, Iwate": [40.0715, 141.9472],
-    "120. Ryusendo 龍泉洞周辺, Iwate": [39.8442, 141.8370],
-    "121. Naruko Gorge 鳴子峡, Miyagi": [38.7480, 140.7190],
-    "122. Izunuma 伊豆沼, Miyagi": [38.7350, 141.1030],
-    "123. Mt. Haguro 羽黒山, Yamagata": [38.7025, 139.9838],
-    "124. Funagata-yama 船形山展望台, Miyagi": [38.6430, 140.5870],
-    "125. Tadami Bridge 只見線第一橋梁, Fukushima": [37.3445, 139.3150],
-    "126. Goshikinuma 五色沼, Fukushima": [37.6550, 140.0720],
-    "127. Inawashiro Lake 猪苗代湖, Fukushima": [37.5460, 140.1040],
-    "128. Amaharashi Coast 雨晴海岸, Toyama": [36.8174, 137.0452],
-    "129. Tateyama Murodo 室堂, Toyama": [36.5776, 137.6064],
-    "130. Shogawa Gorge 庄川峡, Toyama": [36.5860, 136.9710],
-    "131. Mitsukejima 見附島, Ishikawa": [37.3961, 137.2474],
-    "132. Senmaida 白米千枚田, Ishikawa": [37.4252, 136.9996],
-    "133. Rokkozaki 禄剛崎, Ishikawa": [37.5289, 137.3261],
-    "134. Hakusan Chokaisanso 白山チブリ尾根避難小屋, Ishikawa": [36.1560, 136.7490],
-    "135. Ena Ravine Bridge 恵那峡大橋展望台, Gifu": [35.4859, 137.4118],
-    "136. Daibo Pass 大望峠, Nagano": [36.7340, 137.9660],
-    "137. Norikura Kogen 乗鞍高原, Nagano": [36.1145, 137.6130],
-    "138. Shirouma Oike 白馬大池, Nagano": [36.8280, 137.7860],
-    "139. Nojimazaki 野島崎, Chiba": [34.9013, 139.8882],
-    "140. Kobentenjima 小弁天島, Chiba": [35.1134, 140.1988],
-    "141. Izumo Hinomisaki 日御碕, Shimane": [35.4322, 132.6290],
-    "142. Lake Shinji 宍道湖, Shimane": [35.4560, 132.9760],
-    "143. Hashiguiiwa 橋杭岩, Wakayama": [33.4754, 135.7830],
-    "144. Takeda Castle 竹田城跡, Hyogo": [35.3004, 134.8290],
-    "145. Ine Funaya 伊根の舟屋, Kyoto": [35.6730, 135.2910],
-    "146. Nima Sand Museum 仁摩サンドミュージアム, Shimane": [35.1230, 132.4940],
-    "147. Shionomisaki Cape 潮岬, Wakayama": [33.4364, 135.7706],
-    "148. Nariai-ji Temple 成相寺展望台, Kyoto": [35.5968, 135.2013],
-    "149. Kumihama Bay 久美浜湾, Kyoto": [35.6180, 134.9030],
-    "150. Kashiwajima 柏島, Kochi": [32.7492, 132.6278],
-    "151. Tsunoshima Bridge 角島大橋, Yamaguchi": [34.3578, 130.8398],
-    "152. Motonosumi Shrine 元乃隅神社, Yamaguchi": [34.3435, 131.0387],
-    "153. Chichibugahama 父母ヶ浜, Kagawa": [34.2138, 133.6397],
-    "154. Cape Muroto 室戸岬, Kochi": [33.2514, 134.1757],
-    "155. Ouchi-juku 大内宿, Fukushima": [37.3384, 139.8478],
-    "156. Hoshitoge Rice Terraces 星峠の棚田, Niigata": [37.0873, 138.6875],
-    "157. Lake Hibara 桧原湖, Fukushima": [37.6902, 140.0605],
-    "158. Cape Shiriya 尻屋崎, Aomori": [41.4295, 141.4726],
-    "159. Lake Ogawara 小川原湖, Aomori": [40.8068, 141.2933],
-    "160. Cape Nosappu 納沙布岬, Hokkaido": [43.3845, 145.8178],    
-    "161. Cape Chikyu 地球岬, Hokkaido": [42.3158, 140.9803],
-    "162. Lake Onneto オンネトー, Hokkaido": [43.2752, 143.3190],
-    "163. Shirogane Blue Pond 青い池, Hokkaido": [43.4934, 142.6188],
-    "164. Cape Esan 恵山岬, Hokkaido": [41.8065, 141.1667],
-    "165. Koganezaki 黄金崎, Shizuoka": [34.7646, 138.7635],
-    "166. Gokayama Ainokura 五箇山相倉集落, Toyama": [36.4259, 136.9357],
-    "167. Mikuni Pass 三国峠, Hokkaido": [43.6408, 143.1754],
-    "168. Oirase Stream 奥入瀬渓流, Aomori": [40.5228, 140.9344],
-    "169. Tanesashi Coast 種差海岸, Aomori": [40.4746, 141.6047],
-    "170. Kabushima Shrine 蕪島神社, Aomori": [40.5410, 141.5575],
-    "171. Genbikei Gorge 厳美渓, Iwate": [38.9870, 141.1076],
-    "172. Mt. Kurikoma 栗駒山, Miyagi": [38.9615, 140.7886],
-    "173. Tengendai 天元台高原, Yamagata": [37.8820, 139.9940],
-    "174. Bandai-san 磐梯山, Fukushima": [37.6008, 140.0722],
-    "175. Akan International Crane 釧路湿原, Hokkaido": [43.0560, 144.2560],
-    "176. Lake Akan 阿寒湖, Hokkaido": [43.4380, 144.0950],
-    "177. Cape Ochiishi 落石岬, Hokkaido": [43.1700, 145.5100],
-    "178. Lake Toya 洞爺湖, Hokkaido": [42.5970, 140.8540],
-    "179. Noboribetsu Jigokudani 登別地獄谷, Hokkaido": [42.4940, 141.1510],
-    "180. Muroto Geopark 室戸ジオパーク, Kochi": [33.3140, 134.1580],
-    "181. Sadamisaki Peninsula 佐田岬, Ehime": [33.3440, 132.0230],
-    "182. Mt. Ishizuchi 石鎚山, Ehime": [33.7650, 133.1180],
-    "183. Iya Valley 祖谷のかずら橋, Tokushima": [33.8730, 133.8340],
-    "184. Naruto Whirlpools 鳴門海峡, Tokushima": [34.2380, 134.6540],
-    "185. Mt. Tsurugi 剣山, Tokushima": [33.8560, 134.0930],
-    "186. Sandankyo Gorge 三段峡, Hiroshima": [34.6570, 132.2530],
-    "187. Tomonoura 鞆の浦, Hiroshima": [34.3820, 133.3790],
-    "188. Sandanbeki 三段壁, Wakayama": [33.6760, 135.3480],
-    "189. Nachi Falls 那智の滝, Wakayama": [33.6750, 135.8920],
-    "190. Koyasan 高野山奥之院, Wakayama": [34.2190, 135.5940],
-    "191. Amanohashidate 天橋立, Kyoto": [35.5670, 135.1950],
-    "192. Kinosaki Onsen 城崎温泉, Hyogo": [35.6320, 134.8080],
-    "193. Hyonosen Ridge 氷ノ山, Hyogo": [35.3520, 134.4540],
-    "194. Shodoshima Olive Park 小豆島, Kagawa": [34.4840, 134.2980],
-    "195. Tsurugi Highlands 剣山スーパー林道, Tokushima": [33.8020, 134.0150],
-    "196. Higashi-Aka Island 渡嘉敷島東阿嘉, Okinawa": [26.1860, 127.3520],
-    "197. Shimanto River 四万十川, Kochi": [33.0030, 132.9340],
-    "198. Cape Soya 宗谷岬, Hokkaido": [45.5215, 141.9367],
-    "199. Kunimigaoka 国見ヶ丘, Miyazaki": [32.7510, 131.3300],
-    "200. Kirishima Shrine 霧島神宮, Kagoshima": [31.8590, 130.8710],
-    "201. Yakushima Shiratani 屋久島, Kagoshima": [30.3450, 130.5690],
-    "202. Amami Oshima 奄美大島, Kagoshima": [28.3750, 129.4670],
-    "203. Yonaguni Island 与那国島, Okinawa": [24.4500, 122.9800],
-    "204. Iriomote Jungle カヌーツアー, Okinawa": [24.3500, 123.8500],
-    "205. Okunoshima Rabbit 大久野島, Hiroshima": [34.3050, 132.9930],
-    "206. Mitani Valley 三谷峡, Okayama": [34.8560, 133.7250],
-    "207. Uradome Coast 浦富海岸, Tottori": [35.5880, 134.4600],
-    "208. Izumo Taisha 出雲大社, Shimane": [35.4010, 132.6850],
-    "209. Nita Pass 仁多峠, Shimane": [35.2610, 133.0840],
-    "210. Oki Islands 隠岐の島, Shimane": [36.2160, 133.2330],
-    "211. Dogo Islands 隠岐・島後, Shimane": [36.2500, 133.3000],
-    "212. Ise Jingu 伊勢神宮, Mie": [34.4600, 136.7230],
-    "213. Observation Tower ガーデンタワー, Yamanashi": [35.4433, 138.6023],
-    "214. Gujo Hachiman 郡上八幡, Gifu": [35.7480, 136.9550],
-    "215. Magome-juku 馬籠宿, Gifu": [35.4950, 137.5670],
-    "216. Bessan Plateau 別山高原, Ishikawa": [36.0830, 136.7050],
-    "217. Eiheiji Temple 永平寺, Fukui": [36.0540, 136.3570],
-    "218. Tojinbo 東尋坊, Fukui": [36.2370, 136.1260],
-    "219. Lake Biwa Biwako Terrace 琵琶湖, Shiga": [35.2090, 135.9180],
-    "220. Mt. Ibuki Summit 伊吹山頂, Shiga": [35.4200, 136.4060],
-    "221. Gozaisho Summit 御在所岳, Mie": [35.0120, 136.4380],
-    "222. Iide Mountains 飯豊連峰, Yamagata": [37.8520, 139.7830],
-    "223. Karasawa Cirque 涸沢カール, Nagano": [36.2944, 137.6619],
-    "224. Dorokyo Gorge 瀞峡, Wakayama": [33.9070, 135.8500],
-    "225. Awaji Southern Cape 淡路島南端, Hyogo": [34.2650, 134.8930],
-    "226. Tottori Daisen 大山, Tottori": [35.3780, 133.5350],
-    "227. Tsuno Plateau 津野山高原, Kochi": [33.4120, 133.0560],
-    "228. Kawakami Village 川上村星空, Nara": [34.0560, 135.9740],
-    "229. Miyajima 厳島神社, Hiroshima": [34.2970, 132.3190],
-    "230. Kintaikyo Bridge 錦帯橋, Yamaguchi": [34.1670, 132.1790],
-    "231. Kotohira-gu 金刀比羅宮, Kagawa": [34.1810, 133.8050],
-    "232. Oboke Gorge 大歩危峡, Tokushima": [33.9120, 133.8420],
-    "233. Daisetsuzan Asahidake 大雪山旭岳, Hokkaido": [43.6700, 142.8540],
-    "234. Katsurahama Beach 桂浜, Kochi": [33.4980, 133.5710],
-    "235. Hinokage Starfield 日之影星空, Miyazaki": [32.6290, 131.3870],
-    "236. Sefuri Summit 脊振山頂, Fukuoka": [33.4280, 130.3060],
-    "237. Sefuri Highlands 脊振山系, Saga": [33.3810, 130.1820],
-    "238. Tara Highland 多良岳, Saga": [33.0610, 130.1700],
-    "239. Unzen Nita Pass 雲仙仁田峠, Nagasaki": [32.7540, 130.2700],
-    "240. Kuju Highlands 久住高原, Oita": [32.9880, 131.2400],
-    "241. Ichifusa Highland 一房高原, Kumamoto": [32.3410, 130.9830],
-    "242. Usuki Stone Buddhas 臼杵石仏, Oita": [33.0900, 131.7850],
-    "243. Sakurajima East Coast 桜島有村溶岩展望所, Kagoshima": [31.5784, 130.6595],
-    "244. Yanbaru Forest 与那覇岳, Okinawa": [26.7210, 128.2270],
-    "245. Sefa-utaki 斎場御嶽, Okinawa": [26.1730, 127.8280],
-    "246. Cape Manzamo 万座毛, Okinawa": [26.5040, 127.8500],
-    "247. Aguni Island 粟国島, Okinawa": [26.5930, 127.2350],
-    "248. Kume Island 久米島, Okinawa": [26.3390, 126.7860],
-    "249. Zakimi Castle 座喜味城跡, Okinawa": [26.4110, 127.7420],
-    "250. Cape Maeda 真栄田岬, Okinawa": [26.4460, 127.7800],
-
-    # ── 251-266: 追加地点 ────────────────────────────────────────────────────────
-    # Chiba
-    "251. Isumi Railway Crossing いすみ鉄道第二五之町踏切, Chiba": [35.2827, 140.2973],
-    "252. Oyama Senmaida 大山千枚田, Chiba": [35.1300, 139.9740],
-    "253. Tonami no Torii 東浪見の鳥居, Chiba": [35.3357, 140.3941],
-    # Toyama
-    "254. Asahi Funakawa あさひ舟川「春の四重奏」, Toyama": [36.9610, 137.5580],
-    # Ishikawa
-    "255. Mawaki Ruins 真脇遺跡, Ishikawa": [37.2838, 137.1780],
-    "256. Hoshi no Kanrankan 星の観察館, Ishikawa": [36.1880, 136.6680],
-    "257. Hakusan Tenbodai 白山展望台, Ishikawa": [36.1350, 136.7720],
-    # Fukushima
-    "258. Shikanotsuno Observatory 鹿角平天文台, Fukushima": [36.9820, 140.5299],
-    "259. Koriyama Nunobiki Wind Farm 郡山布引風の高原, Fukushima": [37.5064, 140.3260],
-    "260. Bandaisan Viewpoint 磐梯山眺望箇所, Fukushima": [37.5680, 140.1360],
-    "261. Kaneyama Fureai Square かねやまふれあい広場, Fukushima": [37.4160, 139.5770],
-    # Gunma
-    "262. Ueno Sky Bridge 上野スカイブリッジ, Gunma": [36.0720, 138.7771],
-    "263. Kurabuchi Children くらぶちこども天文台, Gunma": [36.4164, 138.7779],
-    "264. Kozumaki Ranch Observatory 神津牧場天文台, Gunma": [36.3460, 138.8200],
-    "265. Takane Observatory 高根展望台, Gunma": [36.5800, 139.0400],
-    # Niigata
-    "266. Okutadami Dam 奥只見ダム, Niigata": [37.0730, 139.1050],
-    "267. Oshima Mihara-yama 三原山頂上, Tokyo": [34.7384, 139.3800],
-    "268. Oshima Habu Port 波浮港, Tokyo": [34.6873, 139.4363],
-    "269. Minami-Daito Island 南大東島, Okinawa": [25.8470, 131.2330],
+    "1. Long Coc Tea Hill Đồi chè Long Cốc, Phu Tho": [21.2181, 105.1528],
+    "2. Bac Son Valley Thung lũng Bắc Sơn, Lang Son": [21.9056, 106.3312],
+    "3. Mu Cang Chai Mù Cang Chải, Yen Bai": [21.8485, 104.1082],
+    "4. Khau Pha Pass Đèo Khau Phạ, Yen Bai": [21.7619, 104.2867],
+    "5. Lung Cu Flag Tower Cột cờ Lũng Cú, Ha Giang": [23.3592, 105.3156],
+    "6. Ma Pi Leng Pass Đèo Mã Pí Lèng, Ha Giang": [23.2386, 105.3853],
+    "7. Y Ty Y Tý, Lao Cai": [22.6288, 103.6069],
+    "8. Ta Xua Peak Đỉnh Tà Xùa, Son La": [21.2588, 104.4647],
+    "9. Thang Hen Lake Hồ Thăng Hen, Cao Bang": [22.7533, 106.3005],
+    "10. Quan Lan Island Đảo Quan Lạn, Quang Ninh": [20.9065, 107.5452],
+    "11. O Quy Ho Pass Đèo Ô Quy Hồ, Lao Cai": [22.3564, 103.7753],
+    "12. Fansipan Peak Đỉnh Fansipan, Lao Cai": [22.3033, 103.7750],
+    "13. Muong Hoa Valley Thung lũng Mường Hoa, Lao Cai": [22.3021, 103.8642],
+    "14. Hoang Su Phi Hoàng Su Phì, Ha Giang": [22.7483, 104.6811],
+    "15. Dong Van Karst Plateau Cao nguyên đá Đồng Văn, Ha Giang": [23.2778, 105.3611],
+    "16. Du Gia Village Làng Du Già, Ha Giang": [22.9058, 105.2183],
+    "17. Nho Que River Dòng sông Nho Quế, Ha Giang": [23.2281, 105.4128],
+    "18. Ban Gioc Waterfall Thác Bản Giốc, Cao Bang": [22.8562, 106.7217],
+    "19. Nui Mat thần Núi Mắt Thần, Cao Bang": [22.7667, 106.3050],
+    "20. Pac Bo Relic Suối Lê Nin - Pắc Bó, Cao Bang": [22.9811, 106.0561],
+    "21. Ba Be Lake Hồ Ba Bể, Bac Kan": [22.4111, 105.6178],
+    "22. Mau Son Peak Đỉnh Mẫu Sơn, Lang Son": [21.8419, 106.9208],
+    "23. Co To Island Đảo Cô Tô, Quang Ninh": [20.9822, 107.7583],
+    "24. Binh Lieu Ridge Bống Cỏ Bình Liêu, Quang Ninh": [21.5303, 107.4431],
+    "25. Yen Tu Mountain Núi Yên Tử, Quang Ninh": [21.1569, 106.7183],
+    "26. Thung Nai Thung Nai, Hoa Binh": [20.7303, 105.2106],
+    "27. Mai Chau Valley Thung lũng Mai Châu, Hoa Binh": [20.6592, 105.0789],
+    "28. Pu Luong Nature Reserve Khu bảo tồn Pù Luông, Thanh Hoa": [20.4561, 105.2344],
+    "29. Pha Luong Peak Đỉnh Pha Luông, Son La": [20.8872, 104.6256],
+    "30. Moc Chau Tea Hill Đồi chè Mộc Châu, Son La": [20.8433, 104.6200],
+    "31. Tam Dao Mountain Peak Đỉnh Tam Đảo, Vinh Phuc": [21.4589, 105.6486],
+    "32. Ba Vi Peak Đỉnh Ba Vì, Hanoi": [21.0808, 105.3622],
+    "33. Dong Cao Plateau Cao nguyên Đồng Cao, Bac Giang": [21.3653, 106.8406],
+    "34. Cuc Phuong National Park Vườn quốc gia Cúc Phương, Ninh Binh": [20.3183, 105.6078],
+    "35. Van Long Wetland Khu bảo tồn Vân Long, Ninh Binh": [20.3708, 105.8825],
+    "36. Hang Mua Peak Đỉnh Hang Múa, Ninh Binh": [20.2828, 105.9525],
+    "37. Xuan Thuy National Park Vườn quốc gia Xuân Thủy, Nam Dinh": [20.2333, 106.5500],
+    "38. Sam Son Coast Bờ biển Sầm Sơn, Thanh Hoa": [19.7428, 105.9069],
+    "39. Ben En National Park Vườn quốc gia Bến En, Thanh Hoa": [19.6208, 105.5181],
+    "40. Pu Mat National Park Vườn quốc gia Pù Mát, Nghe An": [18.9667, 104.8000],
+    "41. Cua Lo Beach Biển Cửa Lò, Nghe An": [18.8108, 105.7186],
+    "42. Phong Nha - Ke Bang Vườn quốc gia Phong Nha - Kẻ Bàng, Quang Binh": [17.5333, 106.1500],
+    "43. Da Nhay Beach Biển Đá Nhảy, Quang Binh": [17.5858, 106.4636],
+    "44. Son Doong Cave Entrance Cửa hang Sơn Đoòng, Quang Binh": [17.4619, 106.2872],
+    "45. Nhat Le Beach Biển Nhật Lệ, Quang Binh": [17.4897, 106.6264],
+    "46. Cua Tung Beach Biển Cửa Tùng, Quang Tri": [17.0200, 107.1000],
+    "47. Con Co Island Đảo Cồn Cỏ, Quang Tri": [17.1583, 107.3333],
+    "48. Hai Van Pass Đèo Hải Vân, Thua Thien Hue": [16.1983, 108.1311],
+    "49. Lap An Lagoon Đầm Lập An, Thua Thien Hue": [16.2167, 108.0833],
+    "50. Bach Ma National Park Vườn quốc gia Bạch Mã, Thua Thien Hue": [16.1969, 107.8542],
+    "51. Son Tra Peninsula Bán đảo Sơn Trà, Da Nang": [16.1000, 108.2500],
+    "52. An Bang Beach Biển An Bàng, Quang Nam": [15.9128, 108.3378],
+    "53. Cu Lao Cham Island Cù Lao Chàm, Quang Nam": [15.9583, 108.5167],
+    "54. My Son Sanctuary Thánh địa Mỹ Sơn, Quang Nam": [15.7647, 108.1239],
+    "55. Ly Son Island Đảo Lý Sơn, Quang Ngai": [15.3789, 109.1172],
+    "56. Sa Huynh Beach Biển Sa Huỳnh, Quang Ngai": [14.6500, 109.0667],
+    "57. Mang Den Măng Đen, Kon Tum": [14.6000, 108.3000],
+    "58. Chu Dang Ya Volcano Núi lửa Chư Đăng Ya, Gia Lai": [14.1353, 108.0169],
+    "59. Bien Ho Lake Hồ T'Nưng (Biển Hồ), Gia Lai": [14.0083, 108.0000],
+    "60. Phu Yen Cape Dien Mũi Điện (Đại Lãnh), Phu Yen": [12.8908, 109.4589],
+    "61. Ghenh Da Dia Ghềnh Đá Đĩa, Phu Yen": [13.3517, 109.2978],
+    "62. Xuan Dai Bay Vịnh Xuân Đài, Phu Yen": [13.4333, 109.2333],
+    "63. Eo Gio Quy Nhon Eo Gió Quy Nhơn, Binh Dinh": [13.8969, 109.3083],
+    "64. Ky Co Beach Biển Kỳ Cò, Binh Dinh": [13.8833, 109.3167],
+    "65. Cu Lao Xanh Island Cù Lao Xanh, Binh Dinh": [13.6167, 109.3500],
+    "66. Lak Lake Hồ Lắk, Dak Lak": [12.4283, 108.1758],
+    "67. Dray Nur Waterfall Thác Dray Nur, Dak Lak": [12.5053, 107.8931],
+    "68. Ta Dung Lake Hồ Tà Đùng, Dak Nong": [11.8500, 107.9833],
+    "69. Langbiang Mountain Đỉnh Langbiang, Lam Dong": [12.0428, 108.4386],
+    "70. Tuyen Lam Lake Hồ Tuyền Lâm, Lam Dong": [11.8986, 108.4353],
+    "71. Cau Dat Tea Hill Đồi chè Cầu Đất, Lam Dong": [11.8500, 108.5500],
+    "72. Linh Quy Phuoc Dien Chùa Linh Quy Pháp Ấn, Lam Dong": [11.5333, 107.9167],
+    "73. Cam Ranh Bay Vịnh Cam Ranh, Khanh Hoa": [11.8833, 109.1500],
+    "74. Van Phong Bay Vịnh Vân Phong, Khanh Hoa": [12.6000, 109.3833],
+    "75. Diep Son Island Đảo Điệp Sơn, Khanh Hoa": [12.7000, 109.2500],
+    "76. Binh Ba Island Đảo Bình Ba, Khanh Hoa": [11.8333, 109.2333],
+    "77. Vinh Hy Bay Vịnh Vĩnh Hy, Ninh Thuan": [11.7167, 109.1833],
+    "78. Nui Chua National Park Vườn quốc gia Núi Chúa, Ninh Thuan": [11.7000, 109.1333],
+    "79. Mui Dinh Cape Mũi Dinh, Ninh Thuan": [11.4833, 109.0167],
+    "80. Phu Quy Island Đảo Phú Quý, Binh Thuan": [10.5167, 108.9333],
+    "81. Mui Ne Sand Dunes Đồi Cát Mũi Né, Binh Thuan": [10.9500, 108.2833],
+    "82. Ke Ga Cape Mũi Kê Gà, Binh Thuan": [10.6975, 107.9903],
+    "83. Cu Lao Cau Island Cù Lao Câu, Binh Thuan": [11.2333, 108.8500],
+    "84. Tri An Lake Hồ Trị An, Dong Nai": [11.1333, 107.0167],
+    "85. Nam Cat Tien Park Vườn quốc gia Nam Cát Tiên, Dong Nai": [11.4167, 107.4333],
+    "86. Ba Den Mountain Núi Bà Đen, Tay Ninh": [11.3708, 106.1689],
+    "87. Dau Tieng Lake Hồ Dầu Tiếng, Tay Ninh": [11.3500, 106.3500],
+    "88. Vung Tau Lighthouse Hải đăng Vũng Tàu, Ba Ria - Vung Tau": [10.3386, 107.0850],
+    "89. Ho Tram Beach Biển Hồ Tràm, Ba Ria - Vung Tau": [10.4833, 107.4333],
+    "90. Con Dao Island Đảo Côn Đảo, Ba Ria - Vung Tau": [8.6833, 106.6000],
+    "91. Can Gio Mangrove Rừng sác Cần Giờ, Ho Chi Minh City": [10.4333, 106.8833],
+    "92. Tan Lap Floating Village Làng nổi Tân Lập, Long An": [10.6167, 105.9833],
+    "93. Tram Chim National Park Vườn quốc gia Tràm Chim, Dong Thap": [10.7000, 105.5500],
+    "94. Ba Hon Dam Island Bà Hòn Dầm, Kien Giang": [10.2333, 104.5333],
+    "95. Nam Du Island Quần đảo Nam Du, Kien Giang": [9.6833, 104.3500],
+    "96. Phu Quoc Island (Ganh Dau) Gành Dầu Phú Quốc, Kien Giang": [10.3667, 103.8500],
+    "97. Phu Quoc Island (Rach Vem) Rạch Vẹm Phú Quốc, Kien Giang": [10.3500, 103.9333],
+    "98. Hon Son Island Đảo Hòn Sơn, Kien Giang": [9.8000, 104.8333],
+    "99. U Minh Ha Park Vườn quốc gia U Minh Hạ, Ca Mau": [9.2500, 104.9167],
+    "100. Ca Mau Cape Mũi Cà Mau, Ca Mau": [8.6083, 104.7167],
 }
 
 st.set_page_config(page_title="Astro Map Pro", page_icon="🌌", layout="wide", initial_sidebar_state="collapsed")
@@ -358,16 +179,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── SESSION STATE ────────────────────────────────────────────────────────────
-for k, v in [("lat", 35.6895), ("lon", 139.6917),
-             ("map_center", [35.6895, 139.6917]), ("zoom", 7),
-             ("day_offset", 0), ("location_name", "Tokyo, Japan"),
-             ("is_custom_point", True), ("weather_source", "🔀 Blend (JMA+ECMWF)"), ("star_mode", "both"),
-             ("active_source_used", "JMA"),
+for k, v in [("lat", 21.0285), ("lon", 105.8542),
+             ("map_center", [21.0285, 105.8542]), ("zoom", 6),
+             ("day_offset", 0), ("location_name", "Hanoi, Vietnam"),
+             ("is_custom_point", True), ("weather_source", "Blend"),
+             ("active_source_used", "ECMWF"),
              ("_last_tip", None), ("_last_lc", None),
              ("_source_auto", True), ("_ecmwf_available", True),
              ("map_tile", "himawari"),
              ("_need_fly", False), ("_skip_prefetch", False),
-             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "kanto"), ("_scan_best", False),
+             ("_scan_result", None), ("_scan_days", 0), ("_scan_scanning", False), ("_scan_region", "bac"), ("_scan_best", False),
              ("_scan_tonight", False), ("_scan_fallback_label", None),
              ("_ai_rings", []), ("_ai_panel", [])]:
     if k not in st.session_state:
@@ -379,21 +200,43 @@ def _strip_loc_num(name: str) -> str:
     import re
     return re.sub(r'^\d+\.\s*', '', name).strip()
 
-def _disp_name_html(name: str) -> str:
-    """Tên hiển thị (đã bỏ chữ Nhật) tô màu cam, dùng trong tiêu đề."""
-    import html as _h
-    return f'<span style="color:#fb923c;">{_h.escape(_disp_name(name))}</span>'
+# Vài tên không tách đúng bằng quy tắc chung (phần tiếng Anh/Việt trùng hoặc không có dấu)
+_EN_PART_FIX = {"Y Ty Y": "Y Ty", "Nui": "Nui Mat", "Eo Gio Quy Nhon Eo": "Eo Gio Quy Nhon"}
+
+def _vn_en_part(s: str) -> str:
+    """Lấy phần tiếng Anh ở đầu tên địa điểm (bỏ phần tiếng Việt có dấu theo sau).
+    'Long Coc Tea Hill Đồi chè Long Cốc' -> 'Long Coc Tea Hill'
+    'Bac Son Valley Thung lũng Bắc Sơn'  -> 'Bac Son Valley'
+    'Thung Nai Thung Nai'                -> 'Thung Nai'"""
+    toks = s.split()
+    cut = len(toks)
+    for i, t in enumerate(toks):
+        if any(ord(c) > 127 for c in t):
+            cut = i
+            # từ ngay trước là từ tiếng Việt viết hoa không dấu (vd 'Thung' trong 'Thung lũng')
+            if i >= 2 and t[0].islower() and toks[i-1][0].isupper() and toks[i-1].isascii():
+                cut = i - 1
+            break
+    toks = toks[:cut]
+    h = len(toks) // 2
+    if len(toks) >= 2 and len(toks) % 2 == 0 and toks[:h] == toks[h:]:   # 'Thung Nai Thung Nai'
+        toks = toks[:h]
+    out = " ".join(toks).strip() or s
+    return _EN_PART_FIX.get(out, out)
 
 def _disp_name(name: str) -> str:
-    """Tên hiển thị gọn: bỏ số thứ tự đầu + chữ Nhật.
-    'Senjojiki Cirque 千畳敷カール, Nagano' -> 'Senjojiki Cirque, Nagano'. Chỉ dùng để HIỂN THỊ."""
-    import re
-    n = re.sub(r'^\d+\.\s*', '', name or '')
-    n = re.sub(r'[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]+', ' ', n)
-    n = re.sub(r'\(\s*\)|（\s*）', '', n)
-    n = re.sub(r'\s+,', ',', n)
-    n = re.sub(r'\s+', ' ', n).strip(' ,')
-    return n or re.sub(r'^\d+\.\s*', '', name or '').strip()
+    """Tên hiển thị gọn: bỏ số thứ tự đầu + phần tiếng Việt, giữ tỉnh.
+    '1. Long Coc Tea Hill Đồi chè Long Cốc, Phu Tho' -> 'Long Coc Tea Hill, Phu Tho'. Chỉ dùng để HIỂN THỊ."""
+    n = _strip_loc_num(name or "")
+    if "," in n:
+        head, prov = n.rsplit(",", 1)
+        return f"{_vn_en_part(head.strip())}, {prov.strip()}"
+    return _vn_en_part(n) if n else (name or "")
+
+def _disp_name_html(name: str) -> str:
+    """Tên hiển thị tô màu cam, dùng trong tiêu đề."""
+    import html as _h
+    return f'<span style="color:#fb923c;">{_h.escape(_disp_name(name))}</span>'
 
 @st.cache_data(ttl=3600, show_spinner=False)   # cache 1 giờ — tên địa điểm không đổi
 def fetch_location_name(lat, lon):
@@ -413,14 +256,14 @@ def get_moon_phase_percent(date_obj):
     base = datetime(2024, 1, 11)
     phase = ((date_obj - base).total_seconds() / 86400.0 / 29.53059) % 1.0
     illum = round((1 - math.cos(phase * 2 * math.pi)) / 2 * 100, 1)
-    if phase < 0.03 or phase > 0.97: desc = "New Moon（新月）🌑"
-    elif phase < 0.22: desc = "Waxing Crescent（月齢初期）"
-    elif phase < 0.28: desc = "First Quarter（上弦の月）"
-    elif phase < 0.47: desc = "Waxing Gibbous（月齢中期）"
-    elif phase < 0.53: desc = "Full Moon（満月）🌕"
-    elif phase < 0.72: desc = "Waning Gibbous（月齢後期）"
-    elif phase < 0.78: desc = "Last Quarter（下弦の月）"
-    else: desc = "Waning Crescent（月齢末期）"
+    if phase < 0.03 or phase > 0.97: desc = "New Moon 🌑"
+    elif phase < 0.22: desc = "Waxing Crescent"
+    elif phase < 0.28: desc = "First Quarter"
+    elif phase < 0.47: desc = "Waxing Gibbous"
+    elif phase < 0.53: desc = "Full Moon 🌕"
+    elif phase < 0.72: desc = "Waning Gibbous"
+    elif phase < 0.78: desc = "Last Quarter"
+    else: desc = "Waning Crescent"
     return illum, desc
 
 def _moon_img_b64(date_obj, size=42):
@@ -458,9 +301,9 @@ def _moon_icon(desc):
     return "🌙"
 
 @st.cache_data(ttl=86400, show_spinner=False)  # cache 24 giờ — quỹ đạo trăng không đổi trong ngày
-def calculate_exact_moon_altitude_ephem(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
+def calculate_exact_moon_altitude_ephem(lat, lon, year, month, day, hour_local, utc_offset_h=7.0):
     """Tính độ cao mặt trăng (có thể âm khi dưới đường chân trời).
-    utc_offset_h là offset của location (JST=+9).
+    utc_offset_h là offset của location (ICT=+7).
     Dùng +30 phút để tính giữa khung giờ → chính xác hơn khi hiển thị trên chart."""
     obs = ephem.Observer()
     obs.lat, obs.lon = str(lat), str(lon)
@@ -473,9 +316,9 @@ def calculate_exact_moon_altitude_ephem(lat, lon, year, month, day, hour_local, 
     return round(math.degrees(float(moon.alt)), 1)
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def calculate_exact_sun_altitude_ephem(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
+def calculate_exact_sun_altitude_ephem(lat, lon, year, month, day, hour_local, utc_offset_h=7.0):
     """Tính độ cao mặt trời (có thể âm khi dưới đường chân trời = ban đêm).
-    utc_offset_h là offset của location (JST=+9)."""
+    utc_offset_h là offset của location (ICT=+7)."""
     obs = ephem.Observer()
     obs.lat, obs.lon = str(lat), str(lon)
     obs.pressure = 0
@@ -487,7 +330,7 @@ def calculate_exact_sun_altitude_ephem(lat, lon, year, month, day, hour_local, u
     return round(math.degrees(float(sun.alt)), 1)
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def calculate_milkyway_altitude(lat, lon, year, month, day, hour_local, utc_offset_h=9.0):
+def calculate_milkyway_altitude(lat, lon, year, month, day, hour_local, utc_offset_h=7.0):
     """Tính độ cao trung tâm Dải Ngân Hà (Galactic Center, Sgr A*).
     RA = 17h45m40s, Dec = -29°00'28" (J2000)
     Trả về (altitude_deg, azimuth_deg) — altitude < 0 = dưới chân trời."""
@@ -515,369 +358,126 @@ def calculate_zenith_ra_dec(lat, lon):
     return f"{ra_h:02d}h {ra_m:02d}m", f"{dec_d:+03d}° {dec_m:02d}'"
 
 def calculate_accurate_bortle(lat, lon):
-    """Estimate Bortle class and SQM (mag/arcsec²) from coordinates.
+    """Estimate Bortle class and SQM (mag/arcsec2) from coordinates.
 
     Methodology:
-    ─────────────────────────────────────────────────
-    Priority 1 — Per-location lookup table: values read directly from
-      lightpollutionmap.info (VIIRS 2023 / Sky Brightness layer).
-      If coordinates match within 5 km, use that value directly.
+    -----------------------------------------------------
+    Priority 1 - Per-location lookup table: values calibrated for the
+      250+ curated Vietnam astrophotography locations, based on
+      lightpollutionmap.info (VIIRS) sky-brightness data.
 
-    Priority 2 — Geographic zone overrides (mountain/island/coastal zones
-      calibrated from lightpollutionmap.info heatmap screenshots covering
-      all of Japan from Hokkaido to Kyushu).
+    Priority 2 - Weighted multi-city distance heuristic with per-city
+      Bortle/SQM curves, used as a fallback for any point outside the
+      curated list (e.g. a custom map click).
 
-    Priority 3 — Weighted multi-city distance heuristic with per-city
-      Bortle/SQM curves calibrated against ground-truth samples.
-
-    Calibration sources (v5.17):
-      · lightpollutionmap.info popup samples (page 15 of Japan_LPM.pdf):
-          SQM 17.71 @ 35.69,139.71 (Tokyo core, Bortle 8-9)
-          SQM 18.20 @ 35.54,139.69 (Kawasaki, Bortle 8-9)
-          SQM 19.15 @ 35.27,139.67 (Yokohama suburb, Bortle 6)
-          SQM 20.43 @ 36.23,137.96 (Nagano highlands elev 588m, Bortle 5)
-          SQM 20.63 @ 35.13,139.61 (Boso coastal, Bortle 4)
-          SQM 20.86 @ 35.14,139.19 (Sagami Bay coast, Bortle 4)
-          SQM 21.62 @ 34.65,138.98 (Izu Peninsula, Bortle 4)
-          SQM 21.62 @ 35.45,137.64 (Nagano elev 1172m, Bortle 4)
-          SQM 21.77 @ 34.62,138.97 (Shimoda area, Bortle 3)
-          SQM 21.94 @ 34.08,139.56 (Oshima Island, Bortle 2)
-      · Heatmap visual analysis: pages 1-14 of Japan_LPM.pdf
-          Full Japan overview + regional zoom (Kyushu, Kansai, Chubu,
-          Kanto, Tohoku, Hokkaido) with coordinate overlays.
-
-    Bortle ↔ SQM reference (Wikipedia / Bortle 2001 / Sky & Telescope):
-      Class 1:   21.76–22.0    Class 2:   21.6–21.75
-      Class 3:   21.3–21.6     Class 4:   20.8–21.3
-      Class 4.5: 20.3–20.8     Class 5:   19.25–20.3
-      Class 6:   18.5–19.25    Class 7:   18.0–18.5
+    Bortle <-> SQM reference (Wikipedia / Bortle 2001 / Sky & Telescope):
+      Class 1:   21.76-22.0    Class 2:   21.6-21.75
+      Class 3:   21.3-21.6     Class 4:   20.8-21.3
+      Class 4.5: 20.3-20.8     Class 5:   19.25-20.3
+      Class 6:   18.5-19.25    Class 7:   18.0-18.5
       Class 8/9: < 18.0
-    Source: lightpollutionmap.info · Falchi et al. 2016 · VIIRS 2023
     """
-    # ── Lookup table: verified on lightpollutionmap.info VIIRS 2023 layer ───────
-    # Color → Bortle mapping (lightpollutionmap.info standard palette):
-    #   white/pink core → 9 | red → 8-9 | orange → 7-8 | yellow → 6-7
-    #   yellow-green → 5-6 | light green → 4-5 | green → 4
-    #   dark green → 3 | teal/blue-green → 2-3 | light blue → 2 | grey → 1
     _LOC_BORTLE = {
-        # ── Kanagawa ──────────────────────────────────────────────────────────
-        (35.1313, 139.6179): (4.5, 21.20), #  1 Jogashima          green     → Bortle 4 (20.8–21.3)
-        (35.1408, 139.1609): (4.5, 20.80), #  6 Manazuru           light green (near Odawara) → 4.5 edge / 5
-        (35.5400, 139.7030): (9, 17.80),   # Kawasaki city core    — lightpollutionmap SQM ≈17.8, Bortle 9
-        (35.4437, 139.6380): (9, 17.90),   # Yokohama core         — very bright urban core
-        # ── Chiba / Boso ──────────────────────────────────────────────────────
-        (34.9517, 139.8103): (4, 21.20),   #  2 Tateyama           green
-        (34.9088, 139.8294): (4, 21.20),   #  3 Shirahama          green
-        (35.1795, 140.3729): (4, 21.25),   #  4 Onjuku             green
-        (35.3196, 140.4091): (4, 21.25),   #  5 Isumi              green
-        # ── Shizuoka / Izu ────────────────────────────────────────────────────
-        (34.6588, 138.9868): (3.5, 21.77), #  7 Shimoda — calibrated from sample SQM 21.77
-        (34.6073, 138.8284): (3, 21.75),   #  8 Cape Aiai          dark green
-        (34.7213, 138.7431): (3, 21.75),   #  9 Matsuzaki          dark green
-        # ── Shizuoka inland ───────────────────────────────────────────────────
-        (35.1704, 138.1811): (3, 21.75),   # 10 Okuoikojo          dark green
-        (35.4224, 138.5927): (3, 21.75),   # 11 Asagiri Plateau    dark green
-        # ── Yamanashi ─────────────────────────────────────────────────────────
-        (35.4912, 138.6049): (4, 21.70),   # 12 Shoji-ko           dark green (slight glow from Kofu)
-        # ── Nagano ────────────────────────────────────────────────────────────
-        (35.4457, 137.6617): (4, 21.62),   # 13 Hanamomo-no-sato   calibrated: SQM 21.62 → Class 3 (21.3–21.6 border)
-        (35.8989, 137.4887): (3, 22.00),   # 14 Ontake             light blue (Japan Alps summit)
-        (36.2502, 137.6392): (3, 22.00),   # 15 Kamikochi          light blue (deep Alps)
-        (36.3991, 137.7151): (3, 21.95),   # 16 Enzan-so           light blue
-        (36.2274, 138.1296): (3, 21.75),   # 17 Utsukushihara      dark green
-        (36.1408, 138.3537): (3, 21.80),   # 18 JAXA               dark green
-        # ── Gunma ─────────────────────────────────────────────────────────────
-        (36.4773, 138.4646): (4, 21.75),   # 19 Tsumagoi           dark green
-        (36.6534, 138.5274): (3, 21.80),   # 20 Yugama/Shibutoge   dark green
-        (36.7325, 139.0601): (4, 21.30),   # 21 Sakura 上発知      green (Numata basin glow)
-        # ── Tochigi ───────────────────────────────────────────────────────────
-        (36.8036, 139.4236): (4, 21.75),   # 22 Oku-Nikko          dark green
-        # ── Fukushima ─────────────────────────────────────────────────────────
-        (37.3427, 140.6756): (3, 21.75),   # 23 Hoshinomura        dark green
-        (37.7230, 140.2551): (3, 21.80),   # 24 Azuma-kofuji       dark green (volcanic plateau)
-        # ── Miyagi ────────────────────────────────────────────────────────────
-        (38.1361, 140.4468): (3, 21.75),   # 25 Okama 御釜         dark green
-        # ── Ibaraki coast ─────────────────────────────────────────────────────
-        (36.6144, 140.6802): (5, 20.80),   # 26 Higashinamekawa    light green (coastal urban) → 4.5/5
-        # ── Tokyo ─────────────────────────────────────────────────────────────
-        (35.7920, 139.0475): (5, 20.70),   # 27 Okutama            light green (Tokyo glow) → 4.5/5
-        
-        # ── Chiba ─────────────────────────────────────────────────────────────
-        (35.7077, 140.8685): (4, 21.20),   # 28 Inubosaki
-        (35.5002, 140.4315): (4.5, 21.00), # 29 Kujukuri
-        (34.9146, 139.9355): (4.5, 21.00), # 30 Awa Shirahama
-        # ── Ibaraki ───────────────────────────────────────────────────────────
-        (36.3151, 140.5894): (5, 20.80),   # 31 Oarai
-        (36.7641, 140.4062): (4, 21.40),   # 32 Fukuroda
-        (36.7992, 140.5364): (4, 21.75),   # 33 Plateau Satomi
-        # ── Gunma ─────────────────────────────────────────────────────────────
-        (36.9306, 139.2150): (3, 21.90),   # 34 Oze
-        (36.7833, 139.0830): (3.5, 21.60), # 35 Tanbara
-        # ── Saitama ───────────────────────────────────────────────────────────
-        (35.9563, 138.9255): (4, 21.40),   # 36 Misotsuchi
-        (35.9977, 139.0124): (4, 21.40),   # 37 Nakatsu Gorge (replaced Mitsumine — too close to 36)
-        # ── Tokyo Islands ─────────────────────────────────────────────────────
-        (34.2086, 139.1358): (3, 21.80),   # 38 Kozushima
-        (33.8740, 139.5950): (2.5, 21.95), # 39 Mikurajima
-        (33.1003, 139.7706): (2.5, 21.95), # 40 Hachijojima
-        (32.4666, 139.7678): (2, 22.00),   # 83 Aogashima
-        (34.3872, 139.2878): (3, 21.80),   # 84 Niijima
-        (34.3265, 139.2158): (3, 21.80),   # 85 Shikinejima
-        (27.0944, 142.1917): (2, 22.00),   # 86 Ogasawara
-        # ── Yamanashi ─────────────────────────────────────────────────────────
-        (35.4154, 138.8758): (4, 21.50),   # 41 Yamanakako Panorama
-        (35.9245, 138.4214): (3.5, 21.65), # 42 Kiyosato
-        (35.5466, 138.7318): (4, 21.40),   # 43 Shindo Pass
-        # ── Nagano ────────────────────────────────────────────────────────────
-        (35.9414, 138.4704): (3, 21.80),   # 44 Nobeyama
-        (36.1319, 138.0350): (4, 21.80),   # 45 Takabocchi
-        (36.1030, 138.1946): (4, 21.75),   # 87 Kirigamine
-        (36.0510, 138.3597): (3, 21.80),   # 88 Shirakoma Pond
-        (36.0694, 138.3806): (3, 21.80),   # 89 Yachiho
-        (35.7725, 137.8173): (3, 21.90),   # 90 Senjojiki
-        (36.6940, 137.7844): (3, 21.85),   # 91 Happo Pond
-        (36.7582, 137.8758): (3, 21.85),   # 92 Tsugaike
-        (36.7167, 137.8594): (3, 21.85),   # 93 Hakuba Iwatake
-        (36.7182, 138.4921): (3, 21.80),   # 94 Shiga Highlands
-        # ── Niigata ───────────────────────────────────────────────────────────
-        (36.8917, 138.1708): (3, 21.75),   # 95 Myoko
-        (37.7052, 138.8178): (4, 21.20),   # 96 Yahiko
-        (38.2410, 139.4628): (4, 21.20),   # 97 Senami Coast
-        # ── Yamagata ──────────────────────────────────────────────────────────
-        (38.5484, 140.0264): (3, 21.85),   # 98 Gassan
-        # ── Akita ─────────────────────────────────────────────────────────────
-        (39.0933, 140.0497): (2.5, 21.90), # 99 Toriumi
-        # ── Aomori ────────────────────────────────────────────────────────────
-        (41.2570, 140.3495): (3, 21.75),   # 100 Cape Tappi
-        # ── Gifu ──────────────────────────────────────────────────────────────
-        (36.1068, 137.5538): (2.5, 21.95), # 47 Norikura
-        (36.1808, 137.5303): (3, 21.90),   # 48 Hirayu
-        (36.2854, 137.5743): (3, 21.90),   # 49 Shinhotaka
-        # ── Ishikawa ──────────────────────────────────────────────────────────
-        (36.2573, 136.9060): (3, 21.80),   # 50 Shirakawago, Gifu
-        (36.8157, 136.7448): (4, 21.30),   # 51 Chirihama
-        # ── Fukui ─────────────────────────────────────────────────────────────
-        (35.5945, 135.8824): (4, 21.30),   # 52 Mikatagoko
-        # ── Mie ───────────────────────────────────────────────────────────────
-        (33.8930, 136.1113): (3, 21.80),   # 53 Oni-ga-jo
-        (34.2708, 136.8964): (3.5, 21.60), # 54 Daiozaki
-        # ── Nara ──────────────────────────────────────────────────────────────
-        (34.5346, 136.1506): (3, 21.80),   # 46 Soni Highlands
-        (34.1856, 136.1090): (2.5, 21.95), # 55 Odaigahara
-        (34.2460, 135.8680): (3, 21.85),   # 56 Tenkawa
-        # ── Hyogo ─────────────────────────────────────────────────────────────
-        (35.0258, 134.3553): (2.5, 21.90), # 57 Nishiharima
-        # ── Okayama ───────────────────────────────────────────────────────────
-        (34.6712, 133.5483): (3, 21.80),   # 58 Bisei
-        (35.2770, 133.6740): (3, 21.80),   # 59 Hiruzen
-        # ── Tottori ───────────────────────────────────────────────────────────
-        (35.5397, 134.2383): (3.5, 21.60), # 60 Tottori Sand Dunes
-        (35.4105, 133.8924): (3.5, 21.60), # 61 Misasa
-        # ── Yamaguchi ─────────────────────────────────────────────────────────
-        (34.2576, 131.3070): (3, 21.80),   # 62 Akiyoshidai
-        # ── Ehime ─────────────────────────────────────────────────────────────
-        (33.3804, 132.9536): (2.5, 21.95), # 63 Shikoku Karst
-        (32.7196, 133.0182): (2.5, 21.95), # 64 Ashizuri
-        # ── Saga ──────────────────────────────────────────────────────────────
-        (33.5878, 129.8780): (3.5, 21.50), # 69 Yobuko
-        # ── Nagasaki ──────────────────────────────────────────────────────────
-        (33.3720, 129.3988): (3, 21.80),   # 68 Ikitsuki
-        # ── Kumamoto ──────────────────────────────────────────────────────────
-        (32.8845, 131.0808): (2.5, 21.95), # 66 Kusasenri
-        (32.99963, 131.0671): (2.5, 21.95), # 67 Daikanbo
-        # ── Miyazaki ──────────────────────────────────────────────────────────
-        (32.7092, 131.3086): (3, 21.80),   # 70 Takachiho
-        (31.3674, 131.3458): (2.5, 21.95), # 71 Cape Toi
-        # ── Kagoshima ─────────────────────────────────────────────────────────
-        (31.1805, 130.5284): (3, 21.80),   # 72 Kaimondake
-        (30.9924, 130.6595): (2.5, 21.90), # 65 Sata Cape
-        (27.0452, 128.4246): (2, 22.00),   # 73 Yoron
-        # ── Okinawa ───────────────────────────────────────────────────────────
-        (24.6053, 124.3427): (2, 22.00),   # 74 Hirakubozaki
-        (24.4553, 124.2520): (2, 22.00),   # 75 Tamatorizaki
-        (24.4078, 123.7575): (2, 22.00),   # 76 Iriomote
-        (24.0558, 123.8060): (1.5, 22.00), # 77 Hateruma
-        (26.4360, 127.7045): (3.5, 21.50), # 78 Cape Zanpa
-        (26.7069, 128.0188): (3, 21.80),   # 79 Kouri Bridge
-        (26.8716, 128.2695): (2.5, 21.95), # 80 Cape Hedo
-        (24.7353, 125.4672): (2, 22.00),   # 81 Higashi-Hennazaki
-        (24.7248, 125.2478): (2, 22.00),   # 82 Kurima Bridge
-
-        # ── 101-174: Bổ sung ──────────────────────────────────────────────────
-        (44.0174, 144.2740): (2.0, 22.00), # 101 Cape Notoro, Hokkaido
-        (43.5763, 144.5360): (2.0, 22.00), # 102 Lake Mashu, Hokkaido
-        (43.7398, 144.2570): (2.0, 22.00), # 103 Bihoro Pass, Hokkaido
-        (43.6110, 144.3320): (2.0, 22.00), # 104 Lake Kussharo, Hokkaido
-        (43.0808, 145.1174): (2.0, 22.00), # 105 Cape Kiritappu, Hokkaido
-        (41.9272, 143.2473): (2.0, 22.00), # 106 Cape Erimo, Hokkaido
-        (43.5765, 145.2765): (2.0, 22.00), # 107 Notsuke Peninsula, Hokkaido
-        (44.1257, 143.9060): (2.0, 22.00), # 108 Lake Saroma, Hokkaido
-        (44.0702, 145.1110): (2.0, 22.00), # 109 Shiretoko Pass, Hokkaido
-        (43.3318, 140.3495): (2.5, 21.90), # 110 Cape Kamui, Hokkaido
-        (41.5265, 140.9125): (2.5, 21.90), # 111 Omazaki, Aomori
-        (41.3273, 140.8365): (2.5, 21.90), # 112 Hotokegaura, Aomori
-        (40.4405, 140.8885): (2.5, 21.90), # 113 Lake Towada, Aomori
-        (40.6530, 140.8770): (2.5, 21.90), # 114 Hakkoda, Aomori
-        (39.7992, 140.8020): (2.5, 21.95), # 115 Nyuto Onsen, Akita
-        (39.7264, 140.6954): (2.5, 21.95), # 116 Tazawako, Akita
-        (39.9922, 139.7105): (2.5, 21.95), # 117 Oga Nyudozaki, Akita
-        (39.6440, 141.9800): (3.0, 21.80), # 118 Jodogahama, Iwate
-        (40.0715, 141.9472): (3.0, 21.80), # 119 Kitayamazaki, Iwate
-        (39.8442, 141.8370): (3.0, 21.80), # 120 Ryusendo, Iwate
-        (38.7480, 140.7190): (3.0, 21.80), # 121 Naruko Gorge, Miyagi
-        (38.7350, 141.1030): (3.0, 21.70), # 122 Izunuma, Miyagi
-        (38.7025, 139.9838): (3.0, 21.80), # 123 Mt. Haguro, Yamagata
-        (38.6430, 140.5870): (3.0, 21.80), # 124 Funagata-yama, Miyagi
-        (37.3445, 139.3150): (3.0, 21.80), # 125 Tadami Bridge, Fukushima
-        (37.6550, 140.0720): (3.0, 21.75), # 126 Goshikinuma, Fukushima
-        (37.5460, 140.1040): (3.0, 21.75), # 127 Inawashiro Lake, Fukushima
-        (36.8174, 137.0452): (3.5, 21.50), # 128 Amaharashi Coast, Toyama
-        (36.5776, 137.6064): (2.5, 21.95), # 129 Tateyama Murodo, Toyama
-        (36.5860, 136.9710): (3.0, 21.80), # 130 Shogawa Gorge, Toyama
-        (37.3961, 137.2474): (3.0, 21.80), # 131 Mitsukejima, Ishikawa
-        (37.4252, 136.9996): (3.0, 21.80), # 132 Senmaida, Ishikawa
-        (37.5289, 137.3261): (3.0, 21.80), # 133 Rokkozaki, Ishikawa
-        (36.1560, 136.7490): (2.5, 21.95), # 134 Hakusan Chokaisanso, Ishikawa
-        (35.4859, 137.4118): (3.5, 21.60), # 135 Ena Ravine, Gifu
-        (36.7340, 137.9660): (3.0, 21.85), # 136 Daibo Pass, Nagano
-        (36.1145, 137.6130): (2.5, 21.95), # 137 Norikura Kogen, Nagano
-        (36.8280, 137.7860): (3.0, 21.90), # 138 Shirouma Oike, Nagano
-        (34.9013, 139.8882): (4.0, 21.20), # 139 Nojimazaki, Chiba
-        (35.1134, 140.1988): (4.0, 21.20), # 140 Kobentenjima, Chiba
-        (35.4322, 132.6290): (3.0, 21.80), # 141 Izumo Hinomisaki, Shimane
-        (35.4560, 132.9760): (3.0, 21.75), # 142 Lake Shinji, Shimane
-        (35.1230, 132.4940): (3.0, 21.80), # 146 Nima Sand Museum, Shimane
-        (33.4754, 135.7830): (3.0, 21.80), # 143 Hashiguiiwa, Wakayama
-        (33.4364, 135.7706): (3.0, 21.80), # 147 Shionomisaki Cape, Wakayama
-        (35.3004, 134.8290): (3.0, 21.80), # 144 Takeda Castle, Hyogo
-        (35.6730, 135.2910): (3.5, 21.60), # 145 Ine Funaya, Kyoto
-        (35.5968, 135.2013): (3.0, 21.75), # 148 Nariai-ji, Kyoto
-        (35.6180, 134.9030): (3.0, 21.70), # 149 Kumihama Bay, Kyoto
-        (32.7492, 132.6278): (2.5, 21.95), # 150 Kashiwajima, Kochi
-        (34.3578, 130.8398): (3.0, 21.80), # 151 Tsunoshima Bridge, Yamaguchi
-        (34.3435, 131.0387): (3.0, 21.80), # 152 Motonosumi Shrine, Yamaguchi
-        (34.2138, 133.6397): (3.5, 21.50), # 153 Chichibugahama, Kagawa
-        (33.2514, 134.1757): (2.5, 21.95), # 154 Cape Muroto, Kochi
-        (37.3384, 139.8478): (3.0, 21.75), # 155 Ouchi-juku, Fukushima
-        (37.0873, 138.6875): (3.0, 21.80), # 156 Hoshitoge, Niigata
-        (37.6902, 140.0605): (3.0, 21.75), # 157 Lake Hibara, Fukushima
-        (41.4295, 141.4726): (2.5, 21.90), # 158 Cape Shiriya, Aomori
-        (40.8068, 141.2933): (3.0, 21.75), # 159 Lake Ogawara, Aomori
-        (43.3845, 145.8178): (2.0, 22.00), # 160 Cape Nosappu, Hokkaido
-        (42.3158, 140.9803): (2.5, 21.90), # 161 Cape Chikyu, Hokkaido
-        (43.2752, 143.3190): (2.0, 22.00), # 162 Lake Onneto, Hokkaido
-        (43.4934, 142.6188): (2.0, 22.00), # 163 Shirogane Blue Pond, Hokkaido
-        (41.8065, 141.1667): (2.5, 21.90), # 164 Cape Esan, Hokkaido
-        (34.7646, 138.7635): (3.0, 21.80), # 165 Koganezaki, Shizuoka
-        (36.4259, 136.9357): (3.0, 21.80), # 166 Gokayama, Toyama
-        (43.6408, 143.1754): (2.0, 22.00), # 167 Mikuni Pass, Hokkaido
-        (40.5228, 140.9344): (2.5, 21.90), # 168 Oirase Stream, Aomori
-        (40.4746, 141.6047): (3.0, 21.80), # 169 Tanesashi Coast, Aomori
-        (40.5410, 141.5575): (3.0, 21.80), # 170 Kabushima Shrine, Aomori
-        (38.9870, 141.1076): (3.0, 21.80), # 171 Genbikei Gorge, Iwate
-        (38.9615, 140.7886): (3.0, 21.80), # 172 Mt. Kurikoma, Miyagi
-        (37.8820, 139.9940): (3.0, 21.80), # 173 Tengendai, Yamagata
-        (37.6008, 140.0722): (3.0, 21.75), # 174 Bandai-san, Fukushima
-        
-        # ── 175-250: Dữ liệu Bortle và SQM bổ sung ────────────────────────────
-        (43.0560, 144.2560): (2.0, 21.80), # 175 Akan Intl Crane Center
-        (43.4380, 144.0950): (2.5, 21.70), # 176 Lake Akan
-        (43.1700, 145.5100): (2.0, 21.85), # 177 Cape Ochiishi
-        (42.5970, 140.8540): (3.0, 21.50), # 178 Lake Toya
-        (42.4940, 141.1510): (3.0, 21.45), # 179 Noboribetsu Jigokudani
-        (33.3140, 134.1580): (2.5, 21.90), # 180 Muroto Geopark, Kochi
-        (33.3440, 132.0230): (2.5, 21.65), # 181 Sadamisaki Peninsula
-        (33.7650, 133.1180): (2.0, 21.80), # 182 Mt. Ishizuchi
-        (33.8730, 133.8340): (2.5, 21.60), # 183 Iya Valley
-        (33.9120, 133.8420): (3.0, 21.70), # 232 Oboke Gorge, Tokushima
-        (34.2380, 134.6540): (3.5, 21.20), # 184 Naruto Whirlpools
-        (33.8560, 134.0930): (2.0, 21.75), # 185 Mt. Tsurugi
-        (34.6570, 132.2530): (3.0, 21.40), # 186 Sandankyo Gorge
-        (34.3820, 133.3790): (3.5, 21.10), # 187 Tomonoura
-        (33.6760, 135.3480): (3.0, 21.50), # 188 Sandanbeki
-        (33.6750, 135.8920): (2.5, 21.60), # 189 Nachi Falls
-        (34.2190, 135.5940): (2.5, 21.65), # 190 Koyasan
-        (35.5670, 135.1950): (3.5, 21.10), # 191 Amanohashidate
-        (35.6320, 134.8080): (3.0, 21.30), # 192 Kinosaki Onsen
-        (35.3520, 134.4540): (2.5, 21.80), # 193 Hyonosen Ridge, Hyogo (1510m, deep mountains)
-        (34.4840, 134.2980): (3.0, 21.20), # 194 Shodoshima Olive Park
-        (33.8020, 134.0150): (2.0, 21.85), # 195 Tsurugi Super Rindo, Tokushima (highland forest road)
-        (26.1860, 127.3520): (3.0, 21.70), # 196 Higashi-Aka Island, Kerama (remote island)
-        (33.0030, 132.9340): (2.0, 21.80), # 197 Shimanto River
-        (45.5215, 141.9367): (2.0, 21.95), # 198 Cape Soya, Hokkaido (northernmost tip, remote)
-        (32.7510, 131.3300): (2.5, 21.70), # 199 Kunimigaoka, Miyazaki
-        (31.8590, 130.8710): (2.5, 21.65), # 200 Kirishima Shrine
-        (30.3450, 130.5690): (2.0, 21.80), # 201 Yakushima
-        (28.3750, 129.4670): (2.5, 21.60), # 202 Amami Oshima
-        (24.4500, 122.9800): (1.5, 22.00), # 203 Yonaguni Island, Okinawa (westernmost Japan, near-pristine)
-        (24.3500, 123.8500): (2.0, 21.85), # 204 Iriomote Jungle
-        (34.3050, 132.9930): (3.5, 21.10), # 205 Okunoshima
-        (34.8560, 133.7250): (2.5, 21.60), # 206 Mitani Valley
-        (35.5880, 134.4600): (3.0, 21.80), # 207 Uradome Coast, Tottori
-        (35.4010, 132.6850): (3.0, 21.30), # 208 Izumo Taisha
-        (35.2610, 133.0840): (2.5, 21.75), # 209 Nita Pass, Shimane (Chugoku mountains)
-        (36.2160, 133.2330): (2.0, 21.75), # 210 Oki Islands
-        (36.2500, 133.3000): (2.0, 21.75), # 211 Dogo Islands
-        (34.4600, 136.7230): (3.5, 21.00), # 212 Ise Jingu
-        (35.4433, 138.6023): (2.0, 22.00), # 213 Observation Tower, Yamanashi (near Shoji-ko)
-        (35.7480, 136.9550): (3.0, 21.40), # 214 Gujo Hachiman
-        (35.4950, 137.5670): (3.0, 21.30), # 215 Magome-juku
-        (36.0830, 136.7050): (2.5, 21.85), # 216 Bessan Plateau, Ishikawa (Hakusan foothills)
-        (36.0540, 136.3570): (3.0, 21.40), # 217 Eiheiji Temple
-        (36.2370, 136.1260): (3.0, 21.40), # 218 Tojinbo
-        (35.2090, 135.9180): (3.0, 21.40), # 219 Lake Biwa Terrace
-        (35.4200, 136.4060): (3.0, 21.60), # 220 Mt. Ibuki Summit, Shiga (1377m)
-        (35.0120, 136.4380): (3.0, 21.55), # 221 Gozaisho Summit, Mie (1212m, Suzuka range)
-        (37.8520, 139.7830): (2.0, 21.95), # 222 Iide Mountains, Yamagata (deep Tohoku mountains)
-        (36.2944, 137.6619): (1.5, 22.10), # 223 Karasawa Cirque 涸沢カール, Nagano (Japan Alps, high altitude)
-        (33.9070, 135.8500): (2.5, 21.85), # 224 Dorokyo Gorge, Wakayama
-        (34.2650, 134.8930): (3.5, 21.40), # 225 Awaji Southern Cape, Hyogo (away from Kobe/Osaka)
-        (35.3780, 133.5350): (2.5, 21.60), # 226 Tottori Daisen
-        (33.4120, 133.0560): (2.0, 21.90), # 227 Tsuno Plateau, Kochi (Shikoku highlands)
-        (34.0560, 135.9740): (2.5, 21.85), # 228 Kawakami Village, Nara (deep Yoshino mountains)
-        (34.2970, 132.3190): (3.5, 21.00), # 229 Miyajima
-        (34.1670, 132.1790): (3.5, 21.10), # 230 Kintaikyo Bridge
-        (34.1810, 133.8050): (3.0, 21.40), # 231 Kotohira-gu
-        (33.8730, 133.8340): (2.5, 21.60), # 232 Iya Kazurabashi
-        (43.6700, 142.8540): (2.0, 21.90), # 233 Daisetsuzan Asahidake, Hokkaido (1600m+, remote highland)
-        (33.4980, 133.5710): (3.5, 21.10), # 234 Katsurahama Beach
-        (32.6290, 131.3870): (2.0, 21.95), # 235 Hinokage Starfield, Miyazaki (Kyushu deep mountains)
-        (33.4280, 130.3060): (3.0, 21.60), # 236 Sefuri Summit, Fukuoka (1054m, JAXA station nearby)
-        (33.3810, 130.1820): (2.5, 21.85), # 237 Sefuri Highlands, Saga (deep mountain range)
-        (33.0610, 130.1700): (2.5, 21.80), # 238 Tara Highland, Saga (remote mountain)
-        (32.7540, 130.2700): (2.5, 21.80), # 239 Unzen Nita Pass, Nagasaki (1080m, national park)
-        (32.9880, 131.2400): (2.5, 21.90), # 240 Kuju Highlands, Oita
-        (32.3410, 130.9830): (2.5, 21.85), # 241 Ichifusa Highland, Kumamoto (deep Kyushu mountains)
-        (33.0900, 131.7850): (3.0, 21.30), # 242 Usuki Stone Buddhas
-        (31.5784, 130.6595): (3.5, 21.20), # 243 Sakurajima East Coast (有村溶岩, away from Kagoshima)
-        (26.7210, 128.2270): (3.0, 21.70), # 244 Yanbaru Forest, Okinawa (UNESCO natural heritage, north Okinawa)
-        (26.1730, 127.8280): (3.0, 21.30), # 245 Sefa-utaki
-        (26.5040, 127.8500): (3.0, 21.30), # 246 Cape Manzamo
-        (26.5930, 127.2350): (2.0, 22.00), # 247 Aguni Island, Okinawa (tiny remote island, Bortle 2)
-        (26.3390, 126.7860): (2.0, 21.95), # 248 Kume Island, Okinawa (remote island, dark skies)
-        (26.4110, 127.7420): (3.5, 21.10), # 249 Zakimi Castle
-        (26.4460, 127.7800): (3.0, 21.30), # 250 Cape Maeda
-
-        # ── 251-269: 追加地点 ──────────────────────────────────────────────────────
-        (35.2827, 140.2973): (4.0, 21.20), # 251 Isumi Railway Crossing, Chiba
-        (35.1300, 139.9740): (4.5, 21.00), # 252 Oyama Senmaida, Chiba
-        (35.3357, 140.3941): (4.0, 21.20), # 253 Tonami no Torii, Chiba
-        (36.9610, 137.5580): (3.0, 21.80), # 254 Asahi Funakawa, Toyama
-        (37.2838, 137.1780): (3.0, 21.75), # 255 Mawaki Ruins, Ishikawa
-        (36.1880, 136.6680): (3.0, 21.80), # 256 Hoshi no Kanrankan, Ishikawa
-        (36.1350, 136.7720): (3.0, 21.80), # 257 Hakusan Tenbodai, Ishikawa
-        (37.1760, 140.3870): (3.0, 21.80), # 258 Shikanotsuno Observatory, Fukushima
-        (37.5064, 140.3260): (3.5, 21.60), # 259 Koriyama Nunobiki, Fukushima
-        (37.5680, 140.1360): (3.0, 21.75), # 260 Bandaisan Viewpoint, Fukushima
-        (37.4160, 139.5770): (3.0, 21.80), # 261 Kaneyama Fureai, Fukushima
-        (36.0720, 138.7771): (4.0, 21.30), # 262 Ueno Sky Bridge, Gunma
-        (36.4164, 138.7779): (3.5, 21.60), # 263 Kurabuchi Observatory, Gunma
-        (36.3460, 138.8200): (3.5, 21.60), # 264 Kozumaki Ranch, Gunma
-        (36.5800, 139.0400): (3.5, 21.60), # 265 Takane Observatory, Gunma
-        (37.0730, 139.1050): (2.5, 21.90), # 266 Okutadami Dam, Niigata
-        (34.7384, 139.3800): (2.0, 22.00), # 267 Oshima Mihara-yama summit
-        (34.6873, 139.4363): (2.0, 21.95), # 268 Oshima Habu Port
-        (25.8470, 131.2330): (1.5, 22.05), # 269 Minami-Daito Island, Okinawa
+        (21.2181, 105.1528): (3.0, 21.70), # 1 Long Coc Tea Hill, Phu Tho
+        (21.9056, 106.3312): (3.0, 21.75), # 2 Bac Son Valley, Lang Son
+        (21.8485, 104.1082): (2.5, 21.85), # 3 Mu Cang Chai, Yen Bai
+        (21.7619, 104.2867): (2.0, 21.90), # 4 Khau Pha Pass, Yen Bai
+        (23.3592, 105.3156): (2.0, 21.92), # 5 Lung Cu Flag Tower, Ha Giang
+        (23.2386, 105.3853): (2.0, 21.95), # 6 Ma Pi Leng Pass, Ha Giang
+        (22.6288, 103.6069): (2.0, 21.90), # 7 Y Ty, Lao Cai
+        (21.2588, 104.4647): (2.5, 21.80), # 8 Ta Xua Peak, Son La
+        (22.7533, 106.3005): (2.0, 21.90), # 9 Thang Hen Lake, Cao Bang
+        (20.9065, 107.5452): (3.0, 21.65), # 10 Quan Lan Island, Quang Ninh
+        (22.3564, 103.7753): (2.0, 21.90), # 11 O Quy Ho Pass, Lao Cai
+        (22.3033, 103.7750): (1.5, 22.00), # 12 Fansipan Peak, Lao Cai
+        (22.3021, 103.8642): (2.5, 21.82), # 13 Muong Hoa Valley, Lao Cai
+        (22.7483, 104.6811): (2.0, 21.91), # 14 Hoang Su Phi, Ha Giang
+        (23.2778, 105.3611): (2.0, 21.93), # 15 Dong Van Karst Plateau, Ha Giang
+        (22.9058, 105.2183): (2.0, 21.90), # 16 Du Gia Village, Ha Giang
+        (23.2281, 105.4128): (2.0, 21.94), # 17 Nho Que River, Ha Giang
+        (22.8562, 106.7217): (2.0, 21.88), # 18 Ban Gioc Waterfall, Cao Bang
+        (22.7667, 106.3050): (2.0, 21.92), # 19 Nui Mat Than, Cao Bang
+        (22.9811, 106.0561): (2.0, 21.90), # 20 Pac Bo Relic, Cao Bang
+        (22.4111, 105.6178): (2.5, 21.80), # 21 Ba Be Lake, Bac Kan
+        (21.8419, 106.9208): (2.5, 21.83), # 22 Mau Son Peak, Lang Son
+        (20.9822, 107.7583): (2.5, 21.80), # 23 Co To Island, Quang Ninh
+        (21.5303, 107.4431): (2.0, 21.88), # 24 Binh Lieu Ridge, Quang Ninh
+        (21.1569, 106.7183): (3.0, 21.60), # 25 Yen Tu Mountain, Quang Ninh
+        (20.7303, 105.2106): (3.0, 21.68), # 26 Thung Nai, Hoa Binh
+        (20.6592, 105.0789): (3.0, 21.72), # 27 Mai Chau Valley, Hoa Binh
+        (20.4561, 105.2344): (2.5, 21.80), # 28 Pu Luong Nature Reserve, Thanh Hoa
+        (20.8872, 104.6256): (2.0, 21.88), # 29 Pha Luong Peak, Son La
+        (20.8433, 104.6200): (3.0, 21.70), # 30 Moc Chau Tea Hill, Son La
+        (21.4589, 105.6486): (3.5, 21.40), # 31 Tam Dao Mountain Peak, Vinh Phuc
+        (21.0808, 105.3622): (3.5, 21.45), # 32 Ba Vi Peak, Hanoi
+        (21.3653, 106.8406): (2.5, 21.78), # 33 Dong Cao Plateau, Bac Giang
+        (20.3183, 105.6078): (2.5, 21.82), # 34 Cuc Phuong National Park, Ninh Binh
+        (20.3708, 105.8825): (3.5, 21.48), # 35 Van Long Wetland, Ninh Binh
+        (20.2828, 105.9525): (3.5, 21.50), # 36 Hang Mua Peak, Ninh Binh
+        (20.2333, 106.5500): (3.0, 21.65), # 37 Xuan Thuy National Park, Nam Dinh
+        (19.7428, 105.9069): (4.0, 20.90), # 38 Sam Son Coast, Thanh Hoa
+        (19.6208, 105.5181): (2.5, 21.78), # 39 Ben En National Park, Thanh Hoa
+        (18.9667, 104.8000): (2.0, 21.90), # 40 Pu Mat National Park, Nghe An
+        (18.8108, 105.7186): (4.0, 20.85), # 41 Cua Lo Beach, Nghe An
+        (17.5333, 106.1500): (2.0, 21.92), # 42 Phong Nha - Ke Bang, Quang Binh
+        (17.5858, 106.4636): (2.5, 21.75), # 43 Da Nhay Beach, Quang Binh
+        (17.4619, 106.2872): (1.5, 22.02), # 44 Son Doong Cave Entrance, Quang Binh
+        (17.4897, 106.6264): (3.5, 21.30), # 45 Nhat Le Beach, Quang Binh
+        (17.0200, 107.1000): (3.0, 21.65), # 46 Cua Tung Beach, Quang Tri
+        (17.1583, 107.3333): (2.0, 21.88), # 47 Con Co Island, Quang Tri
+        (16.1983, 108.1311): (3.0, 21.60), # 48 Hai Van Pass, Thua Thien Hue
+        (16.2167, 108.0833): (2.5, 21.72), # 49 Lap An Lagoon, Thua Thien Hue
+        (16.1969, 107.8542): (2.0, 21.88), # 50 Bach Ma National Park, Thua Thien Hue
+        (16.1000, 108.2500): (3.5, 21.35), # 51 Son Tra Peninsula, Da Nang
+        (15.9128, 108.3378): (3.5, 21.40), # 52 An Bang Beach, Quang Nam
+        (15.9583, 108.5167): (2.0, 21.85), # 53 Cu Lao Cham Island, Quang Nam
+        (15.7647, 108.1239): (2.5, 21.78), # 54 My Son Sanctuary, Quang Nam
+        (15.3789, 109.1172): (2.0, 21.90), # 55 Ly Son Island, Quang Ngai
+        (14.6500, 109.0667): (2.5, 21.75), # 56 Sa Huynh Beach, Quang Ngai
+        (14.6000, 108.3000): (2.0, 21.88), # 57 Mang Den, Kon Tum
+        (14.1353, 108.0169): (2.5, 21.80), # 58 Chu Dang Ya Volcano, Gia Lai
+        (14.0083, 108.0000): (3.0, 21.60), # 59 Bien Ho Lake, Gia Lai
+        (12.8908, 109.4589): (2.0, 21.92), # 60 Phu Yen Cape Dien, Phu Yen
+        (13.3517, 109.2978): (2.5, 21.82), # 61 Ghenh Da Dia, Phu Yen
+        (13.4333, 109.2333): (2.5, 21.80), # 62 Xuan Dai Bay, Phu Yen
+        (13.8969, 109.3083): (2.5, 21.78), # 63 Eo Gio Quy Nhon, Binh Dinh
+        (13.8833, 109.3167): (2.5, 21.80), # 64 Ky Co Beach, Binh Dinh
+        (13.6167, 109.3500): (2.0, 21.88), # 65 Cu Lao Xanh Island, Binh Dinh
+        (12.4283, 108.1758): (2.0, 21.85), # 66 Lak Lake, Dak Lak
+        (12.5053, 107.8931): (2.5, 21.80), # 67 Dray Nur Waterfall, Dak Lak
+        (11.8500, 107.9833): (2.0, 21.90), # 68 Ta Dung Lake, Dak Nong
+        (12.0428, 108.4386): (2.5, 21.75), # 69 Langbiang Mountain, Lam Dong
+        (11.8986, 108.4353): (3.0, 21.60), # 70 Tuyen Lam Lake, Lam Dong
+        (11.8500, 108.5500): (2.5, 21.78), # 71 Cau Dat Tea Hill, Lam Dong
+        (11.5333, 107.9167): (2.0, 21.88), # 72 Linh Quy Phuoc Dien, Lam Dong
+        (11.8833, 109.1500): (3.0, 21.65), # 73 Cam Ranh Bay, Khanh Hoa
+        (12.6000, 109.3833): (2.0, 21.90), # 74 Van Phong Bay, Khanh Hoa
+        (12.7000, 109.2500): (2.0, 21.88), # 75 Diep Son Island, Khanh Hoa
+        (11.8333, 109.2333): (2.0, 21.88), # 76 Binh Ba Island, Khanh Hoa
+        (11.7167, 109.1833): (2.0, 21.92), # 77 Vinh Hy Bay, Ninh Thuan
+        (11.7000, 109.1333): (1.5, 21.98), # 78 Nui Chua National Park, Ninh Thuan
+        (11.4833, 109.0167): (2.0, 21.90), # 79 Mui Dinh Cape, Ninh Thuan
+        (10.5167, 108.9333): (1.5, 22.00), # 80 Phu Quy Island, Binh Thuan
+        (10.9500, 108.2833): (3.0, 21.55), # 81 Mui Ne Sand Dunes, Binh Thuan
+        (10.6975, 107.9903): (2.0, 21.88), # 82 Ke Ga Cape, Binh Thuan
+        (11.2333, 108.8500): (1.5, 21.96), # 83 Cu Lao Cau Island, Binh Thuan
+        (11.1333, 107.0167): (3.0, 21.60), # 84 Tri An Lake, Dong Nai
+        (11.4167, 107.4333): (2.0, 21.88), # 85 Nam Cat Tien Park, Dong Nai
+        (11.3708, 106.1689): (3.0, 21.65), # 86 Ba Den Mountain, Tay Ninh
+        (11.3500, 106.3500): (2.5, 21.75), # 87 Dau Tieng Lake, Tay Ninh
+        (10.3386, 107.0850): (4.0, 20.80), # 88 Vung Tau Lighthouse, Ba Ria - Vung Tau
+        (10.4833, 107.4333): (3.0, 21.62), # 89 Ho Tram Beach, Ba Ria - Vung Tau
+        (8.6833, 106.6000): (1.5, 22.05), # 90 Con Dao Island, Ba Ria - Vung Tau
+        (10.4333, 106.8833): (3.5, 21.30), # 91 Can Gio Mangrove, Ho Chi Minh City
+        (10.6167, 105.9833): (3.0, 21.60), # 92 Tan Lap Floating Village, Long An
+        (10.7000, 105.5500): (2.5, 21.78), # 93 Tram Chim National Park, Dong Thap
+        (10.2333, 104.5333): (2.0, 21.88), # 94 Ba Hon Dam Island, Kien Giang
+        (9.6833, 104.3500): (1.5, 22.00), # 95 Nam Du Island, Kien Giang
+        (10.3667, 103.8500): (2.5, 21.80), # 96 Phu Quoc Island (Ganh Dau), Kien Giang
+        (10.3500, 103.9333): (2.5, 21.82), # 97 Phu Quoc Island (Rach Vem), Kien Giang
+        (9.8000, 104.8333): (2.0, 21.88), # 98 Hon Son Island, Kien Giang
+        (9.2500, 104.9167): (2.0, 21.90), # 99 U Minh Ha Park, Ca Mau
+        (8.6083, 104.7167): (1.5, 22.02), # 100 Ca Mau Cape, Ca Mau
     }
 
     def _km(la1, lo1, la2, lo2):
@@ -890,119 +490,14 @@ def calculate_accurate_bortle(lat, lon):
         if _km(lat, lon, plat, plon) < 5.0:
             return bc, sq
 
-    # ── Priority 2: Geographic zone overrides ────────────────────────────────
-    # Calibrated from heatmap analysis of Japan_LPM.pdf pages 1-14.
-    # Zones listed from darkest (highest priority) to brightest.
-
-    # Japan Alps core — Bortle 1-2 (grey/light-blue on heatmap)
-    # Covers: Kamikochi, Hotaka, Yari, Tateyama, Hakuba deep valleys
-    if 36.0 < lat < 36.8 and 137.3 < lon < 137.9:
-        return 2, 21.95
-
-    # Northern Japan Alps / Ontake / Norikura area
-    if 35.7 < lat < 36.2 and 137.2 < lon < 137.7:
-        return 2, 22.00
-
-    # Southern Alps (Minami Alps / Akaishi) — Bortle 2-3
-    if 35.3 < lat < 35.8 and 137.5 < lon < 138.1:
-        return 2, 22.00
-
-    # Shizuoka deep mountain interior (Okuoi / Ikawa)
-    if 35.0 < lat < 35.4 and 137.8 < lon < 138.3:
-        return 3, 21.80
-
-    # Asagiri Plateau / Fuji Highland area
-    if 35.28 < lat < 35.48 and 138.45 < lon < 138.70:
-        return 3, 21.75
-
-    # Izu Peninsula tip (south of Shimoda) — dark green
-    if lat < 34.72 and 138.70 < lon < 139.10:
-        return 3, 21.80
-
-    # Izu Oshima / Izu Islands — Bortle 2 (nearly pitch black, calibrated SQM 21.94)
-    if 33.8 < lat < 34.8 and 139.3 < lon < 139.8 and _km(lat, lon, 34.08, 139.56) < 20:
-        return 2, 21.94
-
-    # Ogasawara / Bonin Islands — Bortle 1 (extreme remote)
-    if lat < 28.0 and 141.0 < lon < 143.0:
-        return 1, 22.20
-
-    # Nikko highlands / Oku-Nikko (Yunoko, Senjogahara)
-    if 36.70 < lat < 36.90 and 139.35 < lon < 139.60:
-        return 3, 21.75
-
-    # Oku-Chichibu mountains (Gunma/Saitama/Yamanashi border)
-    if 35.8 < lat < 36.2 and 138.6 < lon < 139.2 and _km(lat, lon, 35.97, 138.87) > 20:
-        return 3, 21.75
-
-    # Noto Peninsula tip — Bortle 3 (light blue on heatmap)
-    if 37.2 < lat < 37.6 and 136.8 < lon < 137.4:
-        return 3, 21.80
-
-    # Tohoku highlands / Ou Mountains core
-    if 37.5 < lat < 40.5 and 140.2 < lon < 141.0 and _km(lat, lon, 38.27, 140.87) > 30:
-        return 3, 21.75
-
-    # Azuma/Adatara volcanic plateau (Fukushima)
-    if 37.60 < lat < 37.90 and 140.1 < lon < 140.4:
-        return 3, 21.80
-
-    # Sanriku coast (Iwate/Miyagi) — relatively dark coastal
-    if 38.5 < lat < 40.5 and 141.3 < lon < 142.0:
-        return 4, 21.30
-
-    # Akita / Yamagata highlands — Bortle 3-4
-    if 38.5 < lat < 40.5 and 140.0 < lon < 140.8 and _km(lat, lon, 39.72, 140.10) > 20:
-        return 3, 21.75
-
-    # Hokkaido — Daisetsuzan / Shiretoko core (nearly pitch black)
-    if 43.3 < lat < 44.0 and 142.5 < lon < 144.5:
-        return 2, 22.00
-
-    # Hokkaido interior mountains (away from Sapporo/Asahikawa)
-    if 42.5 < lat < 45.5 and 141.5 < lon < 144.5 and _km(lat, lon, 43.06, 141.35) > 40 and _km(lat, lon, 43.77, 142.37) > 25:
-        return 3, 21.75
-
-    # Eastern Hokkaido (Kushiro/Abashiri area) — Bortle 4
-    if 43.0 < lat < 44.5 and 144.0 < lon < 145.5:
-        return 4, 21.30
-
-    # Kyushu highlands (Aso / Kuju / Kirishima) — Bortle 3
-    if 32.5 < lat < 33.2 and 130.8 < lon < 131.4:
-        return 3, 21.75
-
-    # Miyazaki coast / Nichinan — Bortle 4 (light green on heatmap)
-    if 31.3 < lat < 32.2 and 131.2 < lon < 131.8:
-        return 4, 21.20
-
-    # Kagoshima south (Satsuma Peninsula tip) — Bortle 4
-    if lat < 31.5 and 130.4 < lon < 130.8:
-        return 4, 21.20
-
-    # Amami / Okinawa islands — Bortle 3-4 (remote, minimal pollution)
-    if lat < 28.5 and 127.0 < lon < 131.0:
-        return 3, 21.80
-
-    # Shikoku mountains (Kochi interior) — Bortle 3
-    if 33.4 < lat < 33.9 and 133.0 < lon < 133.8:
-        return 3, 21.75
-
-    # Sea of Japan coastal Tohoku / Akita — Bortle 4
-    if 38.0 < lat < 40.5 and 139.0 < lon < 140.2 and _km(lat, lon, 39.72, 140.10) > 15:
-        return 4, 21.30
-
-    # ── Priority 3: Min-distance heuristic (approach from v5.10, extended to all Japan)
-    # Concept: inspired by v5.10's simple min-distance threshold approach.
+    # -- Priority 2: Min-distance heuristic --------------------------------
     # Each city has a center SQM (calibrated from lightpollutionmap.info).
     # SQM recovers with distance via a universal delta table.
     # Final SQM = min across all cities (most polluted city wins).
-    # Validated against 10 ground-truth samples from Japan_LPM.pdf — all within ±1 Bortle class.
     #
-    # Delta table (km from city center → SQM added to city's center_sqm):
-    #   ≤4km:+0.0  ≤8km:+0.3  ≤15km:+0.7  ≤25km:+1.2  ≤40km:+1.8
-    #   ≤65km:+2.5  ≤100km:+3.2  ≤150km:+3.7  >150km:+4.0
-    # Calibration: Tokyo(0km)=17.50 → Machida(27km)=18.81 [delta≈1.3, matches ≤25 band]
-    #              Yokohama(0km)=17.80 → Yokosuka(35km)=19.15 [delta≈1.35, matches ≤40 band]
+    # Delta table (km from city center -> SQM added to city's center_sqm):
+    #   <=4km:+0.0  <=8km:+0.3  <=15km:+0.7  <=25km:+1.2  <=40km:+1.8
+    #   <=65km:+2.5  <=100km:+3.2  <=150km:+3.7  >150km:+4.0
     _DELTA_BANDS = [
         (4,   0.0),
         (8,   0.3),
@@ -1017,305 +512,53 @@ def calculate_accurate_bortle(lat, lon):
         for _thresh, _delta in _DELTA_BANDS:
             if d <= _thresh:
                 return _delta
-        return 4.0  # > 150km → negligible
+        return 4.0  # > 150km -> negligible
 
-    # (lat, lon, name, center_sqm) — center_sqm calibrated from lightpollutionmap.info
+    # (lat, lon, name, center_sqm) - center_sqm calibrated from lightpollutionmap.info
     _CITIES = [
-        # ── Kanto mega-region ──────────────────────────────────────────────────
-        (35.6895, 139.6917, "Tokyo",       17.40),
-        (35.4437, 139.6380, "Yokohama",    17.60),
-        (35.5400, 139.7030, "Kawasaki",    17.60),  # calibrated SQM 18.20 @ 10km
-        (35.8616, 139.6455, "Saitama",     18.20),
-        (35.6074, 140.1063, "Chiba",       18.20),        # Kanto suburban dense ring — critical for Setagaya/Noborito/Machida accuracy
-        (35.6430, 139.6529, "Setagaya",    17.90),  # inner Tokyo ward, between Tokyo & Kawasaki
-        (35.5503, 139.5491, "Tama-Plaza",  18.50),  # Kawasaki Aoba-ku
-        (35.5480, 139.4454, "Machida",     18.60),  # calibrated from PDF SQM 18.81 nearby
-        (35.6993, 139.4107, "Tachikawa",   18.60),
-        (35.6598, 139.3188, "Hachioji",    18.60),
-        (35.4385, 139.3653, "Atsugi",      18.60),
-        (35.9264, 139.4841, "Kawagoe",     19.10),
-        (35.2815, 139.6695, "Yokosuka",    19.10),
-        (35.2700, 139.6700, "Yokohama-S",  18.25),  # calibrated SQM 19.15 (Totsuka/Yokosuka)
-        (35.6562, 138.5692, "Kofu",        19.80),
-        (35.2682, 139.1634, "Odawara",     19.75),
-        (36.3278, 139.0110, "Takasaki",    19.50),
-        # ── Kansai mega-region ─────────────────────────────────────────────────
-        (34.6937, 135.5023, "Osaka",       17.60),
-        (34.6843, 135.8068, "Nara",        19.20),
-        (34.6901, 135.1956, "Kobe",        18.50),
-        (35.0116, 135.7681, "Kyoto",       18.70),
-        (35.1815, 136.9066, "Nagoya",      17.80),
-        # ── Other major cities ─────────────────────────────────────────────────
-        (34.7650, 137.3923, "Toyohashi",   19.40),
-        (35.4128, 136.7586, "Gifu",        19.30),        
-        (43.0621, 141.3544, "Sapporo",     18.50),
-        (33.5904, 130.4017, "Fukuoka",     18.50),
-        (33.8834, 130.8751, "Kitakyushu",  18.80),
-        (38.2682, 140.8694, "Sendai",      19.20),
-        (34.6567, 133.9207, "Okayama",     19.20),
-        (34.4875, 133.3742, "Fukuyama",    19.70),
-        (34.3853, 132.4553, "Hiroshima",   19.20),
-        (34.8152, 134.6812, "Himeji",      19.30),
-        (34.3380, 134.0495, "Takamatsu",   19.60),
-        (34.6551, 133.9195, "Okayama",     19.80),
-        (43.7706, 142.3650, "Asahikawa",   20.30),
-        (37.9161, 139.0364, "Niigata",     19.50),
-        (36.5613, 136.6562, "Kanazawa",    19.40),
-        (36.6953, 137.2113, "Toyama",      19.50),
-        (36.6485, 138.1949, "Nagano",      20.05),
-        (36.0627, 136.2177, "Fukui",       19.65),
-        (34.9769, 138.3831, "Shizuoka",    19.40),
-        (34.7108, 137.7262, "Hamamatsu",   19.10),
-        (36.2380, 137.9720, "Matsumoto",   20.43),  # calibrated SQM 20.43
-        (32.7898, 130.7417, "Kumamoto",    19.50),
-        (31.5966, 130.5571, "Kagoshima",   19.50),
-        (33.8395, 132.7657, "Matsuyama",   20.10),
-        (33.2375, 131.6101, "Oita",        19.40),
-        (34.0657, 134.5590, "Tokushima",   20.30),
-        (34.3400, 134.0434, "Takamatsu",   20.30),
-        (33.5597, 133.5311, "Kochi-c",     20.30),
-        (36.3898, 139.0634, "Maebashi",    19.50),
-        (36.5550, 139.8829, "Utsunomiya",  19.50),
-        (37.3983, 140.3870, "Koriyama",    19.50),
-        (37.7500, 140.4677, "Fukushima-c", 20.10),
-        (39.7186, 140.1023, "Akita-c",     20.10),
-        (40.8244, 140.7400, "Aomori-c",    20.30),
-        (26.2124, 127.6792, "Naha",        19.50),
-        
-        # ── Hokkaido ──────────────────────────────────────────────────────────
-        (42.9849, 144.3814, "Kushiro",      20.40),
-        (44.0206, 144.2730, "Abashiri",     20.60),
-        (45.4156, 141.6731, "Wakkanai",     20.80),
-        (42.3172, 140.9738, "Muroran",      19.60),
-        (42.5510, 141.3550, "Tomakomai",    19.40),
-        (42.9238, 143.1968, "Obihiro",      20.20),
-        (43.8031, 143.8958, "Kitami",       20.40),
-        (41.7687, 140.7288, "Hakodate",     19.60),
-
-        # ── Tohoku ────────────────────────────────────────────────────────────
-        (40.5123, 141.4880, "Hachinohe",    19.90),
-        (39.7036, 141.1527, "Morioka",      20.10),
-        (39.6411, 141.9571, "Miyako",       20.50),
-        (39.3150, 141.1167, "Hanamaki",     20.20),
-        (38.2554, 140.8777, "Natori",       19.40),
-        (38.4342, 141.3028, "Ishinomaki",   19.80),
-        (38.9081, 139.8365, "Sakata",       20.20),
-        (38.9140, 139.8500, "Tsuruoka",     20.20),
-        (37.4947, 139.9297, "Aizuwakamatsu",20.30),
-        (37.0505, 140.8877, "Iwaki",        19.70),
-
-        # ── Ibaraki ───────────────────────────────────────────────────────────
-        (36.3418, 140.4468, "Mito",         19.50),
-        (36.0835, 140.0764, "Tsukuba",      19.20),
-        (36.3966, 140.5348, "Hitachi",      19.50),
-        (35.9654, 140.6448, "Kashima",      19.60),
-        (36.1812, 139.9930, "Koga",         19.30),
-
-        # ── Tochigi ───────────────────────────────────────────────────────────
-        (36.5658, 139.8836, "Kanuma",       19.70),
-        (36.8717, 139.9959, "Nasu-Shiobara",20.10),
-        (36.3140, 139.8000, "Oyama",        19.30),
-
-        # ── Gunma ─────────────────────────────────────────────────────────────
-        (36.3219, 139.0033, "Isesaki",      19.30),
-        (36.2916, 139.3753, "Ota",          19.20),
-        (36.3380, 139.1970, "Kiryu",        19.60),
-
-        # ── Saitama ───────────────────────────────────────────────────────────
-        (35.9756, 139.7528, "Kasukabe",     18.80),
-        (35.8303, 139.8057, "Koshigaya",    18.60),
-        (35.9917, 139.0858, "Chichibu",     20.30),
-        (35.8569, 139.6489, "Kawaguchi",    18.20),
-
-        # ── Chiba ─────────────────────────────────────────────────────────────
-        (35.7345, 140.8266, "Choshi",       19.60),
-        (35.6047, 140.1233, "Funabashi",    18.10),
-        (35.7876, 140.3186, "Narita",       19.10),
-        (35.7204, 140.1024, "Matsudo",      18.20),
-        (35.4979, 140.1141, "Ichihara",     18.70),
-
-        # ── Tokyo Metro ───────────────────────────────────────────────────────
-        (35.7289, 139.7100, "Ikebukuro",    17.30),
-        (35.6938, 139.7034, "Shinjuku",     17.20),
-        (35.6580, 139.7016, "Shibuya",      17.20),
-        (35.7138, 139.7772, "Ueno",         17.40),
-        (35.6812, 139.7671, "Tokyo-Sta",    17.20),
-
-        # ── Kanagawa ──────────────────────────────────────────────────────────
-        (35.3358, 139.3496, "Hiratsuka",    18.90),
-        (35.3192, 139.5467, "Kamakura",     19.10),
-        (35.2646, 139.1521, "Hakone",       20.30),
-        (35.2836, 139.6722, "Miura",        19.40),
-
-        # ── Yamanashi ─────────────────────────────────────────────────────────
-        (35.6639, 138.5684, "Kai",          19.80),
-        (35.4875, 138.8078, "Fujiyoshida",  20.20),
-        (35.5500, 138.9000, "Yamanakako",   20.60),
-
-        # ── Nagano ────────────────────────────────────────────────────────────
-        (36.6513, 138.1810, "Suzaka",       20.20),
-        (36.3134, 138.5968, "Saku",         20.60),
-        (36.2140, 138.2520, "Komoro",       20.50),
-        (35.5147, 137.8218, "Iida",         20.30),
-        (35.7286, 137.9537, "Ina",          20.40),
-
-        # ── Niigata ───────────────────────────────────────────────────────────
-        (37.4464, 138.8512, "Nagaoka",      19.90),
-        (37.1483, 138.2364, "Joetsu",       20.10),
-        (38.0603, 138.4376, "Sado",         20.80),
-
-        # ── Hokuriku ──────────────────────────────────────────────────────────
-        (36.7500, 137.0167, "Takaoka",      19.60),
-        (36.0652, 136.2216, "Sabae",        19.60),
-        (36.4026, 136.4508, "Komatsu",      19.60),
-
-        # ── Tokai ─────────────────────────────────────────────────────────────
-        (35.4233, 136.7607, "Ogaki",        19.30),
-        (34.7303, 136.5086, "Tsu",          19.50),
-        (34.7180, 137.8515, "Iwata",        19.20),
-        (34.7687, 137.9980, "Kakegawa",     19.40),
-        (35.0956, 138.8635, "Numazu",       19.40),
-        (35.1223, 138.9185, "Mishima",      19.40),
-
-        # ── Kansai ────────────────────────────────────────────────────────────
-        (34.6851, 135.8048, "Tenri",        19.50),
-        (34.5733, 135.4828, "Sakai",        18.10),
-        (34.8164, 135.5683, "Takatsuki",    18.50),
-        (34.6930, 135.1940, "Akashi",       18.70),
-        (34.2305, 135.1708, "Wakayama",     19.50),
-
-        # ── Chugoku ───────────────────────────────────────────────────────────
-        (35.4723, 133.0505, "Matsue",       20.20),
-        (35.4281, 133.3309, "Yonago",       20.10),
-        (35.5011, 134.2351, "Tottori",      20.20),
-        (34.1785, 131.4737, "Yamaguchi",    20.20),
-        (33.9578, 130.9414, "Shimonoseki",  19.40),
-
-        # ── Shikoku ───────────────────────────────────────────────────────────
-        (33.9196, 133.1810, "Niihama",      19.90),
-        (33.8416, 132.7661, "Iyo",          20.10),
-        (33.5624, 133.5373, "Nankoku",      20.20),
-        (33.3636, 134.1520, "Muroto",       20.80),
-
-        # ── Kyushu ────────────────────────────────────────────────────────────
-        (32.7448, 129.8737, "Nagasaki",     19.50),
-        (33.1799, 129.7150, "Sasebo",       19.80),
-        (32.7503, 129.8780, "Nagasaki-C",   19.50),
-        (31.9111, 131.4239, "Miyazaki",     19.60),
-        (32.5833, 131.6667, "Nobeoka",      20.00),
-        (31.7196, 131.0616, "Kobayashi",    20.40),
-        (32.0686, 131.6514, "Hyuga",        20.00),
-        (33.2635, 130.3009, "Karatsu",      19.80),
-        (32.0134, 130.2110, "Izumi",        20.20),
-        (31.3783, 130.8528, "Kanoya",       20.00),
-
-        # ── Okinawa ───────────────────────────────────────────────────────────
-        (26.3344, 127.8056, "Okinawa-C",    19.20),
-        (26.2122, 127.6873, "Naha-Airport", 19.30),
-        (24.3448, 124.1572, "Ishigaki",     20.80),
-        (24.8056, 125.2811, "Miyakojima",   20.90),
-        
-        # ── 100 địa điểm bổ sung
-        (43.7680, 142.3650, "Asahikawa",        20.40),
-        (42.5220, 140.9700, "Noboribetsu",      20.20),
-        (42.9240, 143.1970, "Obihiro",          20.30),
-        (43.2000, 145.5800, "Nemuro",           20.70),
-        (44.3300, 142.2300, "Nayoro",           20.50),
-        (40.5900, 141.5000, "Misawa",           19.80),
-        (40.6200, 140.4800, "Hirosaki",         20.00),
-        (39.9500, 141.1300, "Kitakami",         20.10),
-        (39.6800, 141.9000, "Kamaishi",         20.30),
-        (38.2100, 140.8500, "Sendai-S",         19.50),
-        (38.0000, 140.4500, "Yamagata",         19.80),
-        (38.4500, 140.2500, "Shinjo",           20.30),
-        (37.4000, 140.3800, "Koriyama",         19.60),
-        (37.0500, 140.8800, "Iwaki-N",          19.90),
-        (36.9500, 140.3500, "Shirakawa",        20.20),
-        (36.5600, 139.8800, "Utsunomiya",       19.60),
-        (36.4500, 139.8500, "Nikko",            20.40),
-        (36.3500, 140.4500, "Mito",             19.50),
-        (36.0000, 140.1000, "Tsuchiura",        19.30),
-        (36.2000, 139.0000, "Takasaki",         19.40),
-        (36.6500, 138.8500, "Numata",           20.50),
-        (36.0500, 139.4000, "Kumagaya",         19.10),
-        (35.9500, 139.7500, "Kasukabe",         18.80),
-        (35.8500, 139.6500, "Urawa",            18.50),
-        (35.7000, 139.9000, "Ichikawa",         18.00),
-        (35.6000, 140.1200, "Chiba-C",          18.20),
-        (35.5500, 140.1500, "Kisarazu",         19.00),
-        (35.2500, 139.9000, "Tateyama",         19.80),
-        (35.7800, 140.3500, "Narita-C",         19.20),
-        (35.7500, 140.8000, "Choshi-C",         19.70),
-        (35.6800, 139.7000, "Shinjuku-W",       17.10),
-        (35.6500, 139.5000, "Chofu",            18.20),
-        (35.7500, 139.4000, "Tokorozawa",       18.30),
-        (35.5000, 139.4000, "Yamato",           18.70),
-        (35.3500, 139.3500, "Hiratsuka",        19.00),
-        (35.3000, 139.5500, "Kamakura-C",       19.20),
-        (35.2500, 139.1500, "Odawara",          19.60),
-        (35.2000, 139.0500, "Yugawara",         20.00),
-        (35.1500, 138.6500, "Fuji",             19.50),
-        (34.9800, 138.3800, "Shizuoka-C",       19.40),
-        (34.7200, 137.7500, "Hamamatsu-C",      19.20),
-        (35.6500, 138.5500, "Kofu-C",           19.90),
-        (36.2500, 137.9500, "Matsumoto-C",      20.50),
-        (36.6500, 138.1800, "Nagano-C",         20.10),
-        (36.7500, 137.2000, "Toyama-C",         19.60),
-        (36.5500, 136.6500, "Kanazawa-C",       19.50),
-        (36.0500, 136.2000, "Fukui-C",          19.70),
-        (35.1500, 136.9000, "Nagoya-C",         17.90),
-        (35.4000, 136.7500, "Gifu-C",           19.40),
-        (34.7500, 137.4000, "Toyohashi-C",      19.50),
-        (34.6900, 135.5000, "Osaka-C",          17.70),
-        (34.5800, 135.4800, "Sakai-C",          18.20),
-        (34.8200, 135.5700, "Takatsuki-C",      18.60),
-        (34.6800, 135.8000, "Nara-C",           19.30),
-        (35.0000, 135.7500, "Kyoto-C",          18.80),
-        (34.6900, 135.1800, "Kobe-C",           18.60),
-        (34.6500, 133.9200, "Okayama-C",        19.30),
-        (34.4800, 133.3800, "Fukuyama-C",       19.80),
-        (34.3800, 132.4500, "Hiroshima-C",      19.30),
-        (34.1800, 131.4700, "Yamaguchi-C",      20.30),
-        (33.9500, 130.9500, "Shimonoseki-C",    19.50),
-        (35.4700, 133.0500, "Matsue-C",         20.30),
-        (35.5000, 134.2300, "Tottori-C",        20.30),
-        (34.3400, 134.0500, "Takamatsu-C",      20.40),
-        (34.0600, 134.5500, "Tokushima-C",      20.40),
-        (33.8400, 132.7500, "Matsuyama-C",      20.20),
-        (33.5600, 133.5300, "Kochi-C",          20.40),
-        (33.5900, 130.4000, "Fukuoka-C",        18.60),
-        (33.8800, 130.8700, "Kitakyushu-C",     18.90),
-        (33.2500, 130.3000, "Saga-C",           19.90),
-        (32.7500, 129.8800, "Nagasaki-C",       19.60),
-        (32.8000, 130.7300, "Kumamoto-C",       19.60),
-        (33.2400, 131.6000, "Oita-C",           19.50),
-        (31.9000, 131.4200, "Miyazaki-C",       19.70),
-        (31.6000, 130.5500, "Kagoshima-C",      19.60),
-        (26.2100, 127.6800, "Naha-C",           19.60),
-        (24.3500, 124.1500, "Ishigaki-C",       20.90),
-        (43.8500, 144.1500, "Kitami-C",         20.50),
-        (43.3000, 142.8000, "Furano",           20.60),
-        (42.8000, 141.7000, "Chitose",          19.80),
-        (40.8200, 140.7500, "Aomori-C",         20.40),
-        (39.7000, 140.1000, "Akita-C",          20.20),
-        (38.7500, 140.7000, "Naruko",           20.50),
-        (38.2500, 141.0000, "Shiogama",         19.50),
-        (37.7500, 140.4500, "Fukushima-C",      20.20),
-        (36.8000, 139.9900, "Nasushiobara-C",   20.20),
-        (36.3500, 139.0600, "Maebashi-C",       19.60),
-        (36.3000, 139.1900, "Kiryu-C",          19.70),
-        (36.0000, 139.5000, "Kuki",             19.00),
-        (35.9000, 139.4000, "Kawagoe-C",        18.80),
-        (35.7500, 140.1000, "Matsudo-C",        18.30),
-        (35.7000, 139.7800, "Ueno-C",           17.50),
-        (35.6500, 139.7000, "Shibuya-C",        17.30),
-        (35.3500, 139.5500, "Fujisawa",         18.90),
-        (35.2500, 139.1500, "Hakone-C",         20.40),
-        (36.6500, 138.1800, "Suzaka-C",         20.30),
-        (36.3000, 138.6000, "Saku-C",           20.70),
-        (36.8500, 138.2500, "Myoko",            20.60),
-        (36.7500, 137.0000, "Takaoka-C",        19.70),
-        (34.6900, 135.1900, "Akashi-C",         18.80),
+        (21.3167, 105.4000, "PhuTho-C", 19.80), # Gần 1
+        (21.8525, 106.7592, "LangSon-C", 19.20), # Gần 2, 22
+        (21.7050, 104.8731, "YenBai-C", 19.40), # Gần 3, 4
+        (22.8233, 104.9836, "HaGiang-C", 19.90), # Gần 5, 6, 14, 15, 16, 17
+        (22.4856, 103.9707, "LaoCai-C", 19.10), # Gần 7, 11, 12, 13
+        (21.3272, 103.9142, "SonLa-C", 19.50), # Gần 8, 29, 30
+        (22.6667, 106.2500, "CaoBang-C", 19.60), # Gần 9, 18, 19, 20
+        (21.0100, 107.2900, "CamPha-C", 18.90), # Gần 10, 23, 24, 25
+        (22.1462, 105.8350, "BacKan-C", 19.70), # Gần 21
+        (20.8172, 105.3375, "HoaBinh-C", 19.30), # Gần 26, 27
+        (19.8067, 105.7853, "ThanhHoa-C", 18.90), # Gần 28, 38, 39
+        (21.3089, 105.6047, "VinhYen-C", 18.70), # Gần 31
+        (21.0285, 105.8542, "HaNoi-C", 17.10), # Gần 32
+        (21.2731, 106.1947, "BacGiang-C", 19.10), # Gần 33
+        (20.2506, 105.9744, "NinhBinh-C", 18.80), # Gần 34, 35, 36
+        (20.4283, 106.1683, "NamDinh-C", 18.60), # Gần 37
+        (18.6733, 105.6819, "Vinh-C", 18.50), # Gần 40, 41
+        (17.4686, 106.6222, "DongHoi-C", 19.10), # Gần 42, 43, 44, 45
+        (16.8167, 107.1000, "DongHa-C", 19.30), # Gần 46, 47
+        (16.4667, 107.6000, "Hue-C", 18.80), # Gần 48, 49, 50
+        (16.0544, 108.2022, "DaNang-C", 17.80), # Gần 51
+        (15.8801, 108.3380, "HoiAn-C", 18.60), # Gần 52, 53, 54
+        (15.1200, 108.8000, "QuangNgai-C", 19.00), # Gần 55, 56
+        (14.3500, 108.0000, "KonTum-C", 19.40), # Gần 57
+        (13.9833, 108.0000, "Pleiku-C", 18.90), # Gần 58, 59
+        (13.0833, 109.3000, "TuyHoa-C", 19.10), # Gần 60, 61, 62
+        (13.7750, 109.2333, "QuyNhon-C", 18.70), # Gần 63, 64, 65
+        (12.6667, 108.0500, "BuonMaThuot-C", 18.60), # Gần 66, 67
+        (12.0000, 107.6833, "GiaNghia-C", 19.30), # Gần 68
+        (11.9404, 108.4583, "DaLat-C", 18.40), # Gần 69, 70, 71
+        (11.5469, 107.8089, "BaoLoc-C", 19.10), # Gần 72
+        (12.2388, 109.1969, "NhaTrang-C", 18.20), # Gần 73, 74, 75, 76
+        (11.5667, 108.9833, "PhanRang-C", 19.00), # Gần 77, 78, 79
+        (10.9333, 108.1000, "PhanThiet-C", 18.60), # Gần 80, 81, 82, 83
+        (10.9572, 106.8426, "BienHoa-C", 17.90), # Gần 84, 85
+        (11.3100, 106.0983, "TayNinh-C", 19.20), # Gần 86, 87
+        (10.3460, 107.0843, "VungTau-C", 18.10), # Gần 88, 89, 90
+        (10.7769, 106.7009, "HCM-C", 16.80), # Gần 91
+        (10.5333, 106.4000, "TanAn-C", 18.80), # Gần 92
+        (10.4583, 105.6333, "CaoLanh-C", 19.10), # Gần 93
+        (10.0167, 105.0833, "RachGia-C", 18.70), # Gần 94, 95, 98
+        (10.2167, 103.9667, "PhuQuoc-C", 19.00), # Gần 96, 97
+        (9.1769, 105.1500, "CaMau-C", 19.20), # Gần 99, 100
     ]
 
     sqm_est = 22.30  # start pristine, find most polluted influence
@@ -1324,18 +567,13 @@ def calculate_accurate_bortle(lat, lon):
         _sqm_here = _csqm + _get_delta(_d)
         sqm_est = min(sqm_est, _sqm_here)
 
-    sqm_est = max(17.5, min(22.3, round(sqm_est, 2)))
+    sqm_est = max(16.5, min(22.3, round(sqm_est, 2)))
 
-    # Convert SQM → Bortle class
-    # Thresholds theo Wikipedia / Bortle 2001 / Sky & Telescope:
-    #   Class 1:  21.76–22.0   Class 2: 21.6–21.75  Class 3: 21.3–21.6
-    #   Class 4:  20.8–21.3    Class 4.5: 20.3–20.8 Class 5: 19.25–20.3
-    #   Class 6:  18.5–19.25   Class 7: 18.0–18.5
-    #   Class 8+: < 18.0
+    # Convert SQM -> Bortle class
     if   sqm_est >= 21.76: bc = 1
     elif sqm_est >= 21.60: bc = 2
     elif sqm_est >= 21.30: bc = 3
-    elif sqm_est >= 20.30: bc = 4   # gộp 4 và 4.5
+    elif sqm_est >= 20.30: bc = 4   # merge 4 and 4.5
     elif sqm_est >= 19.41: bc = 5
     elif sqm_est >= 18.50: bc = 6
     elif sqm_est >= 18.00: bc = 7
@@ -1346,15 +584,13 @@ def calculate_accurate_bortle(lat, lon):
 
 # ── WEATHER FETCH ─────────────────────────────────────────────────────────────
 # Các endpoint fallback theo thứ tự ưu tiên:
-#   1. Primary: JMA MSM + ECMWF — đầy đủ nhất
-#   2. Fallback A: chỉ ECMWF (bỏ JMA) — nhẹ hơn, không phụ thuộc Japan server
-#   3. Fallback B: chỉ JMA MSM — khi ECMWF lỗi
+#   Nguồn dữ liệu: ECMWF IFS 0.25° + ICON global (GFS đã bỏ vì dự báo không đáng tin).
+#   1 lần gọi API lấy cả 2 mô hình; key trả về có hậu tố _ecmwf_ifs025 / _icon_global.
+#   Chỉ 1 endpoint; mỗi endpoint thử lại nhiều lần (xem _fetch_weather_raw_impl).
 _FIELDS = "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_2m,wind_speed_10m,temperature_2m,precipitation"
 _ENDPOINTS = [
     # (label, url_suffix)
-    ("full",     f"&hourly={_FIELDS}&models=jma_msm,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
-    ("no_jma",   f"&hourly={_FIELDS}&models=ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
-    ("jma_only", f"&hourly={_FIELDS}&models=jma_msm&wind_speed_unit=ms&timezone=auto"),
+    ("full",    f"&hourly={_FIELDS}&models=ecmwf_ifs025,icon_global&wind_speed_unit=ms&timezone=auto"),
 ]
 
 @st.cache_resource
@@ -1362,11 +598,12 @@ def _wx_prefetch_store():
     """Kho dùng chung giữa các lần rerun: data = kết quả đã tải sẵn, at = thời điểm tải (epoch giây)."""
     return {"data": {}, "at": {}}
 
-def _wx_prefetch(coords, workers=8):
+def _wx_prefetch(coords, workers=8, budget=25):
     """Tải song song thời tiết cho nhiều toạ độ (chỉ requests thuần, không đụng streamlit trong thread).
-    Kết quả để trong kho; _fetch_weather_raw (có cache) sẽ lấy ra dùng -> cache vẫn ghi ở thread chính."""
+    Kết quả để trong kho; _fetch_weather_raw (có cache) sẽ lấy ra dùng -> cache vẫn ghi ở thread chính.
+    Có giới hạn thời gian (budget, giây): quá hạn thì bỏ qua phần chưa xong, KHÔNG làm treo trang."""
     import time as _t
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, wait
     store = _wx_prefetch_store()
     now = _t.time()
     todo = [c for c in dict.fromkeys(coords) if now - store["at"].get(c, 0) > 3300]
@@ -1374,23 +611,31 @@ def _wx_prefetch(coords, workers=8):
         return
     def one(c):
         try:
-            return c, _fetch_weather_raw_impl(c[0], c[1])
+            return c, _fetch_weather_raw_impl(c[0], c[1], fast=True)
         except Exception:
             return c, None
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for c, res in ex.map(one, todo):
-            if res and res[2] != "offline":      # lỗi thì để _fetch_weather_raw tự thử lại
-                store["data"][c] = res
-                store["at"][c] = now
+    ex = ThreadPoolExecutor(max_workers=workers)
+    futs = [ex.submit(one, c) for c in todo]
+    done, _pending = wait(futs, timeout=budget)
+    ex.shutdown(wait=False, cancel_futures=True)      # luồng đang chạy tự kết thúc theo timeout của requests
+    for f in done:
+        try:
+            c, res = f.result()
+        except Exception:
+            continue
+        if res and res[2] != "offline":      # lỗi thì bỏ qua điểm này
+            store["data"][c] = res
+            store["at"][c] = now
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_weather_raw(lat, lon):
     pre = _wx_prefetch_store()["data"].pop((lat, lon), None)
-    if pre is not None:
+    # Bỏ dữ liệu prefetch cũ (chỉ có ECMWF) còn sót trong cache_resource từ phiên bản trước
+    if pre is not None and any(k.endswith("_icon_global") for k in pre[0]):
         return pre
     return _fetch_weather_raw_impl(lat, lon)
 
-def _fetch_weather_raw_impl(lat, lon):
+def _fetch_weather_raw_impl(lat, lon, fast=False):
     """Raw API fetch với retry + multi-endpoint fallback.
     Returns (hourly_dict, utc_offset_seconds, endpoint_used_label, last_error)"""
     import time as _time
@@ -1399,17 +644,19 @@ def _fetch_weather_raw_impl(lat, lon):
     last_error = None
     for ep_label, ep_suffix in _ENDPOINTS:
         url = base + ep_suffix
-        for attempt in range(3):   # 3 lần thử mỗi endpoint (network có thể chập chờn)
+        for attempt in range(1 if fast else 3):   # 3 lần thử mỗi endpoint (fast: chỉ 1 lần)
             try:
-                # Multi-model request (full/no_jma) nặng hơn, cần timeout dài hơn
-                _timeout = 12 if ep_label == "full" else 8
+                # Multi-model request (full) nặng hơn, cần timeout dài hơn
+                _timeout = 12
+                if fast: _timeout = 8
                 res = requests.get(url, headers=headers, timeout=_timeout)
                 if res.status_code == 200:
                     j = res.json()
                     hrly = j.get("hourly", {})
-                    _sfx = {"no_jma": "_ecmwf_ifs025", "jma_only": "_jma_msm"}.get(ep_label)
-                    if _sfx:   # request 1 model → key không có hậu tố model; thêm vào cho thống nhất với phần còn lại
-                        hrly = {(k if (k == "time" or k.endswith(_sfx)) else k + _sfx): v for k, v in hrly.items()}
+                    # nhiều model → key đã có hậu tố; nếu API trả key trần (chỉ 1 model) thì gán cho ECMWF
+                    hrly = {(k if (k == "time" or k.endswith("_ecmwf_ifs025") or k.endswith("_icon_global"))
+                             else k + "_ecmwf_ifs025"): v
+                            for k, v in hrly.items()}
                     return hrly, j.get("utc_offset_seconds", 32400), ep_label, None
                 # 5xx = server lỗi → thử endpoint tiếp theo ngay
                 last_error = f"HTTP {res.status_code}"
@@ -1427,25 +674,20 @@ def _fetch_weather_raw_impl(lat, lon):
                 break  # lỗi khác → chuyển endpoint ngay
     return {}, 32400, "offline", last_error
 
-def fetch_weather_7days(lat, lon, source="JMA"):
+def fetch_weather_7days(lat, lon, source="ECMWF"):
     """Wrapper giữ nguyên interface cũ — delegate sang cached raw fetch."""
     hourly, utc_offset, ep_label, last_error = _fetch_weather_raw(lat, lon)
     return hourly, source, utc_offset, ep_label, last_error
 
-def get_val(hourly, field, idx, prefer_jma=True):
+def get_val(hourly, field, idx, prefer_ecmwf=True):
     """
-    Extract a single numeric value for a field at index idx.
-    If prefer_jma: try _jma_msm first, fallback to _ecmwf_ifs025.
-    Else: try _ecmwf_ifs025 first, fallback to _jma_msm.
+    Extract a single numeric value for a field at index idx (ECMWF IFS025 — nguồn duy nhất; GFS đã bỏ).
     Also tries bare key as last resort.
-    Returns (float_value, source_used: 'JMA'|'ECMWF'|None)
+    Returns (float_value, source_used: 'ECMWF'|'?'|None)
     """
-    order = ["_jma_msm", "_ecmwf_ifs025"] if prefer_jma else ["_ecmwf_ifs025", "_jma_msm"]
-    labels = ["JMA", "ECMWF"] if prefer_jma else ["ECMWF", "JMA"]
-    for suffix, label in zip(order, labels):
-        lst = hourly.get(f"{field}{suffix}", [])
-        if idx < len(lst) and lst[idx] is not None:
-            return float(lst[idx]), label
+    lst = hourly.get(f"{field}_ecmwf_ifs025", [])
+    if idx < len(lst) and lst[idx] is not None:
+        return float(lst[idx]), "ECMWF"
     # bare key fallback
     lst = hourly.get(field, [])
     if idx < len(lst) and lst[idx] is not None:
@@ -1459,128 +701,112 @@ def _get_raw(hourly, field, suffix, idx):
         return float(lst[idx])
     return None
 
-# ── BLEND JMA + ECMWF theo SỐ GIỜ DỰ BÁO CÒN LẠI (lead time), không theo "ngày" ──────────
-#   lead ≤ 39h : JMA MSM 0.70 / ECMWF 0.30  (MSM 5 km đang ở vùng chính xác nhất)
-#   39h → 78h  : trọng số JMA giảm tuyến tính 0.70 → 0 (làm mượt, không nhảy bậc)
-#   ≥ 78h      : ECMWF 100% (MSM hết dữ liệu; thiếu model nào thì tự chuẩn hóa lại)
-_BLEND_JMA_W0   = 0.70
-_BLEND_RAMP_START_H = 39.0
-_BLEND_RAMP_END_H   = 78.0
-_SPREAD_WARN_PCT    = 40.0   # |JMA − ECMWF| mây > 40% → cờ ⚠ "models disagree"
+# ── BLEND ECMWF + ICON theo SỐ GIỜ DỰ BÁO CÒN LẠI (lead time) ─────────────────────
+#   Việt Nam không có mô hình vùng độ phân giải cao → blend 2 mô hình toàn cầu.
+#   lead ≤ 72h  : ECMWF 0.60 / ICON 0.40
+#   72h → 120h  : ICON giảm dần tuyến tính 0.40 → 0.25
+#   ≥ 120h      : ECMWF 0.75 / ICON 0.25
+#   Thiếu 1 model → dùng model còn lại (tự chuẩn hóa).  Hằng số để chỉnh sau khi kiểm chứng.
+_SFX_ECMWF = "_ecmwf_ifs025"
+_SFX_ICON  = "_icon_global"
+WX_SOURCES = ["Blend", "ECMWF", "ICON"]
+_BLEND_ICON_W0       = 0.40
+_BLEND_ICON_W_FAR    = 0.25
+_BLEND_RAMP_START_H  = 72.0
+_BLEND_RAMP_END_H    = 120.0
+_SPREAD_WARN_PCT     = 40.0   # |ECMWF − ICON| mây > 40% → cờ ⚠
 
-def _jma_weight(lead_h):
+def _icon_weight(lead_h):
     if lead_h is None or lead_h <= _BLEND_RAMP_START_H:
-        return _BLEND_JMA_W0
+        return _BLEND_ICON_W0
     if lead_h >= _BLEND_RAMP_END_H:
-        return 0.0
-    return _BLEND_JMA_W0 * (_BLEND_RAMP_END_H - lead_h) / (_BLEND_RAMP_END_H - _BLEND_RAMP_START_H)
+        return _BLEND_ICON_W_FAR
+    f = (lead_h - _BLEND_RAMP_START_H) / (_BLEND_RAMP_END_H - _BLEND_RAMP_START_H)
+    return _BLEND_ICON_W0 + (_BLEND_ICON_W_FAR - _BLEND_ICON_W0) * f
 
 def get_val_blended(hourly, field, idx, lead_h):
-    """
-    Weighted blend of JMA MSM + ECMWF theo lead_h (số giờ từ bây giờ tới slot; xem _jma_weight).
-    Re-normalises weights if any model has missing data (vd. MSM hết dữ liệu → 100% ECMWF).
-    Returns (float_value, label_string)
-    """
-    jma   = _get_raw(hourly, field, "_jma_msm",      idx)
-    ecmwf = _get_raw(hourly, field, "_ecmwf_ifs025",  idx)
-
-    wj = _jma_weight(lead_h)
-    weights = {"jma": wj, "ecmwf": 1.0 - wj}
-
-    vals  = {"jma": jma, "ecmwf": ecmwf}
-    avail = {k: v for k, v in vals.items() if v is not None}
-    if not avail:
+    """Blend ECMWF + ICON theo lead time. Returns (float_value, label) — label 'Blend'/'ECMWF'/'ICON'/None."""
+    e = _get_raw(hourly, field, _SFX_ECMWF, idx)
+    i = _get_raw(hourly, field, _SFX_ICON, idx)
+    if e is None and i is None:
         return 0.0, None
+    if i is None:
+        return round(e, 1), "ECMWF"
+    if e is None:
+        return round(i, 1), "ICON"
+    wi = _icon_weight(lead_h)
+    return round((1.0 - wi) * e + wi * i, 1), "Blend"
 
-    total_w = sum(weights[k] for k in avail)
-    if total_w <= 0:   # vd. wj=0 nhưng chỉ còn JMA → dùng JMA
-        blended = sum(avail.values()) / len(avail)
+def _wx_pick(hourly, field, idx, source, lead_h):
+    """Giá trị theo lựa chọn nguồn: 'Blend' | 'ECMWF' | 'ICON' (model được chọn thiếu dữ liệu → dùng model kia)."""
+    if source == "ECMWF":
+        order = ((_SFX_ECMWF, "ECMWF"), (_SFX_ICON, "ICON"))
+    elif source == "ICON":
+        order = ((_SFX_ICON, "ICON"), (_SFX_ECMWF, "ECMWF"))
     else:
-        blended = sum(weights[k] * v for k, v in avail.items()) / total_w
-    return round(blended, 1), "Blend"
+        return get_val_blended(hourly, field, idx, lead_h)
+    for sfx, lbl in order:
+        v = _get_raw(hourly, field, sfx, idx)
+        if v is not None:
+            return round(v, 1), lbl
+    return 0.0, None
 
-def _cloud_spread(hourly, idx):
-    """|JMA − ECMWF| của cloud_cover tại idx (None nếu thiếu 1 trong 2 model)."""
-    j = _get_raw(hourly, "cloud_cover", "_jma_msm", idx)
-    e = _get_raw(hourly, "cloud_cover", "_ecmwf_ifs025", idx)
-    if j is None or e is None:
+def _model_spread(hourly, idx):
+    """|ECMWF − ICON| của cloud_cover tại idx (None nếu thiếu 1 trong 2 model)."""
+    e = _get_raw(hourly, "cloud_cover", _SFX_ECMWF, idx)
+    i = _get_raw(hourly, "cloud_cover", _SFX_ICON, idx)
+    if e is None or i is None:
         return None
-    return abs(j - e)
+    return abs(e - i)
 
 # ── COMPUTED STATE ────────────────────────────────────────────────────────────
 bortle_class, sqm_val = calculate_accurate_bortle(st.session_state.lat, st.session_state.lon)
 ra_val, dec_val = calculate_zenith_ra_dec(st.session_state.lat, st.session_state.lon)
 
-JST = timezone(timedelta(hours=9))
+ICT = timezone(timedelta(hours=7))   # Indochina Time (Vietnam, UTC+7)
 
 # ── Night-start offset ─────────────────────────────────────────────────────────
 # A "night" runs 18:00 → 06:00 next day.
-# If current JST time is 00:00–17:59 we are still inside last-night's second half
+# If current ICT time is 00:00–17:59 we are still inside last-night's second half
 # (00:00–06:00 already passed, 18:00 tonight is the NEXT upcoming block).
 # So: if hour < 18, "night 0" = today's evening (18:00 today → 06:00 tomorrow),
 #     which means we base target_date on today's date.
 # The past-data problem (18:00-23:59 gone after midnight): we fix it by
 # skipping slots that are in the past when rendering the table.
-_now_jst        = datetime.now(JST)
+_now_ict        = datetime.now(ICT)
 # If 00:00~05:59 → we're still in the previous night (18:00 yesterday → 06:00 today)
 # so shift base back 1 day to keep tonight's 00:00~06:00 slots visible
-if _now_jst.hour < 6:
-    _night_base_jst = _now_jst - timedelta(days=1)
+if _now_ict.hour < 6:
+    _night_base_ict = _now_ict - timedelta(days=1)
 else:
-    _night_base_jst = _now_jst
-# date_options i=0 → tonight (18:00 of _night_base_jst)
-_jp_wd = ["月", "火", "水", "木", "金", "土", "日"]
-def _jp_date(d, suffix):
-    return f"{d.month}月{d.day}日{suffix}({_jp_wd[d.weekday()]})"
+    _night_base_ict = _now_ict
+# date_options i=0 → tonight (18:00 of _night_base_ict)
+_wd_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+def _en_date(d, suffix):
+    return f"{d.month}/{d.day} {suffix} ({_wd_names[d.weekday()]})"
 date_options = [
-    f"{_jp_date(_night_base_jst+timedelta(days=i), '夜')} → {_jp_date(_night_base_jst+timedelta(days=i+1), '朝')}"
+    f"{_en_date(_night_base_ict+timedelta(days=i), 'eve')} → {_en_date(_night_base_ict+timedelta(days=i+1), 'morn')}"
     for i in range(7)
 ]
 
-target_date = (_night_base_jst + timedelta(days=st.session_state.day_offset)).replace(tzinfo=None)
+target_date = (_night_base_ict + timedelta(days=st.session_state.day_offset)).replace(tzinfo=None)
 next_date   = target_date + timedelta(days=1)
 
 moon_pct, moon_text = get_moon_phase_percent(target_date)
 
-# Lựa chọn nguồn cũ đã lưu (US (GFS) / Blend có GFS) → chuyển sang Blend JMA+ECMWF
-if st.session_state.weather_source in ("US (GFS)", "🔀 Blend (JMA+ECMWF+" + "GFS)"):
-    st.session_state.weather_source = "🔀 Blend (JMA+ECMWF)"
-
-prefer_jma = (st.session_state.weather_source != "EU (ECMWF)")
-use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)")
-use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
+# Nguồn thời tiết: dropdown "wx_src_ui" (ở cột phải, dưới thẻ Sky Quality) (Blend / ECMWF / ICON) → đồng bộ vào weather_source.
+# (Giá trị cũ như "EU (ECMWF)" / GFS không còn hợp lệ → về Blend.)
+_wx_ui = st.session_state.get("wx_src_ui")
+if _wx_ui in WX_SOURCES:
+    st.session_state.weather_source = _wx_ui
+if st.session_state.weather_source not in WX_SOURCES:
+    st.session_state.weather_source = "Blend"
 hourly_data, _, _loc_utc_offset, _ep_label, _last_error = fetch_weather_7days(
     st.session_state.lat, st.session_state.lon, st.session_state.weather_source
 )
 
-# ── AUTO-DETECT JMA COVERAGE cho ngày được chọn ───────────────────────────────
-# JMA MSM chỉ có ~3-4 ngày. Nếu user chọn JMA nhưng ngày đó JMA toàn null
-# → tự động dùng ECMWF thay thế (prefer_jma=False) mà không cần user đổi tay.
-def _jma_has_data_for_date(hourly, date_prefix):
-    """Trả về True nếu JMA có ít nhất 1 giá trị không-None cho ngày date_prefix."""
-    times = hourly.get("time", [])
-    cc_jma = hourly.get("cloud_cover_jma_msm", [])
-    for i, t in enumerate(times):
-        if t.startswith(date_prefix) and i < len(cc_jma) and cc_jma[i] is not None:
-            return True
-    return False
-
-# Auto-switch: chỉ can thiệp khi đang dùng JMA đơn lẻ, không đụng Blend
-if st.session_state._source_auto and hourly_data:
-    _cur = st.session_state.weather_source
-    if _cur not in ("🔀 Blend (JMA+ECMWF)", "EU (ECMWF)"):
-        jma_ok = (_jma_has_data_for_date(hourly_data, target_date.strftime("%Y-%m-%d")) or
-                  _jma_has_data_for_date(hourly_data, next_date.strftime("%Y-%m-%d")))
-        if not jma_ok:
-            st.session_state.weather_source = "EU (ECMWF)"
-
-# Sau auto-switch, cập nhật lại flags theo source hiện tại
-prefer_jma = (st.session_state.weather_source != "EU (ECMWF)")
-use_blend  = (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)")
-use_ecmwf  = (st.session_state.weather_source == "EU (ECMWF)")
-
 # UTC offset của location hiện tại (tính bằng giây) — dùng cho moon altitude
-loc_utc_offset_h = _loc_utc_offset / 3600.0  # đổi sang giờ, ví dụ JST=+9, CST=-6
+loc_utc_offset_h = _loc_utc_offset / 3600.0  # đổi sang giờ, ví dụ ICT=+7
 
 desired_slots = [
     (target_date.year, target_date.month, target_date.day, 18, "18:00", target_date.strftime("%Y-%m-%d")),
@@ -1609,12 +835,8 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
     # hourly_data_frozen là tuple-of-items để hashable
     hourly = dict(hourly_data_frozen) if hourly_data_frozen else {}
 
-    _prefer_jma = weather_source != "EU (ECMWF)"
-    _use_blend  = weather_source == "🔀 Blend (JMA+ECMWF)"
-    _use_ecmwf  = weather_source == "EU (ECMWF)"
-
-    # Blend weight tính theo lead time của TỪNG slot (giờ UTC của slot − giờ UTC hiện tại)
-    _now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    _src = weather_source if weather_source in WX_SOURCES else "Blend"
+    _now_utc = datetime.now(timezone.utc).replace(tzinfo=None)   # lead time tính theo UTC (không phụ thuộc giờ server)
 
     out_table  = []
     out_hours  = []
@@ -1642,39 +864,22 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
             continue
 
         _lead_h = (datetime(yr, mo, dy, hr_local) - timedelta(hours=loc_utc_offset_h) - _now_utc).total_seconds() / 3600.0
-        _spread = None
-        if _use_blend:
-            _spread = _cloud_spread(hourly, idx)
-            avg_cloud, src1 = get_val_blended(hourly, "cloud_cover",          idx, _lead_h)
-            low_c,     _    = get_val_blended(hourly, "cloud_cover_low",       idx, _lead_h)
-            mid_c,     _    = get_val_blended(hourly, "cloud_cover_mid",       idx, _lead_h)
-            high_c,    _    = get_val_blended(hourly, "cloud_cover_high",      idx, _lead_h)
-            humid,     _    = get_val_blended(hourly, "relative_humidity_2m",  idx, _lead_h)
-            wind_speed,_    = get_val_blended(hourly, "wind_speed_10m",        idx, _lead_h)
-            temp_val,  _    = get_val_blended(hourly, "temperature_2m",        idx, _lead_h)
-            precip_val,_    = get_val_blended(hourly, "precipitation",         idx, _lead_h)
-            if src1: out_srcs.add(src1)
-        elif _use_ecmwf:
-            avg_cloud  = _get_raw(hourly, "cloud_cover",          "_ecmwf_ifs025", idx) or 0.0
-            low_c      = _get_raw(hourly, "cloud_cover_low",       "_ecmwf_ifs025", idx) or 0.0
-            mid_c      = _get_raw(hourly, "cloud_cover_mid",       "_ecmwf_ifs025", idx) or 0.0
-            high_c     = _get_raw(hourly, "cloud_cover_high",      "_ecmwf_ifs025", idx) or 0.0
-            humid      = _get_raw(hourly, "relative_humidity_2m",  "_ecmwf_ifs025", idx) or 0.0
-            wind_speed = _get_raw(hourly, "wind_speed_10m",        "_ecmwf_ifs025", idx) or 0.0
-            temp_val   = _get_raw(hourly, "temperature_2m",        "_ecmwf_ifs025", idx) or 0.0
-            precip_val = _get_raw(hourly, "precipitation",         "_ecmwf_ifs025", idx) or 0.0
-            src1 = "ECMWF"
-            out_srcs.add("ECMWF")
-        else:
-            avg_cloud, src1 = get_val(hourly, "cloud_cover",          idx, _prefer_jma)
-            low_c,     _    = get_val(hourly, "cloud_cover_low",      idx, _prefer_jma)
-            mid_c,     _    = get_val(hourly, "cloud_cover_mid",      idx, _prefer_jma)
-            high_c,    _    = get_val(hourly, "cloud_cover_high",     idx, _prefer_jma)
-            humid,     _    = get_val(hourly, "relative_humidity_2m", idx, _prefer_jma)
-            wind_speed,_    = get_val(hourly, "wind_speed_10m",       idx, _prefer_jma)
-            temp_val,  _    = get_val(hourly, "temperature_2m",       idx, _prefer_jma)
-            precip_val,_    = get_val(hourly, "precipitation",        idx, _prefer_jma)
-            if src1: out_srcs.add(src1)
+
+        def _P(_f):
+            _v, _s = _wx_pick(hourly, _f, idx, _src, _lead_h)
+            if _s:
+                out_srcs.add(_s)
+            return _v
+
+        avg_cloud  = _P("cloud_cover")
+        low_c      = _P("cloud_cover_low")
+        mid_c      = _P("cloud_cover_mid")
+        high_c     = _P("cloud_cover_high")
+        humid      = _P("relative_humidity_2m")
+        wind_speed = _P("wind_speed_10m")
+        temp_val   = _P("temperature_2m")
+        precip_val = _P("precipitation")
+        _spread    = _model_spread(hourly, idx)
 
         if len(out_table) == 0:
             out_debug = {"low": int(low_c), "mid": int(mid_c), "high": int(high_c), "total": int(avg_cloud)}
@@ -1700,53 +905,6 @@ def _build_night_data(lat, lon, slots, hourly_data_frozen, weather_source, loc_u
 
     return out_table, out_hours, out_moon, out_sun, out_mw, out_debug, out_srcs
 
-# ── NIPPON KISHOU STAR INDEX → trộn vào cột 📸 của bảng giờ (3 đêm đầu) ───────────────────
-# API: GET weather-api-prod.n-kishou.co.jp/get-star-index?lat=&lon=&alt=  → 3 ngày × chỉ số 0–4 theo giờ (18:00–06:00)
-_NK_API = "https://weather-api-prod.n-kishou.co.jp/get-star-index"
-_NK_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Referer": "https://s.n-kishou.co.jp/",
-    "Origin": "https://s.n-kishou.co.jp",
-}
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def _nk_raw(lat3: float, lon3: float):
-    """Danh sách 3 ngày thô từ API (lỗi mạng/HTTP/JSON → raise, cache_data không lưu lỗi)."""
-    r = requests.get(_NK_API, params={"lat": lat3, "lon": lon3, "alt": 2}, headers=_NK_HEADERS, timeout=8)
-    r.raise_for_status()
-    days = r.json()["result_list"]["data"][:3]
-    if not days:
-        raise ValueError("empty result")
-    return days
-
-def _nk_star_fetch(lat3: float, lon3: float):
-    """{'YYYY-MM-DDTHH': index 0–4} cho 3 đêm (dùng cho bảng theo giờ)."""
-    out = {}
-    for d in _nk_raw(lat3, lon3):
-        for x in d.get("starlight_index", []):
-            out[str(x.get("datetime", ""))[:13]] = max(0, min(4, int(x.get("index") or 0)))
-    if not out:
-        raise ValueError("empty result")
-    return out
-
-def _nk_night_value(lat, lon, d):
-    """Điểm Nippon Kishou (0–4) của CẢ ĐÊM bắt đầu vào ngày d tại (lat, lon); không có (ngoài 3 đêm/lỗi) → None."""
-    try:
-        if lat is None or lon is None or d is None:
-            return None
-        key = d.strftime("%Y-%m-%d")
-        for day in _nk_raw(round(float(lat), 3), round(float(lon), 3)):
-            if str(day.get("start_datetime", ""))[:10] == key:
-                return max(0, min(4, int(day.get("overall_review") or 0)))
-    except Exception:
-        return None
-    return None
-
-def _star_value(own, nk):
-    """own: 0–4 (mô hình); nk: 0–4 hoặc None. Có cả hai → chia đôi (kết quả bội của 0.5)."""
-    return own if nk is None else (own + nk) / 2
-
 def _half_star_html(v):
     """4 ngôi sao; v bội của 0.5. Đầy = vàng; nửa sao = nửa TRÁI vàng, nửa PHẢI không màu (chỉ viền); rỗng = chỉ viền.
     Hai lớp dùng cùng glyph ★ (viền bằng text-stroke) nên clip 50% khớp đúng giữa ngôi sao."""
@@ -1764,7 +922,6 @@ def _half_star_html(v):
         else:
             parts.append(f'<span style="{box}{empty}">{S}</span>')
     return "".join(parts)
-# ── END NK STAR FUNCS ─────────────────────────────────────────────────────────────
 
 # Chuyển hourly_data sang dạng hashable để cache key hoạt động
 _hourly_frozen = tuple(
@@ -1776,8 +933,8 @@ _hourly_frozen = tuple(
 # Mục đích: warm up cache cho toàn bộ 7 ngày ngay khi chọn location.
 # Khi user bấm Next/Prev → _build_night_data đã có cache → gần như instant.
 # Chạy tuần tự (không thread) vì @st.cache_data không thread-safe khi write.
-def _make_slots_for_offset(base_jst, day_off):
-    td = (base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+def _make_slots_for_offset(base_ict, day_off):
+    td = (base_ict + timedelta(days=day_off)).replace(tzinfo=None)
     nd = td + timedelta(days=1)
     return tuple([
         (td.year, td.month, td.day, 18, "18:00", td.strftime("%Y-%m-%d")),
@@ -1811,7 +968,7 @@ else:
         try:
             _build_night_data(
                 st.session_state.lat, st.session_state.lon,
-                _make_slots_for_offset(_night_base_jst, _poff),
+                _make_slots_for_offset(_night_base_ict, _poff),
                 _hourly_frozen,
                 st.session_state.weather_source,
                 loc_utc_offset_h,
@@ -1830,20 +987,8 @@ else:
 sources_used = set(sources_used)  # trả về từ cache là frozenset hoặc set, đảm bảo là set
 
 # Label thực tế đã dùng — phân biệt auto-fallback với user chọn tay
-if use_blend:
-    active_source_label = ("🔀 Nippon Kishou & JMA+ECMWF" if st.session_state.day_offset < 3
-                           else "🔀 JMA+ECMWF")
-elif "ECMWF" in sources_used and "JMA" in sources_used:
-    active_source_label = "JMA + EU (ECMWF)"
-elif "ECMWF" in sources_used and prefer_jma:
-    # User chọn JMA nhưng JMA không có data → auto-fallback sang ECMWF
-    active_source_label = "EU (ECMWF IFS025) [auto-fallback]"
-elif "ECMWF" in sources_used:
-    active_source_label = "EU (ECMWF IFS025)"
-elif "JMA" in sources_used:
-    active_source_label = "JMA"
-else:
-    active_source_label = st.session_state.weather_source
+active_source_label = st.session_state.weather_source if not sources_used else \
+    (st.session_state.weather_source + " [" + "+".join(sorted(sources_used)) + "]")
 
 # ── NIGHT VERDICT (full night 18:00~06:00) ───────────────────────────────────
 def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
@@ -2006,10 +1151,10 @@ def _summarize_fallback_tiers(tier_counter):
     return " & ".join(uniq)
 
 
-# ── GREAT NIGHT SCAN — quét 27 địa điểm yêu thích × 7 ngày tới ───────────────
+# ── GREAT NIGHT SCAN — quét 30 địa điểm yêu thích × 7 ngày tới ───────────────
 # Điều kiện thông báo (AND):
 #   1) Moon illumination < 32%
-#   2) Có ít nhất 1/27 địa điểm đầu (sao xanh) đạt tier == "PERFECT NIGHT"
+#   2) Có ít nhất 1/30 địa điểm đầu (sao xanh) đạt tier == "PERFECT NIGHT"
 #   3) Chỉ báo NGÀY SỚM NHẤT thoả mãn (1-7 ngày tới)
 _FAV_30  = [(n,c) for n,c in LOCATION_DATABASE.items()
             if (lambda nm: nm.split(".")[0].strip().isdigit()
@@ -2019,74 +1164,41 @@ _FAV_50  = [(n,c) for n,c in LOCATION_DATABASE.items()
                 and int(nm.split(".")[0].strip()) <= 50)(n)]
 _FAV_ALL = list(LOCATION_DATABASE.items())
 
-# ── REGION REGISTRY — Nhật Bản chia theo 8 vùng địa lý truyền thống + "japan" (toàn quốc) ──
+# ── REGION REGISTRY — Việt Nam chia theo 3 miền địa lý (Bắc/Trung/Nam) + "vietnam" (toàn quốc) ──
 # Mỗi vùng áp dụng đồng nhất cho cả 3 loại lệnh: <region> (scan) / best <region> / tonight <region>
 _REGIONS = {
-    "hokkaido": {"Hokkaido"},
-    "tohoku":   {"Aomori", "Iwate", "Miyagi", "Akita", "Yamagata", "Fukushima"},
-    "kanto":    {"Tokyo", "Kanagawa", "Chiba", "Saitama", "Ibaraki", "Tochigi", "Gunma"},
-    "chubu":    {"Niigata", "Toyama", "Ishikawa", "Fukui", "Yamanashi", "Nagano", "Gifu", "Shizuoka", "Aichi"},
-    "kansai":   {"Osaka", "Kyoto", "Hyogo", "Nara", "Shiga", "Wakayama", "Mie"},
-    "chugoku":  {"Tottori", "Shimane", "Okayama", "Hiroshima", "Yamaguchi"},
-    "shikoku":  {"Tokushima", "Kagawa", "Ehime", "Kochi"},
-    "kyushu":   {"Fukuoka", "Saga", "Nagasaki", "Kumamoto", "Oita", "Miyazaki", "Kagoshima"},
-    "okinawa":  {"Okinawa"},
+    "bac":   {"Ha Giang", "Cao Bang", "Lang Son", "Lao Cai", "Yen Bai", "Bac Kan", "Bac Giang",
+              "Phu Tho", "Vinh Phuc", "Hanoi", "Hoa Binh", "Son La", "Quang Ninh",
+              "Nam Dinh", "Ninh Binh"},
+    "trung": {"Thanh Hoa", "Nghe An", "Quang Binh", "Quang Tri", "Thua Thien Hue", "Da Nang",
+              "Quang Nam", "Quang Ngai", "Binh Dinh", "Phu Yen", "Khanh Hoa", "Ninh Thuan",
+              "Binh Thuan", "Kon Tum", "Gia Lai", "Dak Lak", "Dak Nong", "Lam Dong"},
+    "nam":   {"Ho Chi Minh City", "Dong Nai", "Ba Ria - Vung Tau", "Tay Ninh", "Long An",
+              "Dong Thap", "Kien Giang", "Ca Mau"},
 }
-_REGION_ORDER = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa"]
+_REGION_ORDER = ["bac", "trung", "nam"]
 _REGION_LABELS = {
-    "hokkaido": "Hokkaido", "tohoku": "Tohoku", "kanto": "Kanto", "chubu": "Chubu",
-    "kansai": "Kansai", "chugoku": "Chugoku", "shikoku": "Shikoku", "kyushu": "Kyushu",
-    "okinawa": "Okinawa", "japan": "All Japan",
+    "bac": "Mien Bac (North)", "trung": "Mien Trung (Central)", "nam": "Mien Nam (South)",
+    "vietnam": "All Vietnam",
 }
 # ── Region representative city center (lat, lon, zoom) — dùng để fly map khi scan ──
 _REGION_MAP_CENTER = {
-    "hokkaido": (43.0618, 141.3545, 7),   # Sapporo
-    "tohoku":   (38.2688, 140.8721, 7),   # Sendai
-    "kanto":    (35.6895, 139.6917, 8),   # Tokyo
-    "chubu":    (35.1815, 136.9066, 7),   # Nagoya
-    "kansai":   (34.6937, 135.5023, 8),   # Osaka
-    "chugoku":  (34.3853, 132.4553, 7),   # Hiroshima
-    "shikoku":  (33.5597, 133.5311, 7),   # Kochi
-    "kyushu":   (33.5904, 130.4017, 7),   # Fukuoka
-    "okinawa":  (26.2124, 127.6809, 8),   # Naha
-    "japan":    (36.5000, 138.0000, 6),   # Japan center
+    "bac":     (21.0285, 105.8542, 7),   # Hanoi
+    "trung":   (16.0544, 108.2022, 7),   # Da Nang
+    "nam":     (10.7769, 106.7009, 7),   # Ho Chi Minh City
+    "vietnam": (16.0000, 106.5000, 6),   # Vietnam center
 }
 # ── Region representative city display name ────────────────────────────────────
 _REGION_CITY_NAME = {
-    "hokkaido": "Sapporo, Hokkaido",
-    "tohoku":   "Sendai, Miyagi",
-    "kanto":    "Tokyo",
-    "chubu":    "Nagoya, Aichi",
-    "kansai":   "Osaka, Osaka",
-    "chugoku":  "Hiroshima, Hiroshima",
-    "shikoku":  "Kochi, Kochi",
-    "kyushu":   "Fukuoka, Fukuoka",
-    "okinawa":  "Naha, Okinawa",
-    "japan":    "Japan",
-}
-
-# Các đảo xa thuộc Tokyo (quần đảo Izu + Ogasawara) — KHÔNG có đường bộ/ô tô từ
-# trung tâm Tokyo, phải đi tàu/máy bay riêng. Loại các đảo này khỏi danh sách quét
-# mặc định của vùng "kanto" (AI sẽ chỉ đề xuất địa điểm đất liền đi ô tô được).
-# User vẫn có thể hỏi trực tiếp tên đảo (vd "Hachijojima tối nay thế nào") — các
-# tool tra cứu theo tên (tool_check_location_darkness/tonight) tìm trên toàn bộ
-# LOCATION_DATABASE, không bị ảnh hưởng bởi danh sách loại trừ này.
-_KANTO_REMOTE_ISLANDS = {
-    "38. Kozushima Maehama 前浜海岸, Tokyo",
-    "39. Mikurajima Observatory 御蔵島展望地, Tokyo",
-    "40. Hachijojima Nambara 南原千畳岩海岸, Tokyo",
-    "83. Aogashima Observatory 青ヶ島展望公園, Tokyo",
-    "84. Niijima Habushiura 羽伏浦海岸, Tokyo",
-    "85. Shikinejima Tomari Beach 泊海岸, Tokyo",
-    "86. Ogasawara Weather Station 小笠原, Tokyo",
-    "267. Oshima Mihara-yama 三原山頂上, Tokyo",
-    "268. Oshima Habu Port 波浮港, Tokyo",
+    "bac":     "Hanoi",
+    "trung":   "Da Nang",
+    "nam":     "Ho Chi Minh City",
+    "vietnam": "Vietnam",
 }
 
 _FAV_RAW_BY_REGION = {
     rk: [(n, c) for n, c in LOCATION_DATABASE.items()
-         if n.rsplit(",", 1)[-1].strip() in prefs
-         and not (rk == "kanto" and n in _KANTO_REMOTE_ISLANDS)]
+         if n.rsplit(",", 1)[-1].strip() in prefs]
     for rk, prefs in _REGIONS.items()
 }
 
@@ -2111,31 +1223,31 @@ def _dedupe_locs_km(locs, km=30):
     return kept
 
 # Mỗi vùng: bản dedupe <60km dùng cho best/tonight, <30km dùng cho scan thường (region-only).
-# "japan" = toàn bộ 269 địa điểm (_FAV_ALL), dedupe tương tự các vùng khác.
+# "vietnam" = toàn bộ 100 địa điểm (_FAV_ALL), dedupe tương tự các vùng khác.
 _FAV_BY_REGION_60 = {rk: _dedupe_locs_km(locs, km=60) for rk, locs in _FAV_RAW_BY_REGION.items()}
 _FAV_BY_REGION_30 = {rk: _dedupe_locs_km(locs, km=30) for rk, locs in _FAV_RAW_BY_REGION.items()}
-_FAV_BY_REGION_60["japan"] = _dedupe_locs_km(_FAV_ALL, km=60)
-_FAV_BY_REGION_30["japan"] = _dedupe_locs_km(_FAV_ALL, km=30)
+_FAV_BY_REGION_60["vietnam"] = _dedupe_locs_km(_FAV_ALL, km=60)
+_FAV_BY_REGION_30["vietnam"] = _dedupe_locs_km(_FAV_ALL, km=30)
 
 def _locs_for_region(region_key, for_best_or_tonight):
-    """Trả về danh sách địa điểm cho 1 vùng. region_key in _REGION_ORDER + 'japan'.
+    """Trả về danh sách địa điểm cho 1 vùng. region_key in _REGION_ORDER + 'vietnam'.
     for_best_or_tonight=True → dedupe 60km, False (scan thường) → dedupe 30km."""
     table = _FAV_BY_REGION_60 if for_best_or_tonight else _FAV_BY_REGION_30
-    return table.get(region_key, table["kanto"])
+    return table.get(region_key, table["bac"])
 
-def _run_great_night_scan(start_day=0, region="kanto"):
-    """Quét từ start_day (0-6) trong 7 ngày tới, cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc).
+def _run_great_night_scan(start_day=0, region="bac"):
+    """Quét từ start_day (0-6) trong 7 ngày tới, cho 1 vùng địa lý (region key, hoặc 'vietnam' = toàn quốc).
     - all_locs: danh sách TẤT CẢ địa điểm PERFECT NIGHT trong ngày sớm nhất thoả (sau khi lọc <20km)
     - loc_name / loc_coords: địa điểm đầu tiên (để hiển thị banner chính)
     Trả về None nếu không có ngày nào thoả (kèm "_fallback_tiers": Counter tier thực tế đã quét,
     để hiển thị fallback "cloud & rain in (region) next 7 days" dựa trên dữ liệu thật)."""
     _fallback_tiers = Counter()
     for day_off in range(start_day, 7):
-        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        d = (_night_base_ict + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
         if moon_illum >= 32:
             continue
-        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        slots = _make_slots_for_offset(_night_base_ict, day_off)
         _locs_to_scan = _locs_for_region(region, for_best_or_tonight=False)
         perfect_locs = []  # (loc_name, loc_coords, verdict) tất cả địa điểm pass
         for loc_name, loc_coords in _locs_to_scan:
@@ -2193,8 +1305,8 @@ def _run_great_night_scan(start_day=0, region="kanto"):
 # Ưu tiên cuối tuần (Fri=4, Sat=5, Sun=6). Weekday (Mon-Thu) hiển thị màu trắng.
 _WEEKEND_DAYS = {4, 5, 6}  # weekday(): Mon=0..Sun=6; Fri=4, Sat=5, Sun=6
 
-def _run_best_scan(region="kanto", limit=3):
-    """Quét 7 ngày tới cho 1 vùng địa lý (region key, hoặc 'japan' = toàn quốc), trả về top 3 (dedupe <60km).
+def _run_best_scan(region="bac", limit=3):
+    """Quét 7 ngày tới cho 1 vùng địa lý (region key, hoặc 'vietnam' = toàn quốc), trả về top 3 (dedupe <60km).
     - Ưu tiên cuối tuần (Fri/Sat/Sun) trước Mon-Thu.
     - Trong cùng tier + streak: ưu tiên cuối tuần, rồi streak dài hơn.
     - Trả về None nếu không có kết quả nào."""
@@ -2204,12 +1316,12 @@ def _run_best_scan(region="kanto", limit=3):
     candidates = []
     _fallback_tiers = Counter()
     for day_off in range(0, 7):
-        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        d = (_night_base_ict + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
         if moon_illum >= 41.5:
             continue
         is_weekend = d.weekday() in _WEEKEND_DAYS
-        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        slots = _make_slots_for_offset(_night_base_ict, day_off)
         for loc_name, loc_coords in _locs:
             lat, lon = loc_coords
             try:
@@ -2302,18 +1414,18 @@ def _run_best_scan(region="kanto", limit=3):
     }
 
 # ── TONIGHT SCAN — quét đêm nay (day_off=0) cho Kanto hoặc toàn quốc ────────
-def _run_tonight_scan(region="kanto", limit=3):
+def _run_tonight_scan(region="bac", limit=3):
     """Quét đêm nay (day_off=0) và trả về top3 địa điểm tốt nhất màu pink, cho 1 vùng địa lý.
-    region='japan' → 269 địa điểm toàn quốc, khác → vùng tương ứng (dedupe <60km).
+    region='vietnam' → 100 địa điểm toàn quốc, khác → vùng tương ứng (dedupe <60km).
     - Không yêu cầu moon < 35% (tonight hiển thị kết quả dù trăng sáng).
     - Tiêu chí: tier PERFECT NIGHT > GOOD STARRY NIGHT, streak dài nhất.
     Trả về None nếu không có kết quả nào."""
     _TIER_RANK = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}
     _locs = _locs_for_region(region, for_best_or_tonight=True)
     day_off = 0
-    d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+    d = (_night_base_ict + timedelta(days=day_off)).replace(tzinfo=None)
     moon_illum, _ = get_moon_phase_percent(d)
-    slots = _make_slots_for_offset(_night_base_jst, day_off)
+    slots = _make_slots_for_offset(_night_base_ict, day_off)
     candidates = []
     _fallback_tiers = Counter()
     for loc_name, loc_coords in _locs:
@@ -2387,12 +1499,12 @@ def _serialize_scan_result(result):
     """Chuẩn hoá output của _run_best_scan / _run_tonight_scan thành dict JSON-safe,
     bỏ các field chỉ dùng cho UI (color/border/bg/anim)."""
     if result is None:
-        return {"found": False, "reason": "No data available — the weather data may have failed to load."}
+        return {"found": False, "reason": "Không có dữ liệu — có thể do lỗi tải thời tiết."}
     if result.get("_fallback"):
         return {
             "found": False,
-            "reason": f"No night was good enough within the scanned range. "
-                      f"Most common condition: {result.get('_fallback_label', 'unknown')}.",
+            "reason": f"Không có đêm nào đủ đẹp trong khoảng quét. "
+                      f"Điều kiện phổ biến nhất: {result.get('_fallback_label', 'không rõ')}.",
         }
 
     def _one(d, day_off, loc_name, loc_coords, verdict, moon_illum, is_weekend=None):
@@ -2408,8 +1520,6 @@ def _serialize_scan_result(result):
             "clear_hours": verdict.get("good_hours"),
             "moon_illumination_pct": round(moon_illum, 1) if moon_illum is not None else None,
             "is_weekend": bool(is_weekend) if is_weekend is not None else None,
-            # điểm Nippon Kishou cho cả đêm (0–4; chỉ có cho 3 đêm đầu)
-            "nippon_kishou_star_index": _nk_night_value(loc_coords[0], loc_coords[1], d if hasattr(d, "strftime") else None),
         }
 
     top3 = result.get("top3", [])
@@ -2425,16 +1535,15 @@ def _serialize_scan_result(result):
     return {"found": True, "best": best, "alternatives": alternatives}
 
 
-def tool_scan_best_weekend(region: str = "kanto", top_n: int = 3) -> dict:
+def tool_scan_best_weekend(region: str = "bac", top_n: int = 3) -> dict:
     """Tìm địa điểm và ngày chụp ảnh sao TỐT NHẤT trong 7 ngày tới, ưu tiên cuối tuần
     (Thứ 6/7/Chủ Nhật). Dùng khi user hỏi mơ hồ về thời gian: 'cuối tuần này',
     'tuần này', 'vài ngày tới', hoặc không nói rõ đêm nào.
 
     Args:
-        region: vùng địa lý Nhật Bản cần quét. Phải là một trong:
-            'hokkaido', 'tohoku', 'kanto', 'chubu', 'kansai', 'chugoku',
-            'shikoku', 'kyushu', 'okinawa', 'japan' (japan = toàn quốc, chậm hơn).
-            Mặc định 'kanto' nếu user không nói rõ vùng nào.
+        region: vùng địa lý Việt Nam cần quét. Phải là một trong:
+            'bac', 'trung', 'nam', 'vietnam' (vietnam = toàn quốc, chậm hơn).
+            Mặc định 'bac' nếu user không nói rõ vùng nào.
         top_n: số địa điểm cần trả về (1-5, mặc định 3). Khi user yêu cầu N địa điểm
             (vd '5 điểm', '4 chỗ') thì truyền top_n=N.
 
@@ -2445,12 +1554,12 @@ def tool_scan_best_weekend(region: str = "kanto", top_n: int = 3) -> dict:
     return _serialize_scan_result(_run_best_scan(region=region, limit=max(1, min(5, int(top_n or 3)))))
 
 
-def tool_scan_tonight(region: str = "kanto", top_n: int = 3) -> dict:
+def tool_scan_tonight(region: str = "bac", top_n: int = 3) -> dict:
     """Kiểm tra điều kiện chụp ảnh sao ĐÊM NAY (chỉ đêm nay, không phải ngày khác)
     cho 1 vùng địa lý. Dùng khi user hỏi cụ thể 'tối nay', 'đêm nay'.
 
     Args:
-        region: vùng địa lý, cùng danh sách như tool_scan_best_weekend. Mặc định 'kanto'.
+        region: vùng địa lý, cùng danh sách như tool_scan_best_weekend. Mặc định 'bac'.
         top_n: số địa điểm cần trả về (1-5, mặc định 3). Khi user yêu cầu N địa điểm
             (vd '5 điểm', '4 chỗ') thì truyền top_n=N.
 
@@ -2477,7 +1586,7 @@ def tool_check_location_darkness(location_name: str) -> dict:
     needle = location_name.strip().lower()
     match = next(((n, c) for n, c in LOCATION_DATABASE.items() if needle in n.lower()), None)
     if not match:
-        return {"found": False, "reason": f"No location matching '{location_name}' was found in the database."}
+        return {"found": False, "reason": f"Không tìm thấy địa điểm khớp '{location_name}' trong database."}
     name, (lat, lon) = match
     bortle, sqm = calculate_accurate_bortle(lat, lon)
     return {"found": True, "matched_name": name, "lat": lat, "lon": lon,
@@ -2485,21 +1594,21 @@ def tool_check_location_darkness(location_name: str) -> dict:
 
 
 def _infer_region_from_loc_name(loc_name: str) -> str:
-    """Suy ra region key (kanto, kansai, ...) từ tên địa điểm, dựa theo tỉnh
-    (phần sau dấu phẩy cuối cùng trong tên, vd '..., Kanagawa' -> kanto)."""
+    """Suy ra region key (bac, trung, nam) từ tên địa điểm, dựa theo tỉnh
+    (phần sau dấu phẩy cuối cùng trong tên, vd '..., Phu Tho' -> bac)."""
     pref = loc_name.rsplit(",", 1)[-1].strip()
     for rk, prefs in _REGIONS.items():
         if pref in prefs:
             return rk
-    return "kanto"  # fallback an toàn nếu không khớp tỉnh nào
+    return "bac"  # fallback an toàn nếu không khớp tỉnh nào
 
 
 def _night_verdict_for_single_loc(lat, lon, day_off=0):
     """Tính verdict thời tiết đêm cho 1 toạ độ cụ thể (không quét cả vùng).
     day_off=0 -> tối nay. Trả về None nếu lỗi tải thời tiết."""
-    d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+    d = (_night_base_ict + timedelta(days=day_off)).replace(tzinfo=None)
     moon_illum, _ = get_moon_phase_percent(d)
-    slots = _make_slots_for_offset(_night_base_jst, day_off)
+    slots = _make_slots_for_offset(_night_base_ict, day_off)
     try:
         hourly, _, utc_off, _, _ = fetch_weather_7days(lat, lon, st.session_state.weather_source)
     except Exception:
@@ -2540,12 +1649,12 @@ def tool_check_location_tonight(location_name: str) -> dict:
     needle = location_name.strip().lower()
     match = next(((n, c) for n, c in LOCATION_DATABASE.items() if needle in n.lower()), None)
     if not match:
-        return {"found": False, "reason": f"No location matching '{location_name}' was found in the database."}
+        return {"found": False, "reason": f"Không tìm thấy địa điểm khớp '{location_name}' trong database."}
     name, (lat, lon) = match
     region = _infer_region_from_loc_name(name)
     result = _night_verdict_for_single_loc(lat, lon, day_off=0)
     if not result:
-        return {"found": False, "reason": f"Could not get weather data for {name}."}
+        return {"found": False, "reason": f"Không lấy được dữ liệu thời tiết cho {name}."}
     verdict = result["verdict"]
     tier_rank = {"PERFECT NIGHT": 2, "GOOD STARRY NIGHT": 1}.get(verdict["tier"], 0)
     return {
@@ -2559,7 +1668,6 @@ def tool_check_location_tonight(location_name: str) -> dict:
         "clear_hours": verdict.get("good_hours"),
         "moon_illumination_pct": round(result["moon_illum"], 1) if result["moon_illum"] is not None else None,
         "is_good": tier_rank >= 1,
-        "nippon_kishou_star_index": _nk_night_value(lat, lon, _night_base_jst),
     }
 
 
@@ -2573,7 +1681,7 @@ def _ai_panel_row(c):
         if c.get("date"):
             d = datetime.strptime(str(c["date"])[:10], "%Y-%m-%d")
         elif c.get("sky_tier") is not None:          # tool tra cứu 1 địa điểm cho đêm nay
-            d = _night_base_jst.replace(tzinfo=None)
+            d = _night_base_ict.replace(tzinfo=None)
     except Exception:
         d = None
     bortle = c.get("bortle_class")
@@ -2582,19 +1690,8 @@ def _ai_panel_row(c):
             bortle = calculate_accurate_bortle(c["lat"], c["lon"])[0]
         except Exception:
             bortle = None
-    # sao: (mô hình + Nippon Kishou)/2 cho 3 đêm đầu, theo chế độ đang chọn ở bảng giờ (model | nk | both)
-    _own = str(c.get("stars") or "").count("⭐") if c.get("stars") else None
-    _sm = st.session_state.get("star_mode", "both")
-    _nk = _nk_night_value(c.get("lat"), c.get("lon"), d) if (d and _sm != "model") else None
-    if _own is None:
-        _sv = _nk
-    elif _nk is None:
-        _sv = _own
-    else:
-        _sv = _nk if _sm == "nk" else (_own + _nk) / 2
     return {"name": short.strip(), "pref": pref.strip(),
             "date": f"{d.month}/{d.day} {_EN_WD_AI[d.weekday()]}" if d else "",
-            "stars_val": _sv, "nk": _nk,
             "tier": c.get("sky_tier"), "stars": c.get("stars") or "",
             "detail": c.get("detail") or "", "moon": c.get("moon_illumination_pct"),
             "wk": bool(c.get("is_weekend")), "bortle": bortle}
@@ -2632,18 +1729,18 @@ def ask_astro_ai(user_question: str):
 
     Trả về tuple (answer_text: str, fly_to: dict|None).
     """
-    st.session_state._ai_rings = []     # mỗi câu hỏi mới → bỏ vòng tròn + bảng tóm tắt của câu trước
+    st.session_state._ai_rings = []     # mỗi câu hỏi mới → bỏ vòng tròn của câu trước
     st.session_state._ai_panel = []
-    now_jst = datetime.now(timezone(timedelta(hours=9)))
+    now_ict = datetime.now(timezone(timedelta(hours=7)))
     system_prompt = (
-        f"Hôm nay là {now_jst.strftime('%A, %Y-%m-%d')} (giờ Nhật Bản, JST). "
+        f"Hôm nay là {now_ict.strftime('%A, %Y-%m-%d')} (giờ Việt Nam, ICT). "
         "Bạn là trợ lý tư vấn địa điểm/thời điểm chụp ảnh thiên văn (sao, Milky Way) "
-        "ở Nhật Bản, gắn liền với 1 bản đồ Bortle + dự báo thời tiết đã có sẵn. Đây "
+        "ở Việt Nam, gắn liền với 1 bản đồ Bortle + dự báo thời tiết đã có sẵn. Đây "
         "là 1 cuộc hội thoại nhiều lượt — nếu câu hỏi hiện tại thiếu chi tiết (vd "
         "'thế cuối tuần thì sao' không nói lại vùng/địa điểm), hãy DÙNG LẠI vùng/địa "
         "điểm đã nhắc ở các lượt hỏi trước trong hội thoại này.\n\n"
         "QUY TẮC CHỌN TOOL:\n"
-        "- Nếu user hỏi về 1 địa điểm CỤ THỂ cho tối nay (vd 'Jogashima tối nay thế "
+        "- Nếu user hỏi về 1 địa điểm CỤ THỂ cho tối nay (vd 'Mu Cang Chai tối nay thế "
         "nào') -> gọi tool_check_location_tonight trước. Nếu is_good=false, gọi "
         "THÊM tool_scan_tonight(region=<region trả về>) để tìm chỗ tốt hơn, rồi đề "
         "xuất tên các chỗ đó thay vì điểm ban đầu.\n"
@@ -2656,37 +1753,11 @@ def ask_astro_ai(user_question: str):
         "- Nếu user yêu cầu N địa điểm (vd '5 điểm', '4 chỗ') -> gọi tool_scan_* với top_n=N (tối đa 5) "
         "và chỉ nêu đúng các địa điểm tool trả về, không tự thêm địa điểm khác.\n"
         "- LUÔN gọi ít nhất 1 tool trước khi trả lời, không được tự bịa thời tiết/"
-        "địa điểm/toạ độ.\n"
-        "- Vùng 'kanto' đã TỰ ĐỘNG loại bỏ các đảo xa không đi ô tô được (Ogasawara, "
-        "Aogashima, Hachijojima, Kozushima, Mikurajima, Niijima, Shikinejima, Oshima) "
-        "— bạn không cần tự lọc lại, các địa điểm tool trả về cho 'kanto' đều là đất "
-        "liền/đi ô tô được. Nếu user hỏi riêng về 1 đảo xa cụ thể theo tên, cứ gọi "
-        "tool_check_location_darkness/tool_check_location_tonight với đúng tên đảo đó.\n\n"
-        "Reply briefly (3-5 sentences) in a friendly tone, in the SAME language as the user's LATEST message "
-        "(English question → English answer, Vietnamese → Vietnamese, Japanese → Japanese, and so on; if the "
-        "latest message is mixed, use the language the user mainly wrote in). Place names stay as they are. "
-        "If the original location is poor and you suggest other places, say so clearly (in the user's language), "
-        "e.g. 'The weather at Jogashima is not good; better options are Kamikochi, JAXA...', with the reasons "
-        "(cloud %, moon %, Bortle). If a result includes 'nippon_kishou_star_index' (0-4: the Nippon Kishou "
-        "nightly star rating, only available for the first 3 nights), mention it too.\n\n"
-        "QUAN TRỌNG — ĐỒNG BỘ BẢN ĐỒ/LỊCH: khi bạn dùng tool trả về "
-        "{\"found\": true, \"best\": {...}, \"alternatives\": [...]} (hoặc 1 địa điểm "
-        "đơn từ tool_check_location_*), hãy trình bày địa điểm '1.' trong câu trả lời "
-        "CHÍNH LÀ object 'best' (không tự đảo thứ tự theo cảm tính riêng). Danh sách "
-        "'2.', '3.' (nếu có) lấy theo đúng thứ tự 'alternatives'. Sau khi trả lời "
-        "xong, LUÔN thêm 1 dòng cuối cùng riêng biệt theo đúng định dạng "
-        "'[[PICK:N]]' trong đó N là chỉ số của địa điểm bạn vừa nêu là lựa chọn số 1 "
-        "(0 = best, 1 = alternatives[0], 2 = alternatives[1]; dùng 0 nếu tool chỉ trả "
-        "về 1 địa điểm đơn; dùng -1 nếu không có địa điểm nào để ghim bản đồ, vd chỉ "
-        "trả lời chung chung không dựa trên tool). Dòng '[[PICK:N]]' này sẽ bị ẩn "
-        "khỏi người dùng, chỉ dùng để hệ thống tự cập nhật bản đồ + lịch, nên đừng "
-        "giải thích gì thêm về nó.\n\n"
-        "NGOÀI RA, ngay TRƯỚC dòng '[[PICK:N]]', thêm 1 dòng riêng '[[SHOW:i,j,k]]' "
-        "liệt kê chỉ số của TẤT CẢ các địa điểm bạn THỰC SỰ nêu tên trong câu trả lời "
-        "(0 = best, 1 = alternatives[0], 2 = alternatives[1]; vd '[[SHOW:0,1,2]]' nếu "
-        "nêu cả 3, '[[SHOW:0]]' nếu chỉ nêu 1). Hệ thống dùng nó để vẽ vòng tròn nhấp "
-        "nháy quanh các địa điểm đó trên bản đồ. Dùng '[[SHOW:]]' nếu không nêu địa điểm "
-        "nào. Dòng này cũng bị ẩn khỏi người dùng, đừng giải thích gì về nó."
+        "địa điểm/toạ độ.\n\n"
+        "Trả lời ngắn gọn (3-5 câu), thân thiện, bằng tiếng Việt. Nếu địa điểm ban "
+        "đầu xấu và bạn đề xuất chỗ khác, nói rõ kiểu: 'Mu Cang Chai thời tiết không "
+        "tốt, các địa điểm có thời tiết tốt hơn là Y Ty, Ta Xua...' kèm lý do "
+        "(mây %, trăng %, Bortle)."
     )
 
     history = st.session_state.get("astro_ai_history", [])
@@ -2726,7 +1797,7 @@ def ask_astro_ai(user_question: str):
                         tools=wrapped_tools,
                     ),
                 )
-                answer_text = response.text or "(The AI could not answer. Please try another question.)"
+                answer_text = response.text or "(AI không trả lời được, thử lại câu hỏi khác nhé.)"
                 break
             except Exception as e:
                 last_err = e
@@ -2745,54 +1816,30 @@ def ask_astro_ai(user_question: str):
  
     if answer_text is None:
         if last_err and ("429" in str(last_err) or "RESOURCE_EXHAUSTED" in str(last_err)):
-            return ("⏳ The AI is rate-limited (Gemini free tier: only 5–15 "
-                     "requests/minute). Please wait about 30 seconds and ask again."), None
-        return f"⚠️ AI request failed (tried {len(ASTRO_AI_MODEL_CANDIDATES)} models): {last_err}", None
-
-    # Tách dòng "[[PICK:N]]" ở cuối câu trả lời — đây là chỉ số (ẩn, không hiển thị
-    # cho user) cho biết AI đã chọn CANDIDATE NÀO (trong best/alternatives do tool
-    # trả về) làm đề xuất số 1 trong câu trả lời. Nhờ vậy bản đồ/lịch sẽ đồng bộ
-    # ĐÚNG với địa điểm + đêm mà AI thực sự nêu là ưu tiên, thay vì luôn mặc định
-    # lấy "best" theo thuật toán (có thể khác với lựa chọn AI trình bày, ví dụ khi
-    # AI cân nhắc thêm các tiêu chí user vừa nêu như "chỉ tính đất liền").
-    # Tách "[[SHOW:i,j,k]]" (ẩn) — danh sách địa điểm AI thực sự nêu tên → vẽ vòng tròn
-    # nhấp nháy trên bản đồ. Phải tách TRƯỚC [[PICK:N]] vì PICK phải nằm ở cuối câu.
-    show_idx = None
-    _show_match = re.search(r"\[\[SHOW:([\d,\s]*)\]\]", answer_text)
-    if _show_match:
-        show_idx = [int(x) for x in re.findall(r"\d+", _show_match.group(1))]
-        answer_text = (answer_text[:_show_match.start()] + answer_text[_show_match.end():]).rstrip()
-
-    pick_idx = None
-    _pick_match = re.search(r"\[\[PICK:(-?\d+)\]\]\s*$", answer_text.strip())
-    if _pick_match:
-        pick_idx = int(_pick_match.group(1))
-        answer_text = answer_text[:_pick_match.start()].rstrip()
+            return ("⏳ AI đang bị giới hạn tần suất (free tier Gemini chỉ 5-15 "
+                     "request/phút). Đợi khoảng 30 giây rồi hỏi lại nhé."), None
+        return f"⚠️ Lỗi gọi AI (đã thử {len(ASTRO_AI_MODEL_CANDIDATES)} model): {last_err}", None
 
     # Lưu lịch sử cho lượt hỏi sau (chỉ text, không lưu tool-call nội bộ)
     st.session_state.astro_ai_history = contents + [
         {"role": "model", "parts": [{"text": answer_text}]}
     ]
 
-    # ── Vòng tròn nhấp nháy + bảng tóm tắt: các địa điểm AI nêu (theo [[SHOW]]); thiếu thẻ →
-    # tất cả candidate của tool. pick = -1 (AI báo không có địa điểm nào) mà không có SHOW → không vẽ.
+    # ── Vòng tròn nhấp nháy cho các địa điểm AI vừa đề xuất (kết quả tool cuối cùng) ──
     _shown = []
     _rd = last_result["data"]
-    if _rd and not (pick_idx == -1 and show_idx is None):
-        _cands = [_rd] if "lat" in _rd else \
-                 [c for c in [_rd.get("best")] + list(_rd.get("alternatives", [])) if c]
-        if show_idx is not None:
-            _cands = [_cands[i] for i in dict.fromkeys(show_idx) if 0 <= i < len(_cands)]
+    if _rd:
+        _cands = [_rd] if "lat" in _rd else [c for c in [_rd.get("best")] + list(_rd.get("alternatives", [])) if c]
         _shown = [c for c in _cands if "lat" in c]
     # Ưu tiên đúng các địa điểm AI nêu tên trong câu trả lời (từ mọi lần gọi tool); không khớp được tên nào → như cũ
-    _named = [] if (pick_idx == -1 and show_idx is None) else _ai_mentioned_cands(answer_text, all_cands)
+    _named = _ai_mentioned_cands(answer_text, all_cands)
     if _named:
         _shown = _named
     st.session_state._ai_rings = [[c.get("matched_name") or c.get("location_name") or "", c["lat"], c["lon"]]
                                   for c in _shown]
     st.session_state._ai_panel = [_ai_panel_row(c) for c in _shown]
     if _shown:
-        # Chỉ giữ MỘT bên: AI vừa ra kết quả trên bản đồ → tắt kết quả của Search Location (như lệnh "off").
+        # Chỉ giữ MỘT bên: AI vừa ra kết quả → tắt kết quả cũ của Search Location.
         st.session_state._scan_result = None
         st.session_state._scan_best = False
         st.session_state._scan_tonight = False
@@ -2802,33 +1849,14 @@ def ask_astro_ai(user_question: str):
     fly_to = None
     data = last_result["data"]
     if data:
-        if "lat" in data:
-            # Kết quả tool tra cứu 1 địa điểm đơn (check_location_darkness/tonight).
-            loc = data
-        else:
-            # Kết quả scan (best + alternatives, tối đa 3 candidate). Chọn ĐÚNG
-            # candidate mà AI đã nêu là "1." trong câu trả lời (theo pick_idx),
-            # KHÔNG mặc định lấy "best" nếu AI đã ưu tiên 1 alternative khác.
-            candidates = [c for c in [data.get("best")] + list(data.get("alternatives", [])) if c]
-            if pick_idx is not None and pick_idx >= 0 and pick_idx < len(candidates):
-                loc = candidates[pick_idx]
-            elif pick_idx == -1:
-                loc = None  # AI chủ động báo không có địa điểm nào để ghim
-            else:
-                loc = candidates[0] if candidates else None  # fallback nếu thiếu tag
-
+        loc = data if "lat" in data else data.get("best")
         if loc and "lat" in loc:
-            day_off = loc.get("days_from_today", 0) or 0
-            fly_to = {
-                "lat": loc["lat"], "lon": loc["lon"],
-                "name": loc.get("matched_name") or loc.get("location_name"),
-                "day_off": max(0, min(6, int(day_off))),
-            }
+            fly_to = {"lat": loc["lat"], "lon": loc["lon"],
+                      "name": loc.get("matched_name") or loc.get("location_name")}
 
-    if _named:      # ghim map/lịch theo địa điểm đầu tiên AI nêu
+    if _named:      # ghim map theo địa điểm đầu tiên AI nêu
         _l = _named[0]
-        fly_to = {"lat": _l["lat"], "lon": _l["lon"], "name": _l.get("matched_name") or _l.get("location_name"),
-                  "day_off": max(0, min(6, int(_l.get("days_from_today", 0) or 0)))}
+        fly_to = {"lat": _l["lat"], "lon": _l["lon"], "name": _l.get("matched_name") or _l.get("location_name")}
 
     return answer_text, fly_to
 # ------------------------------------------------------------------------------ (hết KHỐI B)
@@ -2839,11 +1867,11 @@ def _run_mkw_scan(start_day=0):
     """Scan from start_day in 7 days, using mkw list (top-50 locations)."""
     _fallback_tiers = Counter()
     for day_off in range(start_day, 7):
-        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        d = (_night_base_ict + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
         if moon_illum >= 32:
             continue
-        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        slots = _make_slots_for_offset(_night_base_ict, day_off)
         perfect_locs = []
         for loc_name, loc_coords in _MKW_LOCS:
             lat, lon = loc_coords
@@ -2882,11 +1910,11 @@ def _run_mkw_best_scan():
     candidates = []
     _fallback_tiers = Counter()
     for day_off in range(0, 7):
-        d = (_night_base_jst + timedelta(days=day_off)).replace(tzinfo=None)
+        d = (_night_base_ict + timedelta(days=day_off)).replace(tzinfo=None)
         moon_illum, _ = get_moon_phase_percent(d)
         if moon_illum >= 41.5: continue
         is_weekend = d.weekday() in _WEEKEND_DAYS
-        slots = _make_slots_for_offset(_night_base_jst, day_off)
+        slots = _make_slots_for_offset(_night_base_ict, day_off)
         for loc_name, loc_coords in _MKW_LOCS:
             lat, lon = loc_coords
             try:
@@ -2925,7 +1953,7 @@ def _run_mkw_best_scan():
             "moon_illum": best[4],
             "all_locs": [(r[0], r[1], r[2]) for r in results],
             "day_off": best[3],
-            "date": (_night_base_jst + timedelta(days=best[3])).replace(tzinfo=None),
+            "date": (_night_base_ict + timedelta(days=best[3])).replace(tzinfo=None),
             "_is_best": True, "_is_mkw": True}
 
 # ── GREAT NIGHT SCAN EXECUTION — chạy ngay khi _scan_scanning=True ─────────
@@ -3054,7 +2082,7 @@ with st.container(key="astro_newchat_btn"):
     if st.button("", key="astro_new_chat", icon=":material/edit_square:", help="New chat", use_container_width=True):
         st.session_state.astro_ai_history = []
         st.session_state.astro_ai_answer = None
-        st.session_state.astro_last_question = "Ask AI for the best places & times to shoot the Milky Way..."
+        st.session_state.astro_last_question = "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway..."
         st.session_state.astro_last_processed_query = None
         st.rerun()
 
@@ -3098,11 +2126,16 @@ st.markdown(
         line-height: 24px !important;
         resize: none !important;
         overflow: hidden !important;
+        white-space: nowrap !important;
+        text-overflow: ellipsis !important;
     }
 
     div[data-testid="stChatInput"] textarea::placeholder {
         color: #888888 !important;
         opacity: 0.8 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }
 
     div[data-testid="stChatInput"] button {
@@ -3155,7 +2188,7 @@ st.markdown(
 # --- KHUNG CHAT: input trên, khung kết quả bên dưới ---
 _placeholder_text = st.session_state.get(
     "astro_last_question",
-    "Ask AI for the best places & times to shoot the Milky Way...",
+    "Hỏi AI tìm địa điểm & thời điểm chụp ảnh milkyway...",
 )
 
 
@@ -3190,31 +2223,16 @@ if _ai_question and _ai_question.strip():
         st.session_state.astro_last_question = user_query
 
         with _answer_slot:
-            st.caption("⏳ AI is checking the weather & locations...")
+            st.caption("⏳ AI đang kiểm tra thời tiết & địa điểm...")
 
         answer, fly_to = ask_astro_ai(user_query)
         st.session_state.astro_ai_answer = answer
 
         if fly_to:
-            # Giống hệt pattern "Priority 1 (click sao)" / nút Scan: set đầy đủ
-            # lat/lon/location_name/day_offset/sel_date + cờ _need_fly để bản đồ
-            # THỰC SỰ bay tới đúng địa điểm và lịch (calendar) nhảy đúng đêm mà AI
-            # vừa đề xuất là ưu tiên số 1. Trước đây chỉ set lat/lon/map_center/zoom
-            # nên day_offset (lịch) không đổi, và thiếu _need_fly nên bản đồ có khi
-            # không bay tới nơi mới.
-            _ai_day_off = fly_to.get("day_off", 0)
-            st.session_state.lat             = fly_to["lat"]
-            st.session_state.lon             = fly_to["lon"]
-            st.session_state.map_center      = [fly_to["lat"], fly_to["lon"]]
-            st.session_state.zoom            = 9
-            if fly_to.get("name"):
-                st.session_state.location_name = fly_to["name"]
-            st.session_state.is_custom_point = False
-            st.session_state.day_offset      = _ai_day_off
-            st.session_state.sel_date        = date_options[_ai_day_off]
-            st.session_state._need_fly       = True
-            st.session_state._last_tip       = None
-            st.session_state._skip_prefetch  = True
+            st.session_state.lat = fly_to["lat"]
+            st.session_state.lon = fly_to["lon"]
+            st.session_state.map_center = [fly_to["lat"], fly_to["lon"]]
+            st.session_state.zoom = 9
         st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v7)
 
@@ -3229,7 +2247,6 @@ m = folium.Map(
     prefer_canvas=True,   # dùng Canvas renderer → ít DOM node hơn, scroll mượt hơn
 )
 
-# ── Tile layers (chỉ để JS switchTile có thể gọi; không load ngay) ──
 # (Street tab removed. OpenRailwayMap is now added by JS only in Satellite mode.)
 
 # ── Combined BottomRight control: [📍 Label  LPM] + [Windy|Satellite|Himawari] ──
@@ -3362,14 +2379,14 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       // Sentinel encoding (lat below Mercator max 85.05, always valid click):
       //   lat=89.85 → best <region>   (no day_off needed — always scans 7 days)
       //   lat=89.75 → tonight <region> (no day_off needed — always tonight)
-      // lng = 100 + region_idx  (region_idx: 0=hokkaido..8=okinawa, 9=japan)
-      var _REGION_IDX = { hokkaido:0, tohoku:1, kanto:2, chubu:3, kansai:4, chugoku:5, shikoku:6, kyushu:7, okinawa:8, japan:9 };
+      // lng = 100 + region_idx  (region_idx: 0=bac,1=trung,2=nam,3=vietnam)
+      var _REGION_IDX = { bac:0, trung:1, nam:2, vietnam:3 };
       window._triggerBest = function(region) {
-        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['bac'];
         map.fire('click', { latlng: L.latLng(89.85, 100 + idx) });
       };
       window._triggerTonight = function(region) {
-        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['bac'];
         map.fire('click', { latlng: L.latLng(89.75, 100 + idx) });
       };
       // lat=89.65 → "off": tắt banner/ring ngay, không load data
@@ -3389,7 +2406,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       // lat=89.35 → region scan "<region> N" (N=1..6), region_idx in tens place, day_off-1 in hundredths.
       // lng = 300 + region_idx*10 + (N-1)   (region_idx 0-9, N-1 is 0-5 → always fits, no rounding ambiguity)
       window._triggerRegionScan = function(region, n) {
-        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['kanto'];
+        var idx = (region in _REGION_IDX) ? _REGION_IDX[region] : _REGION_IDX['bac'];
         var nn = (n >= 1 && n <= 6) ? n : 1;
         var lng = 300 + idx * 10 + (nn - 1);
         map.fire('click', { latlng: L.latLng(89.35, lng) });
@@ -3417,10 +2434,10 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       // from targetTimes_jp.json (fetch); if that fetch is blocked we probe tiles
       // backwards in 10-min steps instead (basetime == validtime for satimg).
       var HIM_BASE   = 'https://www.jma.go.jp/bosai/himawari/data/satimg/';
-      var HIM_AREA   = 'jp';
+      var HIM_AREA   = 'fd';              // full disk: phủ cả Việt Nam (vùng 'jp' chỉ phủ Nhật)
       var HIM_ELEM   = 'B13/TBB';          // infrared (works day and night)
       var HIM_MINZ   = 3;                  // native tile zoom range (upscaled beyond)
-      var HIM_MAXZ   = 6;
+      var HIM_MAXZ   = 5;                  // fd chỉ có zoom 3-5
       var HIM_FRAMES = 8;                  // frames in the loop (10 min apart)
       var HIM_OPAC   = 1.0;    // max by default; adjustable with the slider
       var HIM_CONT   = 1.2;    // cloud contrast (CSS contrast()); 1.0 = original, higher = darker gaps between clouds
@@ -3446,7 +2463,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       })();
       var HIM_LIGHT_FILTER = 'url(#him-gamma)';
       // Max zoom in Himawari mode (data is coarse, so deeper zoom is just an enlarged/blurry view).
-      var HIM_VIEW_MAXZ = 12;
+      var HIM_VIEW_MAXZ = 11;
       // Labels: Esri reference layer (free, no key), designed to overlay dark imagery.
       var HIM_LABELS = 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
       var PLAY_HTML  = '&#9654;';
@@ -3457,8 +2474,8 @@ _COMBINED_CTRL_TEMPLATE = Template("""
       var himBorderLayers = [], himBorderCache = {};
       var HIM_BORDERS = [
         { w: 1.0, o: 0.9, urls: [
-          'https://cdn.jsdelivr.net/gh/dataofjapan/land@master/japan.geojson',
-          'https://raw.githubusercontent.com/dataofjapan/land/master/japan.geojson' ] },
+          'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_boundary_lines_land.geojson',
+          'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_boundary_lines_land.geojson' ] },
         { w: 0.9, o: 0.8, urls: [
           'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_coastline.geojson',
           'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_coastline.geojson' ] }
@@ -3510,12 +2527,12 @@ _COMBINED_CTRL_TEMPLATE = Template("""
 
       function _p2(n) { return (n < 10 ? '0' : '') + n; }
 
-      // 'yyyymmddhhmmss' (UTC) -> 'MM/DD HH:mm JST'
+      // 'yyyymmddhhmmss' (UTC) -> 'MM/DD HH:mm ICT'
       function _himFmt(v) {
         var d = new Date(Date.UTC(+v.slice(0, 4), +v.slice(4, 6) - 1, +v.slice(6, 8), +v.slice(8, 10), +v.slice(10, 12)));
-        d = new Date(d.getTime() + 9 * 3600 * 1000);
+        d = new Date(d.getTime() + 7 * 3600 * 1000);
         return _p2(d.getUTCMonth() + 1) + '/' + _p2(d.getUTCDate()) + ' '
-          + _p2(d.getUTCHours()) + ':' + _p2(d.getUTCMinutes()) + ' JST';
+          + _p2(d.getUTCHours()) + ':' + _p2(d.getUTCMinutes()) + ' ICT';
       }
       function _himUtcStamp(ms) {
         var d = new Date(ms);
@@ -3540,7 +2557,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         return ded.slice(-HIM_FRAMES);
       }
 
-      // Fallback: find the newest frame by loading a Japan tile (z5 x28 y12), 10-min steps back.
+      // Fallback: find the newest frame by loading a Vietnam tile (z5 x25 y14), 10-min steps back.
       function _himProbe(cb) {
         var step = 10 * 60 * 1000;
         var t = Math.floor((Date.now() - 10 * 60 * 1000) / step) * step;
@@ -3558,7 +2575,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
             cb(out);
           };
           img.onerror = function() { t -= step; next(); };
-          img.src = HIM_BASE + v + '/' + HIM_AREA + '/' + v + '/' + HIM_ELEM + '/5/28/12.jpg';
+          img.src = HIM_BASE + v + '/' + HIM_AREA + '/' + v + '/' + HIM_ELEM + '/5/25/14.jpg';
         }
         next();
       }
@@ -3637,7 +2654,7 @@ _COMBINED_CTRL_TEMPLATE = Template("""
           } catch (e) { next(); }
         })();
       }
-      // Vector borders (prefectures + coastlines) drawn ABOVE the cloud tiles.
+      // Vector borders (country borders + coastlines) drawn ABOVE the cloud tiles.
       function _himBorders(tok) {
         if (!map.getPane('himBorders')) {
           var pn = map.createPane('himBorders');
@@ -3926,168 +2943,11 @@ _CombinedControl(
 import json as _json
 
 # ── KANJI ⇄ ROMAJI ALIAS TABLE ───────────────────────────────────────────────
-# Cho phép search bằng kanji (vd "福島", "秋元") match với tên romaji trong entry
+# (giữ chỗ — bảng alias không cần dùng cho địa danh Việt Nam)
 # (vd "Fukushima", "Akimoto"). Mỗi entry sẽ được gắn thêm "alias text" chứa tất
 # cả romaji keyword tương ứng với kanji xuất hiện trong tên.
-_KANJI_ALIAS = {
-    # ── 47 tỉnh (Prefectures) ────────────────────────────────────────────────
-    "北海道": "Hokkaido", "青森": "Aomori", "岩手": "Iwate", "宮城": "Miyagi",
-    "秋田": "Akita", "山形": "Yamagata", "福島": "Fukushima", "茨城": "Ibaraki",
-    "栃木": "Tochigi", "群馬": "Gunma", "埼玉": "Saitama", "千葉": "Chiba",
-    "東京": "Tokyo", "神奈川": "Kanagawa", "新潟": "Niigata", "富山": "Toyama",
-    "石川": "Ishikawa", "福井": "Fukui", "山梨": "Yamanashi", "長野": "Nagano",
-    "岐阜": "Gifu", "静岡": "Shizuoka", "愛知": "Aichi", "三重": "Mie",
-    "滋賀": "Shiga", "京都": "Kyoto", "大阪": "Osaka", "兵庫": "Hyogo",
-    "奈良": "Nara", "和歌山": "Wakayama", "鳥取": "Tottori", "島根": "Shimane",
-    "岡山": "Okayama", "広島": "Hiroshima", "山口": "Yamaguchi", "徳島": "Tokushima",
-    "香川": "Kagawa", "愛媛": "Ehime", "高知": "Kochi", "福岡": "Fukuoka",
-    "佐賀": "Saga", "長崎": "Nagasaki", "熊本": "Kumamoto", "大分": "Oita",
-    "宮崎": "Miyazaki", "鹿児島": "Kagoshima", "沖縄": "Okinawa",
-    # ── Landmark / địa danh kanji → romaji trong tên entry ───────────────────
-    "馬の背": "Jogashima", "白浜": "Shirahama", "大波月": "Onjuku", "雀島": "Isumi",
-    "真鶴": "Manazuru", "愛の鐘": "Cape Aiai", "千貫門": "Matsuzaki",
-    "奥大井湖上": "Okuoikojo", "朝霧高原": "Asagiri Plateau", "御嶽山": "Ontake",
-    "上高地": "Kamikochi", "燕山荘": "Enzan-so", "イルカ岩": "Enzan-so",
-    "美ヶ原": "Utsukushihara", "渋峠": "Yugama Shibutoge", "上発知": "Sakura",
-    "シダレザクラ": "Sakura", "湯ノ湖": "Oku-Nikko", "天地人橋": "Hoshinomura",
-    "浄土平": "Azuma-kofuji", "御釜": "Okama Zao", "東滑川": "Higashinamekawa",
-    "奥多摩湖": "Okutama", "犬吠埼": "Choshi Inubosaki", "九十九里浜": "Kujukuri Beach",
-    "安房白浜": "Awa Shirahama", "神磯の鳥居": "Oarai Isosaki", "袋田の滝": "Fukuroda Falls",
-    "プラトーさとみ": "Plateau Satomi", "尾瀬ヶ原": "Oze Numata", "玉原高原": "Tanbara Highlands",
-    "三十槌氷柱": "Chichibu Misotsuchi", "中津峡": "Nakatsu Gorge", "前浜海岸": "Kozushima Maehama",
-    "御蔵島": "Mikurajima Observatory", "南原千畳岩": "Hachijojima Nambara",
-    "山中湖": "Yamanakako Panorama", "清泉寮": "Kiyosato Seisenryo", "新道峠": "Shindo Pass",
-    "野辺山": "Nobeyama Radio Observatory", "高ボッチ高原": "Takabocchi Highlands",
-    "曽爾高原": "Soni Highlands", "乗鞍畳平": "Norikura Tatamidaira", "平湯峠": "Hirayu Pass",
-    "新穂高": "Shinhotaka Ropeway", "白川郷": "Shirakawago", "千里浜": "Chirihama Beach",
-    "三方五湖": "Mikatagoko Rainbow Line", "鬼ヶ城": "Kumano Oni-ga-jo", "大王崎": "Daiozaki Lighthouse",
-    "大台ヶ原": "Odaigahara Driveway", "天川村": "Tenkawa Miroku Pass", "西はりま天文台": "Nishiharima Observatory",
-    "美星天文台": "Bisei Observatory", "蒜山高原": "Hiruzen Highlands", "鳥取砂丘": "Tottori Sand Dunes",
-    "三朝温泉": "Misasa Onsen", "秋吉台": "Akiyoshidai Karst", "四国カルスト": "Shikoku Karst",
-    "足摺岬": "Ashizuri Cape", "佐多岬": "Sata Cape", "草千里ヶ浜": "Aso Kusasenri",
-    "大観峰": "Daikanbo", "生月島": "Ikitsuki Island", "波戸岬": "Yobuko Cape Hado",
-    "高千穂": "Amaterasu Railway", "都井岬": "Cape Toi", "開聞岳": "Kaimondake",
-    "百合ヶ浜": "Yoron Island", "平久保崎": "Ishigaki Hirakubozaki", "玉取崎": "Tamatorizaki Observatory",
-    "星砂の浜": "Iriomote Hoshizuna Beach", "波照間島": "Hateruma Observatory", "残波岬": "Cape Zanpa",
-    "古宇利大橋": "Kouri Bridge", "辺戸岬": "Cape Hedo", "東平安名崎": "Miyakojima Higashi-Hennazaki",
-    "来間大橋": "Kurima Bridge", "青ヶ島": "Aogashima Observatory", "羽伏浦海岸": "Niijima Habushiura",
-    "泊海岸": "Shikinejima Tomari Beach", "小笠原": "Ogasawara Weather Station",
-    "霧ヶ峰": "Kirigamine Highlands", "白駒池": "Shirakoma Pond", "八千穂高原": "Yachiho Plateau",
-    "千畳敷カール": "Senjojiki Cirque", "八方池": "Happo Pond", "栂池自然園": "Tsugaike Nature Park",
-    "白馬岩岳": "Hakuba Iwatake", "志賀高原": "Shiga Highlands", "妙高高原": "Mt. Myoko",
-    "弥彦山": "Yahiko Skyline", "瀬波海岸": "Senami Coast", "月山八合目": "Gassan Hachigome",
-    "鳥海山": "Toriumi Observatory", "龍飛崎": "Cape Tappi", "能取岬": "Cape Notoro",
-    "摩周湖": "Lake Mashu", "美幌峠": "Bihoro Pass", "屈斜路湖": "Lake Kussharo",
-    "霧多布岬": "Cape Kiritappu", "襟裳岬": "Cape Erimo", "野付半島": "Notsuke Peninsula",
-    "サロマ湖": "Lake Saroma", "知床峠": "Shiretoko Pass", "神威岬": "Cape Kamui",
-    "大間崎": "Omazaki", "仏ヶ浦": "Hotokegaura", "十和田湖": "Lake Towada",
-    "八甲田山": "Hakkoda", "乳頭温泉郷": "Nyuto Onsen", "田沢湖": "Tazawako",
-    "入道崎": "Oga Nyudozaki", "浄土ヶ浜": "Jodogahama", "北山崎": "Kitayamazaki",
-    "龍泉洞": "Ryusendo", "鳴子峡": "Naruko Gorge", "伊豆沼": "Izunuma",
-    "羽黒山": "Mt. Haguro", "蔵王御釜": "Zao Okama", "只見線第一橋梁": "Tadami Bridge",
-    "五色沼": "Goshikinuma", "猪苗代湖": "Inawashiro Lake", "雨晴海岸": "Amaharashi Coast",
-    "室堂": "Tateyama Murodo", "庄川峡": "Shogawa Gorge", "見附島": "Mitsukejima",
-    "白米千枚田": "Senmaida", "禄剛崎": "Rokkozaki", "白川八幡神社": "Shirakawa Hachiman",
-    "恵那峡大橋": "Ena Ravine Bridge", "大望峠": "Daibo Pass", "乗鞍高原": "Norikura Kogen",
-    "白馬大池": "Shirouma Oike", "野島崎": "Nojimazaki", "小弁天島": "Kobentenjima",
-    "日御碕": "Izumo Hinomisaki", "宍道湖": "Lake Shinji", "橋杭岩": "Hashiguiiwa",
-    "竹田城跡": "Takeda Castle", "伊根の舟屋": "Ine Funaya", "柏島": "Kashiwajima",
-    "角島大橋": "Tsunoshima Bridge", "元乃隅神社": "Motonosumi Shrine", "父母ヶ浜": "Chichibugahama",
-    "室戸岬": "Cape Muroto", "大内宿": "Ouchi-juku", "星峠の棚田": "Hoshitoge Rice Terraces",
-    "桧原湖": "Lake Hibara", "尻屋崎": "Cape Shiriya", "小川原湖": "Lake Ogawara",
-    "納沙布岬": "Cape Nosappu", "地球岬": "Cape Chikyu", "オンネトー": "Lake Onneto",
-    "青い池": "Shirogane Blue Pond", "恵山岬": "Cape Esan", "黄金崎": "Koganezaki",
-    "五箇山相倉集落": "Gokayama Ainokura", "三国峠": "Mikuni Pass", "奥入瀬渓流": "Oirase Stream",
-    "種差海岸": "Tanesashi Coast", "蕪島神社": "Kabushima Shrine", "厳美渓": "Genbikei Gorge",
-    "栗駒山": "Mt. Kurikoma", "秋元湖": "Lake Akimoto", "秋元": "Akimoto",
-    "磐梯山": "Bandai-san", "磐梯": "Bandai",
-    # ── Locations 101-250 (added in v5.80+) ────────────────────────────────
-    # Hokkaido
-    "能取": "Cape Notoro", "知床": "Shiretoko Pass", "野付": "Notsuke Peninsula",
-    "サロマ": "Lake Saroma", "釧路湿原": "Akan Crane", "阿寒湖": "Lake Akan",
-    "落石岬": "Cape Ochiishi", "洞爺湖": "Lake Toya", "登別地獄谷": "Noboribetsu Jigokudani",
-    "青い池": "Shirogane Blue Pond", "三国峠": "Mikuni Pass",
-    # Tohoku (101-174)
-    "船形山": "Funagata-yama",
-    # Ishikawa / Toyama / Fukui
-    "白山": "Hakusan Chokaisanso", "雨晴": "Amaharashi Coast",
-    "見附島": "Mitsukejima", "千枚田": "Senmaida", "禄剛": "Rokkozaki",
-    "庄川峡": "Shogawa Gorge", "五箇山": "Gokayama Ainokura",
-    "東尋坊": "Tojinbo", "永平寺": "Eiheiji Temple",
-    # Nagano (additional)
-    "大望峠": "Daibo Pass", "乗鞍高原": "Norikura Kogen", "白馬大池": "Shirouma Oike",
-    "野島崎": "Nojimazaki",
-    # Shimane / Tottori / Okayama / Hiroshima
-    "日御碕": "Izumo Hinomisaki", "仁摩": "Nima Sand Museum",
-    "出雲大社": "Izumo Taisha", "足立美術館": "Adachi Museum", "隠岐": "Oki Islands",
-    "大山": "Tottori Daisen", "蒜山": "Hiruzen Highlands",
-    "鞆の浦": "Tomonoura", "三段峡": "Sandankyo Gorge", "大久野島": "Okunoshima",
-    "三谷峡": "Mitani Valley",
-    # Wakayama / Mie / Nara
-    "潮岬": "Shionomisaki Cape", "那智の滝": "Nachi Falls",
-    "三段壁": "Sandanbeki", "高野山": "Mt. Koya",
-    "伊勢神宮": "Ise Jingu",
-    # Kyoto / Hyogo
-    "成相寺": "Nariai-ji Temple", "天橋立": "Amanohashidate",
-    "久美浜": "Kumihama Bay", "城崎": "Kinosaki Onsen",
-    "姫路城": "Himeji Castle", "明石海峡大橋": "Akashi Kaikyo Bridge",
-    # Shiga / Gifu
-    "琵琶湖": "Lake Biwa Terrace", "彦根城": "Hikone Castle",
-    "郡上八幡": "Gujo Hachiman", "馬籠宿": "Magome-juku",
-    # Kagawa / Tokushima / Ehime / Kochi
-    "父母ヶ浜": "Chichibugahama", "金刀比羅宮": "Kotohira-gu",
-    "大歩危峡": "Oboke Gorge", "祖谷": "Iya Valley",
-    "石鎚山": "Mt. Ishizuchi", "道後温泉": "Dogo Onsen", "佐田岬": "Sadamisaki Peninsula",
-    "室戸ジオパーク": "Muroto Geopark", "桂浜": "Katsurahama Beach",
-    "足摺": "Ashizuri Cape", "四万十": "Shimanto River",
-    # Yamaguchi / Kyushu
-    "角島大橋": "Tsunoshima Bridge", "元乃隅": "Motonosumi Shrine",
-    "秋吉台": "Akiyoshidai Karst", "錦帯橋": "Kintaikyo Bridge",
-    "太宰府": "Dazaifu Tenmangu", "唐津城": "Karatsu Castle",
-    "吉野ヶ里": "Yoshinogari", "グラバー園": "Nagasaki Glover",
-    "久住高原": "Kuju Highlands",
-    "熊本城": "Kumamoto Castle", "臼杵石仏": "Usuki Stone Buddhas",
-    "別府地獄": "Beppu Hells", "高千穂峡": "Takachiho Gorge",
-    "都井岬": "Cape Toi", "桜島溶岩": "Sakurajima",
-    "霧島神宮": "Kirishima Shrine", "屋久島": "Yakushima",
-    "奄美大島": "Amami Oshima",
-    # Okinawa
-    "首里城": "Shuri Castle", "斎場御嶽": "Sefa-utaki",
-    "万座毛": "Cape Manzamo", "中城城": "Nakagusuku Castle",
-    "勝連城": "Katsuren Castle", "座喜味城": "Zakimi Castle",
-    "真栄田岬": "Cape Maeda", "慶良間": "Kerama Islands",
-    "ジャングル": "Iriomote Jungle",
-
-    # ── Alternate / common place names (tên gọi phổ biến khác của địa danh) ──
-    "城ヶ島": "Jogashima", "伊豆大島": "Izu Oshima", "三浦半島": "Manazuru",
-    "富士山": "Fuji", "富士五湖": "Fuji Five Lakes", "河口湖": "Kawaguchiko",
-    "野尻湖": "Nojiriko", "美ヶ原高原": "Utsukushihara", "霧ヶ峰高原": "Kirigamine Highlands",
-    "白馬村": "Hakuba", "蓼科": "Tateshina", "車山": "Kurumayama",
-    "陽明門": "Oku-Nikko", "中禅寺湖": "Oku-Nikko", "華厳の滝": "Oku-Nikko",
-    "知床": "Shiretoko Pass", "摩周": "Lake Mashu", "屈斜路": "Lake Kussharo",
-    "阿蘇": "Aso Kusasenri", "霧島": "Kaimondake", "桜島": "Kagoshima",
-    "石垣島": "Ishigaki Hirakubozaki", "宮古島": "Miyakojima Higashi-Hennazaki",
-    "石垣": "Ishigaki Hirakubozaki", "宮古": "Miyakojima Higashi-Hennazaki",
-    "西表島": "Iriomote Hoshizuna Beach", "波照間": "Hateruma Observatory",
-    "与論島": "Yoron Island", "屋久島": "Kagoshima", "種子島": "Kagoshima",
-    "礪波": "Shogawa Gorge", "五箇山": "Gokayama Ainokura", "白川村": "Shirakawago",
-    "恵那峡": "Ena Ravine Bridge", "高山": "Hirayu Pass", "奥飛騨": "Hirayu Pass",
-    "天橋立": "Ine Funaya", "丹後": "Ine Funaya", "下田": "Shimoda",
-    "南伊豆": "Cape Aiai", "石廊崎": "Cape Aiai", "西伊豆": "Koganezaki",
-    "鳥羽": "Daiozaki Lighthouse", "志摩": "Daiozaki Lighthouse",
-    "天草": "Amaterasu Railway", "由布岳": "Hiruzen Highlands",
-    # ── Locations 251-266 ────────────────────────────────────────────────────
-    "いすみ鉄道": "Isumi Railway Crossing", "第二五之町踏切": "Isumi Railway Crossing",
-    "大山千枚田": "Oyama Senmaida", "東浪見の鳥居": "Tonami no Torii",
-    "あさひ舟川": "Asahi Funakawa", "春の四重奏": "Asahi Funakawa",
-    "真脇遺跡": "Mawaki Ruins", "星の観察館": "Hoshi no Kanrankan",
-    "白山展望台": "Hakusan Tenbodai",
-    "鹿角平": "Shikanotsuno Observatory", "郡山布引": "Koriyama Nunobiki Wind Farm",
-    "磐梯山眺望": "Bandaisan Viewpoint", "かねやまふれあい": "Kaneyama Fureai Hiroba",
-    "上野スカイブリッジ": "Ueno Sky Bridge", "くらぶちこども天文台": "Kurabuchi Children Observatory",
-    "神津牧場天文台": "Kozumaki Ranch Observatory", "高根展望台": "Takane Observatory",
-    "奥只見ダム": "Okutadami Dam",
-}
+# — không cần bảng alias Kanji/Romaji cho địa danh Việt Nam (chỉ dùng chữ Latin) —
+_KANJI_ALIAS = {}
 
 _loc_js_list = _json.dumps([
     {"name": name, "lat": coords[0], "lon": coords[1]}
@@ -4190,7 +3050,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           // Nếu query là region command (có trailing space chờ số) → ẩn dropdown
           // để không rơi vào geocodeAndFly khi Enter
           var _qNow = inp.value.trim().toLowerCase().replace(/\s+/g,' ');
-          var _RNchk = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+          var _RNchk = ['bac','trung','nam','vietnam'];
           var _isRegionCmd = _RNchk.some(function(r){
             return _qNow === r || new RegExp('^'+r+' [1-6]$').test(_qNow)
               || new RegExp('^'+r+' *$').test(_qNow);
@@ -4289,14 +3149,13 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         var q = qRaw.toLowerCase().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
         clr.style.display = q ? 'inline' : 'none';
         if (!q) { dropdown.style.display = 'none'; return; }
-        var _REGION_LABEL = { hokkaido:'Hokkaido', tohoku:'Tohoku', kanto:'Kanto', chubu:'Chubu',
-          kansai:'Kansai', chugoku:'Chugoku', shikoku:'Shikoku', kyushu:'Kyushu', okinawa:'Okinawa', japan:'All Japan' };
+        var _REGION_LABEL = { bac:'Mien Bac', trung:'Mien Trung', nam:'Mien Nam', vietnam:'All Vietnam' };
         // ── "help" — hiển thị danh sách keyword, không thực hiện lệnh gì ──────
         if (/^help$/.test(q)) {
           dropdown.innerHTML = '';
           _items = []; _activeIdx = -1;
           var helpLines = [
-            {label: 'Search area keyword:', desc: 'hokkaido / tohoku / kanto / chubu / kansai / chugoku / shikoku / kyushu / okinawa / japan', color: '#94a3b8'},
+            {label: 'Search area keyword:', desc: 'bac / trung / nam / vietnam', color: '#94a3b8'},
             {label: 'Search best location keyword:', desc: 'best', color: '#34d399'},
             {label: 'Search tonight keyword:', desc: 'tonight', color: '#fbcfe8'},
             {label: 'Turn off search results:', desc: 'off', color: '#94a3b8'},
@@ -4336,7 +3195,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
         // NOTE: q is already normalized (single space between words) by the input handler above,
         // so we use a literal space character here instead of \s+ to avoid any risk of backslash
         // characters being altered across Python/Jinja2/iframe-srcdoc serialization layers.
-        var _REGION_NAMES = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+        var _REGION_NAMES = ['bac','trung','nam','vietnam'];
         var _regionPattern = '(' + _REGION_NAMES.join('|') + ')';
         var _bareRegionRe  = new RegExp('^' + _regionPattern + '( [1-6])?$');
         var _bareTypingRe  = new RegExp('^' + _regionPattern + ' *$');
@@ -4418,7 +3277,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           var _suffix = (_mBare && _mBare[2]) ? _mBare[2].trim() : null; // '1'~'6' | null
           var _regionDayLbl = ['Tonight','Tomorrow night','Day after tomorrow','4th night','5th night','6th night'];
           if (_suffix !== null) {
-            // Exact command e.g. 'kanto 3' → single clickable row (same as 'mkw 3')
+            // Exact command e.g. 'bac 3' → single clickable row (same as 'mkw 3')
             var _dayNum = parseInt(_suffix);
             _renderRegionHints([{
               label: _region + ' ' + _dayNum,
@@ -4427,7 +3286,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             }], '#34d399', 'rgba(51,65,85,0.4)');
             return;
           }
-          // 'kanto' (no number) → full menu: kanto best + kanto 1..6 (same shape as 'mkw' bare menu)
+          // 'bac' (no number) → full menu: bac best + bac 1..6 (same shape as 'mkw' bare menu)
           var _regionHints = [{
             label: _region + ' best', desc: 'Best night 7d (' + _REGION_LABEL[_region] + ')',
             fn: (function(rr){ return function(){ window._triggerBest(rr); }; })(_region)
@@ -4508,18 +3367,18 @@ _SEARCH_CTRL_TEMPLATE = Template("""
             // "help" chỉ hiển thị gợi ý, không thực hiện hành động khi Enter
             return;
           }
-          var _RN = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+          var _RN = ['bac','trung','nam','vietnam'];
           var _rgx = '(' + _RN.join('|') + ')';
           var _mTonight = _sv.match(new RegExp('^tonight( ' + _rgx + ')?$'));
           if (_mTonight) {
-            var _rTn = _mTonight[2] || 'kanto';
+            var _rTn = _mTonight[2] || 'bac';
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTn);
             return;
           }
           var _mBest = _sv.match(new RegExp('^best( ' + _rgx + ')?$'));
           if (_mBest) {
-            var _rBest = _mBest[2] || 'kanto';
+            var _rBest = _mBest[2] || 'bac';
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBest);
             return;
@@ -4542,14 +3401,14 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           // Defensive fallback: "tonight ..." / "best ..." that didn't parse cleanly above
           // (e.g. unexpected whitespace) still triggers rather than falling through to geocode.
           if (/^tonight(\s|$)/.test(_sv)) {
-            var _rTnFb = 'kanto';
+            var _rTnFb = 'bac';
             for (var _i = 0; _i < _RN.length; _i++) { if (_sv.indexOf(_RN[_i]) !== -1) { _rTnFb = _RN[_i]; break; } }
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerTonight === 'function') window._triggerTonight(_rTnFb);
             return;
           }
           if (/^best(\s|$)/.test(_sv)) {
-            var _rBestFb = 'kanto';
+            var _rBestFb = 'bac';
             for (var _j = 0; _j < _RN.length; _j++) { if (_sv.indexOf(_RN[_j]) !== -1) { _rBestFb = _RN[_j]; break; } }
             inp.value = ''; clr.style.display = 'none'; dropdown.style.display = 'none';
             if (typeof window._triggerBest === 'function') window._triggerBest(_rBestFb);
@@ -4583,7 +3442,7 @@ _SEARCH_CTRL_TEMPLATE = Template("""
           } else {
             // Last-resort: nếu dropdown đang hiện nhưng không có item được chọn,
             // thử match region command một lần nữa trước khi geocode
-            var _RN2 = ['hokkaido','tohoku','kanto','chubu','kansai','chugoku','shikoku','kyushu','okinawa','japan'];
+            var _RN2 = ['bac','trung','nam','vietnam'];
             var _rgx2 = '(' + _RN2.join('|') + ')';
             var _mScan2 = _sv.match(new RegExp('^' + _rgx2 + ' ([1-6])$'));
             if (_mScan2) {
@@ -4673,62 +3532,50 @@ _selected_marker_args = None  # lưu lại marker được chọn, vẽ sau cùn
 # ── Region color map — mỗi vùng 1 màu riêng để phân biệt trên map ─────────────
 # prefecture → (normal_color, selected_color, selected_glow)
 _PREF_REGION_COLOR = {
-    # Hokkaido — ice blue
-    "Hokkaido":    ("#67E8F9", "#00FFFF", "drop-shadow(0 0 7px #67E8F9)"),
-    # Tohoku — soft violet
-    "Aomori":      ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
-    "Iwate":       ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
-    "Miyagi":      ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
-    "Akita":       ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
-    "Yamagata":    ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
-    "Fukushima":   ("#C084FC", "#D946EF", "drop-shadow(0 0 7px #C084FC)"),
-    # Kanto — cyan (giữ màu cũ vì quen)
-    "Tokyo":       ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    "Kanagawa":    ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    "Chiba":       ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    "Saitama":     ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    "Ibaraki":     ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    "Tochigi":     ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    "Gunma":       ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
-    # Chubu — lime green
-    "Niigata":     ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Toyama":      ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Ishikawa":    ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Fukui":       ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Yamanashi":   ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Nagano":      ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Gifu":        ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Shizuoka":    ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    "Aichi":       ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
-    # Kansai — amber/gold
-    "Osaka":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    "Kyoto":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    "Hyogo":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    "Nara":        ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    "Shiga":       ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    "Wakayama":    ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    "Mie":         ("#FCD34D", "#FFD700", "drop-shadow(0 0 6px gold)"),
-    # Chugoku — orange
-    "Tottori":     ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
-    "Shimane":     ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
-    "Okayama":     ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
-    "Hiroshima":   ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
-    "Yamaguchi":   ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
-    # Shikoku — pink
-    "Tokushima":   ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
-    "Kagawa":      ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
-    "Ehime":       ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
-    "Kochi":       ("#F9A8D4", "#F472B6", "drop-shadow(0 0 7px #F9A8D4)"),
-    # Kyushu — red/coral
-    "Fukuoka":     ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    "Saga":        ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    "Nagasaki":    ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    "Kumamoto":    ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    "Oita":        ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    "Miyazaki":    ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    "Kagoshima":   ("#FCA5A5", "#F87171", "drop-shadow(0 0 7px #FCA5A5)"),
-    # Okinawa — warm yellow-green
-    "Okinawa":     ("#BEF264", "#A3E635", "drop-shadow(0 0 7px #BEF264)"),
+    # Mien Bac (North) — cyan
+    "Ha Giang": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Cao Bang": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Lang Son": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Lao Cai": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Yen Bai": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Bac Kan": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Bac Giang": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Phu Tho": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Vinh Phuc": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Hanoi": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Hoa Binh": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Son La": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Quang Ninh": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Nam Dinh": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    "Ninh Binh": ("#22D3EE", "#00FFFF", "drop-shadow(0 0 7px cyan)"),
+    # Mien Trung (Central) — orange
+    "Thanh Hoa": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Nghe An": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Quang Binh": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Quang Tri": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Thua Thien Hue": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Da Nang": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Quang Nam": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Quang Ngai": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Binh Dinh": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Phu Yen": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Khanh Hoa": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Ninh Thuan": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Binh Thuan": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Kon Tum": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Gia Lai": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Dak Lak": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Dak Nong": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    "Lam Dong": ("#FB923C", "#FF6A00", "drop-shadow(0 0 7px #FB923C)"),
+    # Mien Nam (South) — green
+    "Ho Chi Minh City": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Dong Nai": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Ba Ria - Vung Tau": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Tay Ninh": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Long An": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Dong Thap": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Kien Giang": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
+    "Ca Mau": ("#86EFAC", "#4ADE80", "drop-shadow(0 0 7px #86EFAC)"),
 }
 _DEFAULT_COLOR = ("#FFA500", "#FFD700", "drop-shadow(0 0 6px gold)")
 
@@ -4823,19 +3670,13 @@ is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_s
                   for c in LOCATION_DATABASE.values())
 
 # ── Ring helpers (dùng chung cho Scan + AI) ──────────────────────────────────
-# ── Ring helper — CSS injected once, ring div absolutely centered on the coordinate ──
-# icon_size=(0,0) / icon_anchor=(0,0): Leaflet places the DivIcon origin exactly at
-# the lat/lon pixel. The ring div uses position:absolute + transform:translate(-50%,-50%)
-# to center itself around that origin — no offset from <style> tags possible.
 _ring_css = (
     '<style>'
     '@keyframes great-night-pulse {'
     '0%{transform:translate(-50%,-50%) scale(0.6);opacity:0.9;}'
     '70%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}'
     '100%{transform:translate(-50%,-50%) scale(0.6);opacity:0;}}'
-    '.great-night-ring{'
-    'pointer-events:none!important;'
-    'overflow:visible!important;}'
+    '.great-night-ring{pointer-events:none!important;overflow:visible!important;}'
     '</style>'
 )
 
@@ -4862,12 +3703,53 @@ def _add_rings(locations, color, shadow, css_already_injected=False):
                 icon_size=(0, 0), icon_anchor=(0, 0),
                 class_name="great-night-ring"),
         ).add_to(m)
-    return True  # css injected
+    return True
 
 # ── GREAT NIGHT SCAN result — vòng tròn nhấp nháy quanh tất cả địa điểm ──────
 # Kích thước cố định theo pixel (DivIcon) → không thay đổi khi zoom in/out.
 _scan_r = st.session_state._scan_result
 if _scan_r and _scan_r != "none":
+    # ── Ring helper — CSS injected once, ring div absolutely centered on the coordinate ──
+    # icon_size=(0,0) / icon_anchor=(0,0): Leaflet places the DivIcon origin exactly at
+    # the lat/lon pixel. The ring div uses position:absolute + transform:translate(-50%,-50%)
+    # to center itself around that origin — no offset from <style> tags possible.
+    _ring_css = (
+        '<style>'
+        '@keyframes great-night-pulse {'
+        '0%{transform:translate(-50%,-50%) scale(0.6);opacity:0.9;}'
+        '70%{transform:translate(-50%,-50%) scale(2.2);opacity:0;}'
+        '100%{transform:translate(-50%,-50%) scale(0.6);opacity:0;}}'
+        '.great-night-ring{'
+        'pointer-events:none!important;'
+        'overflow:visible!important;}'
+        '</style>'
+    )
+
+    def _make_ring_div(color, shadow):
+        return (
+            '<div style="position:absolute;top:0;left:0;'
+            'width:64px;height:64px;border-radius:50%;'
+            f'border:3px solid {color};'
+            f'box-shadow:0 0 14px {shadow};'
+            'animation:great-night-pulse 1.8s ease-out infinite;'
+            'pointer-events:none;"></div>'
+        )
+
+    def _add_rings(locations, color, shadow, css_already_injected=False):
+        """Render ring markers for a list of (lat,lon) or (name,coords,verdict) entries."""
+        ring_div = _make_ring_div(color, shadow)
+        for _i, entry in enumerate(locations):
+            coords = entry[1] if isinstance(entry[0], str) else list(entry)
+            _html = (_ring_css if (_i == 0 and not css_already_injected) else "") + ring_div
+            folium.Marker(
+                list(coords),
+                icon=folium.DivIcon(
+                    html=_html,
+                    icon_size=(0, 0), icon_anchor=(0, 0),
+                    class_name="great-night-ring"),
+            ).add_to(m)
+        return True  # css injected
+
     _is_best_ring    = st.session_state.get("_scan_best", False)
     _is_tonight_ring = st.session_state.get("_scan_tonight", False)
 
@@ -4950,7 +3832,7 @@ if _verdict:
     if st.session_state.day_offset == 0:
         _date_label = f"Tonight{f' ({_temp_range_str})' if _temp_range_str else ''}"
     else:
-        _date_label = f"{target_date.month}月{target_date.day}日夜{f'({_temp_range_str})' if _temp_range_str else ''}"
+        _date_label = f"{target_date.month}/{target_date.day} night{f' ({_temp_range_str})' if _temp_range_str else ''}"
 
     _warn_speed = "1.1s" if _verdict["anim"] == "blink-warn" else "1.9s"
     _html_label = f"""
@@ -5013,10 +3895,6 @@ if _ai_rows:
                 _bits.append(f'Bortle {float(_r["bortle"]):g}')
             except (TypeError, ValueError):
                 pass
-        if _r.get("nk") is not None:
-            _bits.append(f'Nippon Kishou {_r["nk"]}/4')
-        _stars_html = (_half_star_html(_r["stars_val"]) if _r.get("stars_val") is not None
-                       else _aih.escape(str(_r.get("stars", ""))))
         _bdr = "" if _i == len(_ai_rows) - 1 else "border-bottom:1px solid rgba(103,232,249,0.20);"
         _ai_parts.append(
             f'<div style="padding:5px 0;{_bdr}">'
@@ -5026,7 +3904,7 @@ if _ai_rows:
             f'text-overflow:ellipsis;white-space:nowrap;">{_aih.escape(_r.get("name", ""))}'
             f'<span style="color:#64748b;font-weight:500;font-size:10px;"> {_aih.escape(_r.get("pref", ""))}</span></span>'
             f'<span style="color:{"#fcd34d" if _r.get("wk") else "#94a3b8"};font-size:11px;flex-shrink:0;">{_aih.escape(_r.get("date", ""))}</span>'
-            f'<span style="font-size:14px;line-height:1;flex-shrink:0;white-space:nowrap;">{_stars_html}</span>'
+            f'<span style="color:#fbbf24;font-size:12px;flex-shrink:0;">{_aih.escape(str(_r.get("stars", "")))}</span>'
             f'</div>'
             f'<div style="color:#94a3b8;font-size:10px;margin:2px 0 0 23px;line-height:1.35;">{" · ".join(_bits)}</div>'
             f'</div>')
@@ -5087,7 +3965,7 @@ if _scan_r2 and _scan_r2 != "none":
             )
         _moon_tn = _scan_r2["moon_illum"]
         _rows_joined_tn = "".join(_rows_html_parts_tn)
-        _region_lbl_tn = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+        _region_lbl_tn = _REGION_LABELS.get(_scan_r2.get("region", "bac"), "Mien Bac (North)")
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
 <div style="
@@ -5122,7 +4000,7 @@ if _scan_r2 and _scan_r2 != "none":
         else:
             _dparts = [f"{_dx.month}/{_dx.day} {_EN_WD[_dx.weekday()]}" for _dx in _top3_dates_list]
             _date_header = f"Best locations this week ({', '.join(_dparts)})"
-        _region_lbl_best = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+        _region_lbl_best = _REGION_LABELS.get(_scan_r2.get("region", "bac"), "Mien Bac (North)")
         _date_header = f"{_date_header} — {_region_lbl_best}"
         _rank_icons = ["🥇", "🥈", "🥉"]
         _rows_html_parts = []
@@ -5174,13 +4052,13 @@ if _scan_r2 and _scan_r2 != "none":
             _ban_clr = "#fcd34d"
             _ban_loc = _scan_r2["loc_name"].split(",")[0].strip()
             _ban_loc = _ban_loc.split(".",1)[-1].strip() if "." in _ban_loc else _ban_loc
-            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "bac"), "Mien Bac (North)")
             _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : {_sr_tier} · {_ban_loc} ({_region_lbl_fb}) / moon {_scan_r2['moon_illum']:.0f}%"
         else:
             _ban_bg  = "rgba(5,25,18,0.92)"
             _ban_bdr = "rgba(52,211,153,0.75)"
             _ban_clr = "#6ee7b7"
-            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "kanto"), "Kanto")
+            _region_lbl_fb = _REGION_LABELS.get(_scan_r2.get("region", "bac"), "Mien Bac (North)")
             _ban_txt = f"{_sr_date2.month}/{_sr_date2.day} : PERFECT NIGHT ({_region_lbl_fb})   {_n_spots} spot{'s' if _n_spots > 1 else ''} / moon {_scan_r2['moon_illum']:.0f}%"
         st.markdown(f"""
 <div style="position:relative;margin-top:-644px;height:0;overflow:visible;z-index:9998;pointer-events:none;">
@@ -5209,7 +4087,7 @@ elif _scan_r2 == "none":
     else:
         _scan_days_lbl = st.session_state._scan_days
         _range_lbl = f"day {_scan_days_lbl}+" if _scan_days_lbl > 0 else "tonight+"
-    _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "kanto"), "Kanto")
+    _region_lbl_none = _REGION_LABELS.get(st.session_state.get("_scan_region", "bac"), "Kanto")
     _fallback_lbl = st.session_state.get("_scan_fallback_label") or "unsettled weather"
     # ── Map fallback label → weather icons ──────────────────────────────────────
     def _fallback_icons(label):
@@ -5311,8 +4189,8 @@ if map_data:
     # lat=89.75 → tonight <region>  (lng = 100+region_idx)
     # lat=89.65 → "off": tắt banner/ring ngay lập tức, không load data
     # lat=89.35 → "<region> N" plain scan (lng = 300 + region_idx*10 + (N-1))  ← rewritten from scratch
-    # region_idx: 0=hokkaido,1=tohoku,2=kanto,3=chubu,4=kansai,5=chugoku,6=shikoku,7=kyushu,8=okinawa,9=japan
-    _REGION_BY_IDX = ["hokkaido", "tohoku", "kanto", "chubu", "kansai", "chugoku", "shikoku", "kyushu", "okinawa", "japan"]
+    # region_idx: 0=bac,1=trung,2=nam,3=vietnam
+    _REGION_BY_IDX = ["bac", "trung", "nam", "vietnam"]
     _lc_lat = lc.get("lat", 0) if lc else 0
     _lc_lng = lc.get("lng", 0) if lc else 0
     _is_best_trig    = abs(_lc_lat - 89.85) < 0.02
@@ -5324,7 +4202,7 @@ if map_data:
     if lc and lc != st.session_state._last_lc and (
             _is_best_trig or _is_tonight_trig or _is_off_trig or
             _is_mkw_scan_trig or _is_mkw_best_trig or _is_region_scan_trig):
-        st.session_state._ai_rings = []   # Search box scan/off → bỏ vòng tròn + bảng của AI
+        st.session_state._ai_rings = []   # Search box scan/off → bỏ vòng tròn của AI
         st.session_state._ai_panel = []
     if _is_mkw_scan_trig and lc and lc != st.session_state._last_lc:
         _d = max(0, min(6, round((_lc_lng - 200.0) * 100)))
@@ -5614,14 +4492,13 @@ def _sky_temp_card(lat3, lon3, left_html):
 col_left, col_right = st.columns([2.5, 1.1])
 
 with col_right:
-    # Bortle — model chỉ chính xác trong lãnh thổ Nhật Bản, ẩn nếu ở ngoài (khi đó khung chỉ còn TEMPERATURE)
-    _in_japan = (24.0 <= st.session_state.lat <= 46.0 and 122.0 <= st.session_state.lon <= 154.0)
+    # SKY QUALITY (trái: Bortle, model được hiệu chỉnh cho Việt Nam) + TEMPERATURE (phải: nhiệt độ hiện tại, tự cập nhật 10 phút)
     _sq_left = (
         f'''<div style="flex:1;min-width:0;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
                 <div style="font-size:20px;font-weight:bold;color:#38bdf8;margin-top:5px;line-height:1.2;">Bortle Class {bortle_class}</div>
                 <div style="font-size:12px;color:#e2e8f0;margin-top:3px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
-            </div>''' if _in_japan else "")
+            </div>''')
     _sky_temp_card(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3), _sq_left)
 
     # Moon Phase + Coordinate — 1 block, trái/phải
@@ -5674,62 +4551,37 @@ with col_right:
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # Weather source selectbox + source label
-    # Dynamic key theo weather_source → widget re-render đúng khi auto-fallback sang ECMWF
-    # 3 lựa chọn cuối đều dùng dữ liệu Blend (JMA+ECMWF) cho mây/độ ẩm/gió...; chỉ khác cách tính SAO:
-    #   MODEL = sao của mô hình | NK = sao Nippon Kishou (3 đêm đầu) | NK+MODEL = trung bình hai bên
-    _BLEND = "🔀 Blend (JMA+ECMWF)"
-    _MODE_OF = {"MODEL": "model", "NK": "nk", "NK+MODEL": "both"}
-    _nk_ok = st.session_state.day_offset < 3      # Nippon Kishou chỉ có dữ liệu 3 đêm đầu
-    source_options = ["JMA", "EU (ECMWF)", "MODEL"] + (["NK", "NK+MODEL"] if _nk_ok else [])
-    if st.session_state.weather_source == _BLEND:
-        _pm = st.session_state.get("star_mode", "both")
-        if not _nk_ok and _pm in ("nk", "both"):
-            _pm = "model"      # từ đêm 4: tự chuyển sang JMA+ECMWF (lựa chọn gốc vẫn được giữ khi quay lại đêm 1–3)
-        cur_src = {"model": "MODEL", "nk": "NK", "both": "NK+MODEL"}.get(_pm, "NK+MODEL")
-    else:
-        cur_src = st.session_state.weather_source if st.session_state.weather_source in source_options else "JMA"
-    src_key = f"sel_source_{cur_src.replace(' ', '_').replace('(', '').replace(')', '').replace('+', 'p')}"
-    def _src_disp(v):
-        return {"MODEL": "🔀 JMA+ECMWF", "NK": "⭐ Nippon Kishou",
-                "NK+MODEL": "🔀 Nippon Kishou & JMA+ECMWF"}.get(v, v)
-    chosen = st.selectbox("src", source_options,
-                          index=source_options.index(cur_src),
-                          format_func=_src_disp,
-                          label_visibility="collapsed", key=src_key)
-    if chosen != cur_src:
-        if chosen in _MODE_OF:
-            st.session_state.weather_source = _BLEND
-            st.session_state.star_mode = _MODE_OF[chosen]
-        else:
-            st.session_state.weather_source = chosen
-        st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
-        st.rerun()
-
-
-    # ── BEST TODAY — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────────
+    # ── TODAY HIGHLIGHT — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────
     # Mỗi vùng: liệt kê các địa điểm có thời tiết đêm nay OK (PERFECT / GOOD STARRY NIGHT).
     # Không có địa điểm nào → ghi "None" (xám). Muốn thêm/bớt vùng chỉ cần sửa _TH_REGIONS.
-    _TH_REGIONS = ["kanto", "chubu", "tohoku", "hokkaido", "shikoku", "okinawa", "kyushu"]
+    _TH_ENABLED = True    # đặt False để tắt hẳn Today Highlight (không tải thời tiết thêm)
+    _TH_TIME_BUDGET = 40  # giây: tổng thời gian tối đa dành cho Today Highlight
+    _TH_REGIONS = ["bac", "trung", "nam"]
+    _TH_LABELS  = {"bac": "North", "trung": "Central", "nam": "South"}
     _TH_MAX_SHOW = 2   # số địa điểm hiển thị tối đa mỗi vùng (còn lại gộp thành +N)
 
     def _th_short(name):
-        n = re.sub(r"^\d+\.\s*", "", name.rsplit(",", 1)[0])
-        n = re.sub(r"[^\x00-\x7F]+", " ", n)
-        n = re.sub(r"\s+", " ", n).strip()
-        return n or name
+        n = _strip_loc_num(name).rsplit(",", 1)[0].strip()
+        return _vn_en_part(n) or name
 
     @st.cache_data(ttl=1800, show_spinner=False)
     def _today_highlight_data(source, day_key):
         """{region: [(short_name, full_name, tier), ...]} — PERFECT trước, GOOD sau.
         Chạy tuần tự (không thread) vì @st.cache_data không thread-safe khi write.
-        Dùng danh sách dedupe 60km → ~75 địa điểm; weather fetch đã cache 1h."""
+        Dùng danh sách dedupe 60km; weather fetch đã cache 1h."""
+        import time as _t
         out = {}
+        if not _TH_ENABLED:
+            return out
+        _t0 = _t.time()
         _wx_prefetch([(la, lo) for rk in _TH_REGIONS
                       for _nm, (la, lo) in _locs_for_region(rk, for_best_or_tonight=True)])
+        _ok = _wx_prefetch_store()["at"]       # chỉ tính các điểm đã tải được thời tiết (tránh tải lại chậm)
         for rk in _TH_REGIONS:
             hits = []
             for nm, (la, lo) in _locs_for_region(rk, for_best_or_tonight=True):
+                if (la, lo) not in _ok or _t.time() - _t0 > _TH_TIME_BUDGET:
+                    continue
                 res = _night_verdict_for_single_loc(la, lo, day_off=0)
                 if not res:
                     continue
@@ -5764,8 +4616,8 @@ with col_right:
                 f'<div style="display:flex;align-items:center;gap:6px;height:16px;'
                 f'background:rgba(255,255,255,0.04);border:1px solid #1e293b;border-radius:6px;'
                 f'padding:0 6px;font-size:10px;line-height:16px;">'
-                f'<span style="flex:0 0 52px;color:{_lbl_col};font-weight:700;">'
-                f'{_REGION_LABELS.get(_rk, _rk.title())}</span>'
+                f'<span style="flex:0 0 56px;color:{_lbl_col};font-weight:700;">'
+                f'{_TH_LABELS.get(_rk, _rk.title())}</span>'
                 f'<div style="display:flex;gap:6px;min-width:0;flex:1;overflow:hidden;">{_chips}</div>'
                 f'</div>'
             )
@@ -5777,13 +4629,23 @@ with col_right:
             '</div>')
         return _html
 
+    # ── Dropdown nguồn thời tiết (giống bản JP): Blend / ECMWF / ICON ───────────────
+    _WX_DISP = {"Blend": "🔀 Blend (ECMWF+ICON)", "ECMWF": "EU (ECMWF)", "ICON": "DE (ICON)"}
+    st.selectbox("src", WX_SOURCES, index=WX_SOURCES.index(st.session_state.weather_source),
+                 format_func=lambda v: _WX_DISP.get(v, v),
+                 label_visibility="collapsed", key="wx_src_ui")
+    _odd = sorted(set(sources_used) - {st.session_state.weather_source})   # nhãn khác nguồn đã chọn = đang bị thay thế
+    if _odd:
+        st.caption("⚠ Một số giờ không có dữ liệu của nguồn đã chọn — đang dùng " + " / ".join(_odd)
+                   + " thay thế (" + _WX_DISP.get(st.session_state.weather_source, "") + ").")
+
     _th_ph = st.empty()   # giữ chỗ: hiện ngay (dữ liệu lần trước hoặc 'loading…'), tính xong ở cuối script
 
     def _th_render():
         _d = st.session_state.get("_th_last")
         try:
             _d = _today_highlight_data(st.session_state.weather_source,
-                                       _night_base_jst.strftime("%Y-%m-%d"))
+                                       _night_base_ict.strftime("%Y-%m-%d"))
             st.session_state._th_last = _d
         except Exception:
             pass
@@ -5804,11 +4666,10 @@ with col_left:
 /* ── Date selectbox: shrink to fit content ── */
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
     width: fit-content !important;
-    /* đủ rộng cho "11月13日夜(金) → 11月14日朝(土)"; màn hình hẹp thì tự co lại */
-    min-width: min(285px, calc(100vw - 150px)) !important;
+    min-width: 0 !important;
 }
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] {
-    width: 100% !important;
+    width: fit-content !important;
     min-width: 0 !important;
 }
 [data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child {
@@ -5825,18 +4686,20 @@ with col_left:
 }
 
 /* Streamlit mới dùng react-aria ComboBox (không còn <select>/baseweb) → chọn theo key "sel_date".
-   Ô nhập cần ≥ ~220px để hiện đủ "11月13日夜(金) → 11月14日朝(土)"; màn hình hẹp thì tự co lại. */
+   Ô nhập cần đủ rộng để hiện trọn "11/13 eve (Fri) → 11/14 morn (Sat)"; màn hình hẹp thì tự co lại. */
 .st-key-sel_date input {
-    min-width: 235px !important;
+    min-width: 215px !important;
 }
 @media (max-width: 480px) {
     /* iPhone: nút ⬅️➡️ nhỏ lại + gap hẹp để cả 3 phần nằm trên 1 hàng */
     .st-key-nav1 [data-testid="stVerticalBlock"] { gap: 4px !important; }
     .st-key-nav1 [data-testid="stButton"] button { width: 34px !important; }
     .st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 34px !important; }
-    .st-key-sel_date input { min-width: calc(100vw - 196px) !important; font-size: clamp(9.5px, 2.7vw, 10.5px) !important; }
+    .st-key-sel_date input { min-width: calc(100vw - 196px) !important; font-size: 11px !important; }
 }
-
+@media (max-width: 380px) {
+    .st-key-sel_date input { font-size: 10px !important; }
+}
 /* LPM button is now a floating map control (bottomright) */
 
 /* ── NAV BOX: khung ngoài chứa 2 hàng con ──────────────────────────────────
@@ -5898,7 +4761,6 @@ with col_left:
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
 
-
 </style>""", unsafe_allow_html=True)
 
     # Nav controls — chỉ còn nav1: ⬅️  date  ➡️
@@ -5934,16 +4796,6 @@ with col_left:
     # Table — custom styled HTML card
     if weather_table_data:
         # Hiện badge nếu đang dùng fallback endpoint
-        if _ep_label == "no_jma":
-            st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
-                        'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                        '⚠️ JMA MSM サーバーエラー — 代わりに <b>ECMWF のみ</b> を使用しています</div>',
-                        unsafe_allow_html=True)
-        elif _ep_label == "jma_only":
-            st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
-                        'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
-                        '⚠️ ECMWF サーバーエラー — 代わりに <b>JMA のみ</b> を使用しています</div>',
-                        unsafe_allow_html=True)
         def _cloud_icon_cell(pct_str, precip_val=0.0, temp_val=None, spread=None):
             pct = int(pct_str.replace('%',''))
             if precip_val is not None and precip_val > 0.5:
@@ -5970,7 +4822,7 @@ with col_left:
                        f'<div style="position:absolute;z-index:30;left:0;top:100%;margin-top:2px;background:#0f172a;'
                        f'border:1px solid #f59e0b;border-radius:6px;padding:4px 8px;font-size:11px;color:#fde68a;'
                        f'font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.6);">'
-                       f'JMAとECMWFの差：{int(round(spread))}%</div></details>'
+                       f'Chênh lệch ECMWF – ICON: {int(round(spread))}%</div></details>'
                        if (spread is not None and spread > _SPREAD_WARN_PCT) else '')
                     + '</div>')
 
@@ -5981,22 +4833,6 @@ with col_left:
             else:        icon,col = '','#f97316'
             return f'<span style="color:{col}">{icon} {ws_str}</span>'
 
-        # Sao mỗi giờ theo chế độ: model = mô hình | nk = Nippon Kishou (3 đêm đầu, sau đó dùng mô hình)
-        # | both = trung bình hai bên (3 đêm đầu), sau đó chỉ mô hình. Mây/ẩm/gió luôn từ JMA+ECMWF.
-        _smode = st.session_state.get("star_mode", "both")
-        if st.session_state.day_offset >= 3:
-            _smode = "model"            # Nippon Kishou chỉ có 3 đêm đầu
-        _nk_map = {}
-        if st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)" and _smode in ("nk", "both"):
-            try:
-                _nk_map = _nk_star_fetch(round(float(st.session_state.lat), 3),
-                                         round(float(st.session_state.lon), 3))
-            except Exception:
-                _nk_map = {}
-        _star_tip = ("Nippon Kishou Star Index (nights 1–3; JMA+ECMWF afterwards)" if _smode == "nk"
-                     else "Average of Nippon Kishou Star Index and JMA+ECMWF")
-        _night_d = target_date.date()
-        _nk_hits = 0
         rows_html = ''
         for i, row in enumerate(weather_table_data):
             bg = 'rgba(234,88,12,0.10)' if i % 2 == 0 else 'rgba(194,65,12,0.06)'
@@ -6013,12 +4849,7 @@ with col_left:
             _own = row.get('_stars')
             if _own is None:
                 _own = str(row['📸']).count('⭐')
-            _hh = int(time_lbl[:2])
-            _key = f"{(_night_d if _hh >= 18 else _night_d + timedelta(days=1)):%Y-%m-%d}T{_hh:02d}"
-            _nk_v = _nk_map.get(_key)
-            _nk_hits += _nk_v is not None
-            _sv = (_nk_v if _nk_v is not None else _own) if _smode == "nk" else _star_value(_own, _nk_v)
-            stars = _half_star_html(_sv)
+            stars      = _half_star_html(_own)
             rows_html += (
                 f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
                 f'<td style="padding:8px 6px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
@@ -6038,7 +4869,7 @@ with col_left:
         <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:18%;">🌤️</th>
         <th title="Temperature / Humidity" style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:21%;white-space:nowrap;">🌡️/💧</th>
         <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
-        <th title="{_star_tip if _nk_hits else ''}" style="padding:10px 4px;text-align:left;color:#fb923c;font-weight:700;width:31%;">📸</th>
+        <th style="padding:10px 4px;text-align:left;color:#fb923c;font-weight:700;width:31%;">📸</th>
       </tr>
     </thead>
     <tbody>{rows_html}</tbody>
@@ -6048,38 +4879,38 @@ with col_left:
     else:
         # Hiển thị nguyên nhân thực tế thay vì hardcode "502 Bad Gateway"
         if _last_error == "timeout":
-            _err_title = "⚠️ Open-Meteo API がタイムアウトしました"
+            _err_title = "⚠️ Open-Meteo API request timed out"
             _err_detail = (
-                'リクエストが <b>25秒</b> 以内に応答しませんでした。'
-                'サーバーが混雑している可能性があります。<br><br>'
-                '<span style="color:#94a3b8;">通常は数分で回復します。'
-                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+                'The request did not respond within <b>25 seconds</b>. '
+                'The server may be under heavy load.<br><br>'
+                '<span style="color:#94a3b8;">This usually recovers within a few minutes. '
+                'Press <b>Retry</b> to clear the cache and fetch again.</span>'
             )
         elif _last_error and _last_error.startswith("HTTP 5"):
             _code = _last_error.split(" ")[1]
-            _err_title = f"⚠️ Open-Meteo API が一時的に応答していません"
+            _err_title = f"⚠️ Open-Meteo API is temporarily unavailable"
             _err_detail = (
-                f'サーバー <code style="color:#fbbf24;">api.open-meteo.com</code> が '
-                f'<b>{_code} エラー</b> を返しました — これは提供元側の問題で、'
-                'アプリ側のエラーではありません。<br><br>'
-                '<span style="color:#94a3b8;">通常5～30分で自動的に回復します。'
-                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+                f'Server <code style="color:#fbbf24;">api.open-meteo.com</code> returned '
+                f'a <b>{_code} error</b> — this is an issue on the provider side, '
+                'not with this app.<br><br>'
+                '<span style="color:#94a3b8;">It usually recovers automatically within 5-30 minutes. '
+                'Press <b>Retry</b> to clear the cache and fetch again.</span>'
             )
         elif _last_error and _last_error.startswith("connection_error"):
-            _err_title = "⚠️ Open-Meteo API に接続できません"
+            _err_title = "⚠️ Cannot connect to Open-Meteo API"
             _err_detail = (
-                'ネットワーク接続エラーが発生しました。'
-                'インターネット接続を確認してください。<br><br>'
-                '<span style="color:#94a3b8;"><b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+                'A network connection error occurred. '
+                'Please check your internet connection.<br><br>'
+                '<span style="color:#94a3b8;"><b>Retry</b> clears the cache and fetches again.</span>'
             )
         else:
-            _err_title = "⚠️ Open-Meteo API が一時的に応答していません"
+            _err_title = "⚠️ Open-Meteo API is temporarily unavailable"
             _err_detail = (
-                f'予期しないエラーが発生しました'
-                + (f'（詳細: <code style="color:#fbbf24;">{_last_error}</code>）' if _last_error else '')
-                + '。<br><br>'
-                '<span style="color:#94a3b8;">通常は数分で回復します。'
-                '<b>再試行</b> ボタンでキャッシュを削除して再取得してください。</span>'
+                f'An unexpected error occurred'
+                + (f' (details: <code style="color:#fbbf24;">{_last_error}</code>)' if _last_error else '')
+                + '.<br><br>'
+                '<span style="color:#94a3b8;">This usually recovers within a few minutes. '
+                'Press <b>Retry</b> to clear the cache and fetch again.</span>'
             )
         st.markdown(f"""
 <div style="background:#1e293b;border:1px solid #ef4444;border-radius:12px;padding:20px 24px;margin-top:8px;">
@@ -6090,11 +4921,11 @@ with col_left:
         {_err_detail}
     </div>
 </div>""", unsafe_allow_html=True)
-        if st.button("🔄 再試行", key="btn_retry_weather"):
+        if st.button("🔄 Retry", key="btn_retry_weather"):
             st.cache_data.clear()
             st.rerun(scope="app")
 
-# ── CLEAR SKY CHART — 3 ngày × 24 giờ (kiểu Clear Sky Chart, thay cho 7-DAY FORECAST) ──
+# ── CLEAR SKY CHART — 7 ngày × 24 giờ (kiểu Clear Sky Chart, đặt phía trên biểu đồ Moon/Sun/Milky Way) ──
 # Mỗi hàng = 1 chỉ số, mỗi ô = 1 giờ (giờ địa phương). Dữ liệu lấy từ hourly_data đã fetch
 # sẵn → đổi địa điểm là tự cập nhật. Màu: xanh đậm = tốt (trời quang), trắng = xấu (mây dày).
 _CSC_DAYS = 7
@@ -6160,23 +4991,21 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
     illum = {d: get_moon_phase_percent(d0 + timedelta(days=d))[0] for d in range(_CSC_DAYS)}
     cols = [(d, d0 + timedelta(days=d), h) for d in range(_CSC_DAYS) for h in range(24)]
     n = len(cols)
-    ALL = ("_jma_msm", "_ecmwf_ifs025")
-
+    _csc_src = st.session_state.get("weather_source", "Blend")
     recs = []
     for d, day, h in cols:
         idx = idx_of.get(f"{day.strftime('%Y-%m-%d')}T{h:02d}:00")
-        r = {"cloud": None, "src": "", "ecm": None, "hum": None, "wind": None, "temp": None}
+        r = {"cloud": None, "src": "", "hum": None, "wind": None, "temp": None}
         if idx is not None:
-            c_jma = _csc_get(hourly, "cloud_cover", idx, ("_jma_msm",), bare=False)
-            c_ecm = _csc_get(hourly, "cloud_cover", idx, ("_ecmwf_ifs025",), bare=False)
-            if c_jma is not None:
-                r["cloud"], r["src"] = c_jma, "JMA"
-            elif c_ecm is not None:
-                r["cloud"], r["src"] = c_ecm, "ECMWF"
-            r["ecm"] = c_ecm
-            r["hum"] = _csc_get(hourly, "relative_humidity_2m", idx, ALL)
-            r["wind"] = _csc_get(hourly, "wind_speed_10m", idx, ALL)
-            r["temp"] = _csc_get(hourly, "temperature_2m", idx, ALL)
+            _lead = (datetime(day.year, day.month, day.day, h) - now_local).total_seconds() / 3600.0
+            def _g(_f):
+                _v, _s = _wx_pick(hourly, _f, idx, _csc_src, _lead)
+                return (_v if _s else None), _s
+            r["cloud"], _cs = _g("cloud_cover")
+            r["src"] = _cs or ""
+            r["hum"]  = _g("relative_humidity_2m")[0]
+            r["wind"] = _g("wind_speed_10m")[0]
+            r["temp"] = _g("temperature_2m")[0]
         sa = sun_g.get((d, h), -90.0)
         ma = moon_g.get((d, h), -90.0)
         r["sun"], r["moon"] = sa, ma
@@ -6238,15 +5067,6 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
             cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, r["cloud"]), r["dim"]),
                                f'{_tt(i)} Cloud ({r["src"]}): {int(round(r["cloud"]))}%'))
     p.append(_row("Cloud Cover:", cells))
-
-    cells = []
-    for i, r in enumerate(recs):
-        if r["ecm"] is None:
-            cells.append(_na(i, "ECMWF"))
-        else:
-            cells.append(_cell(i, _csc_hex(_csc_rgb(_CSC_CLOUD_STOPS, r["ecm"]), r["dim"]),
-                               f'{_tt(i)} ECMWF cloud: {int(round(r["ecm"]))}%'))
-    p.append(_row("ECMWF Cloud:", cells))
 
     cells = []
     for i, r in enumerate(recs):
@@ -6381,839 +5201,6 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden)tick
 else:
     st.caption("Clear Sky Forecast: weather data unavailable.")
 
-# ── LIVE SKY CAMERA (Weathernews) ─────────────────────────────────────────────
-# Tokyo mặc định → 1 camera ngẫu nhiên ở trung tâm Tokyo (giữ nguyên trong 1 phiên).
-# Chọn sao / điểm khác → camera của tỉnh chứa điểm đó (hoặc tỉnh của sao gần nhất ≤60km).
-# Tất cả URL lấy từ chính trang https://weathernews.jp/onebox/livecam/
-_LC_BASE = "https://weathernews.jp/onebox/livecam/"
-_LC_TOKYO_CENTER = [   # (camera id, tên) — đều nằm trong 23 quận trung tâm
-    ("410000116",    "東京タワー Tokyo Tower"),
-    ("410001395",    "新宿高層ビル群 Shinjuku"),
-    ("410000685",    "上野 Ueno"),
-    ("7CDDE906B8B7", "港区港南 Minato-Konan"),
-    ("7CDDE907BFAF", "千代田区外神田 Chiyoda-Sotokanda"),
-    ("7CDDE9089FF1", "港区南青山 Minato-Minamiaoyama"),
-    ("410001507",    "中央区箱崎 Chuo-Hakozaki"),
-]
-_LC_PREF = {   # tỉnh (đuôi tên địa điểm) → (đường dẫn trang camera, tên tiếng Nhật)
-    "Hokkaido": ("hokkaido/", "北海道"),
-    "Aomori": ("tohoku/aomori/", "青森"), "Iwate": ("tohoku/iwate/", "岩手"),
-    "Akita": ("tohoku/akita/", "秋田"), "Miyagi": ("tohoku/miyagi/", "宮城"),
-    "Yamagata": ("tohoku/yamagata/", "山形"), "Fukushima": ("tohoku/fukushima/", "福島"),
-    "Tokyo": ("kanto/tokyo/", "東京"), "Kanagawa": ("kanto/kanagawa/", "神奈川"),
-    "Saitama": ("kanto/saitama/", "埼玉"), "Chiba": ("kanto/chiba/", "千葉"),
-    "Ibaraki": ("kanto/ibaraki/", "茨城"), "Tochigi": ("kanto/tochigi/", "栃木"),
-    "Gunma": ("kanto/gunma/", "群馬"),
-    "Shizuoka": ("chubu/shizuoka/", "静岡"), "Aichi": ("chubu/aichi/", "愛知"),
-    "Gifu": ("chubu/gifu/", "岐阜"), "Yamanashi": ("chubu/yamanashi/", "山梨"),
-    "Nagano": ("chubu/nagano/", "長野"), "Niigata": ("chubu/niigata/", "新潟"),
-    "Toyama": ("chubu/toyama/", "富山"), "Ishikawa": ("chubu/ishikawa/", "石川"),
-    "Fukui": ("chubu/fukui/", "福井"),
-    "Osaka": ("kinki/osaka/", "大阪"), "Hyogo": ("kinki/hyogo/", "兵庫"),
-    "Kyoto": ("kinki/kyoto/", "京都"), "Shiga": ("kinki/shiga/", "滋賀"),
-    "Nara": ("kinki/nara/", "奈良"), "Wakayama": ("kinki/wakayama/", "和歌山"),
-    "Mie": ("kinki/mie/", "三重"),
-    "Hiroshima": ("chugoku/hiroshima/", "広島"), "Okayama": ("chugoku/okayama/", "岡山"),
-    "Yamaguchi": ("chugoku/yamaguchi/", "山口"), "Shimane": ("chugoku/shimane/", "島根"),
-    "Tottori": ("chugoku/tottori/", "鳥取"),
-    "Kagawa": ("shikoku/kagawa/", "香川"), "Tokushima": ("shikoku/tokushima/", "徳島"),
-    "Ehime": ("shikoku/ehime/", "愛媛"), "Kochi": ("shikoku/kouchi/", "高知"),
-    "Fukuoka": ("kyushu/fukuoka/", "福岡"), "Saga": ("kyushu/saga/", "佐賀"),
-    "Nagasaki": ("kyushu/nagasaki/", "長崎"), "Oita": ("kyushu/oita/", "大分"),
-    "Kumamoto": ("kyushu/kumamoto/", "熊本"), "Miyazaki": ("kyushu/miyazaki/", "宮崎"),
-    "Kagoshima": ("kyushu/kagoshima/", "鹿児島"),
-    "Okinawa": ("okinawa/", "沖縄"),
-}
-
-def _lc_resolve():
-    """Trả về ('tokyo_center', None) | ('pref', tên tỉnh) | ('japan', None)."""
-    lat, lon = st.session_state.lat, st.session_state.lon
-    nm = st.session_state.location_name
-    if nm in LOCATION_DATABASE:
-        pref = nm.rsplit(",", 1)[-1].strip()
-        return ("pref", pref) if pref in _LC_PREF else ("japan", None)
-    if _haversine_km(lat, lon, 35.6895, 139.6917) <= 25:
-        return ("tokyo_center", None)
-    best_n, best_d = None, 1e9
-    for n, (la, lo) in LOCATION_DATABASE.items():
-        d = _haversine_km(lat, lon, la, lo)
-        if d < best_d:
-            best_n, best_d = n, d
-    if best_n and best_d <= 60:
-        pref = best_n.rsplit(",", 1)[-1].strip()
-        if pref in _LC_PREF:
-            return ("pref", pref)
-    return ("japan", None)
-
-# ── helpers: lấy danh sách camera của tỉnh, ảnh mới nhất, toạ độ khu vực ──────────
-import html as _lc_html_mod
-_LC_UA = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"),
-          "Accept-Language": "ja,en;q=0.8"}
-_LC_PREF_PREFIX = re.compile(r"^(東京都|北海道|(?:京都|大阪)府|[^\s市区町村]{2,3}県)")
-
-def _lc_pref_full(pref_en):
-    jp = _LC_PREF[pref_en][1]
-    return {"Tokyo": "東京都", "Hokkaido": "北海道", "Osaka": "大阪府", "Kyoto": "京都府"}.get(pref_en, jp + "県")
-
-def _lc_muni(name):
-    """'八王子市別所' -> '八王子市'; '港区港南' -> '港区'; '東京タワー' -> None."""
-    n = _LC_PREF_PREFIX.sub("", name.strip())
-    m = re.match(r"^(.+?[市区町村])", n)
-    return m.group(1) if m else None
-
-@st.cache_data(ttl=21600, show_spinner=False)
-def _lc_pref_cameras(path):
-    """[(camera_id, name, page_path)] đọc từ trang camera của 1 tỉnh. Lỗi -> []."""
-    try:
-        r = requests.get(_LC_BASE + path, headers=_LC_UA, timeout=10)
-        r.raise_for_status()
-        txt = r.text
-    except Exception:
-        return []
-    out, seen = [], set()
-    for m in re.finditer(
-            r'href="(?:https://weathernews\.jp)?(/onebox/livecam/[a-z]+/[a-z]+/((?=[^/"]*\d)[0-9A-Za-z]{9,12}))/?"[^>]*>(.*?)</a>',
-            txt, re.S):
-        cid = m.group(2)
-        if cid in seen:
-            continue
-        name = re.sub(r"<[^>]+>", " ", m.group(3))
-        name = _lc_html_mod.unescape(re.sub(r"\s+", " ", name)).strip()
-        name = re.sub(r"\s*\d{1,2}/\d{1,2}\s+\d{1,2}:\d{2}$", "", name)
-        if not name:
-            continue
-        seen.add(cid)
-        out.append((cid, name, m.group(1) + "/"))
-    return out
-
-@st.cache_data(ttl=2592000, show_spinner=False)
-def _lc_geocode_munis(pref_full, munis):
-    """{市区町村: (lat, lon)} qua API geocoder công khai của GSI (Viện Địa lý Nhật). Chạy song song
-    bằng requests thuần (không đụng st.* trong thread), kết quả cache 30 ngày."""
-    from concurrent.futures import ThreadPoolExecutor
-    def one(mn):
-        try:
-            r = requests.get("https://msearch.gsi.go.jp/address-search/AddressSearch",
-                             params={"q": pref_full + mn}, timeout=8)
-            j = r.json()
-            if j:
-                lo, la = j[0]["geometry"]["coordinates"]
-                return mn, (float(la), float(lo))
-        except Exception:
-            pass
-        return mn, None
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        return {k: v for k, v in ex.map(one, munis) if v}
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _lc_latest_image(page_path):
-    """(url ảnh 640px mới nhất, 'yyyymmddhhmmss' JST) từ trang camera. Lỗi -> (None, None)."""
-    try:
-        r = requests.get("https://weathernews.jp" + page_path, headers=_LC_UA, timeout=10)
-        r.raise_for_status()
-        txt = r.text.replace("\\/", "/")
-        m = re.search(r"https://gvs\.weathernews\.jp/livecam/[0-9A-Za-z]+/640/(\d{14})\.(?:jpg|webp)", txt)
-        if m:
-            return m.group(0), m.group(1)
-    except Exception:
-        pass
-    return None, None
-
-def _lc_pick_nearest(pref, lat, lon):
-    """-> (camera, km|None, khu vực|None) hoặc None nếu tỉnh không có danh sách camera đọc được."""
-    cams = _lc_pref_cameras(_LC_PREF[pref][0])
-    if not cams:
-        return None
-    by_muni = {}
-    for c in cams:
-        mn = _lc_muni(c[1])
-        if mn:
-            by_muni.setdefault(mn, []).append(c)
-    coords = _lc_geocode_munis(_lc_pref_full(pref), tuple(sorted(by_muni))) if by_muni else {}
-    best = None
-    for mn, (la, lo) in coords.items():
-        d = _haversine_km(lat, lon, la, lo)
-        if best is None or d < best[0]:
-            best = (d, mn)
-    if best:
-        return by_muni[best[1]][0], best[0], best[1]
-    return cams[0], None, None
-
-def _lc_ts_label(ts):
-    # Timestamp trong tên file ảnh của Weathernews là UTC -> cộng 9h để ra giờ JST.
-    try:
-        return (datetime.strptime(ts, "%Y%m%d%H%M%S") + timedelta(hours=9)).strftime("%m/%d %H:%M JST")
-    except Exception:
-        return ""
-
-def _cam_card_html(img_src, link, sub, title, stamp, btn_label, extra=""):
-    """Thẻ camera dùng chung cho Sky & Road: cùng khung, ảnh 16:9 full-width, cùng bố cục chú thích."""
-    shot = ""
-    if img_src:
-        shot = (f'<a href="{link}" target="_blank" rel="noopener">'
-                f'<img src="{img_src}" referrerpolicy="no-referrer" '
-                f'alt="Camera image unavailable — open the source page" '
-                f'style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;'
-                f'display:block;margin-bottom:10px;background:#1e293b;"></a>')
-    return (f'<div style="{_lc_card}">{shot}'
-            f'<div style="color:#94a3b8;font-size:12px;margin-bottom:4px;min-height:34px;line-height:17px;">{sub}</div>'
-            f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;">'
-            f'{_lc_html_mod.escape(title)}<span style="color:#64748b;font-weight:500;'
-            f'font-size:12px;"> · {stamp}</span></div>'
-            f'{extra}</div>')
-
-_CAM_H = 595   # chiều cao iframe của thẻ camera (ảnh tối đa 420px + chú thích)
-
-_CAM_DOC_TMPL = r"""<!--ANIM--><!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-html,body{margin:0;padding:0;background:transparent;font-family:sans-serif;}
-.card{box-sizing:border-box;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;}
-.shot{position:relative;}
-.shot img{width:100%;aspect-ratio:16/9;max-height:420px;object-fit:cover;border-radius:10px;display:block;background:#1e293b;}
-.ctl{position:absolute;right:8px;bottom:8px;display:flex;gap:6px;align-items:center;}
-.pp{background:rgba(15,23,42,.78);color:#e2e8f0;border:1px solid #475569;border-radius:8px;font-size:12px;padding:4px 10px;cursor:pointer;}
-.cnt{background:rgba(15,23,42,.78);color:#cbd5e1;border-radius:8px;font-size:11px;padding:4px 8px;}
-.bar{height:3px;background:#1e293b;border-radius:2px;margin:6px 0 8px;overflow:hidden;}
-.bar>i{display:block;height:100%;width:0;background:#fb923c;}
-.sub{color:#94a3b8;font-size:12px;margin-bottom:4px;min-height:34px;line-height:17px;}
-.ttl{color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:8px;}
-.ttl span{color:#64748b;font-weight:500;font-size:12px;}
-</style></head><body>
-<div class="card">
-  <div class="shot"><a href="__LINK__" target="_blank" rel="noopener"><img id="im" referrerpolicy="no-referrer" alt="Camera image unavailable — open the source page"></a>
-    <div class="ctl" id="ctl" style="display:none"><span class="cnt" id="cnt"></span><button class="pp" id="pp" type="button">❚❚</button></div></div>
-  <div class="bar"><i id="bar"></i></div>
-  <div class="sub">__SUB__</div>
-  <div class="ttl">__TITLE__<span> · <b id="st" style="font-weight:500">__STAMP__</b></span></div>
-  __EXTRA__
-</div>
-<script>
-(function(){
-var CFG=__CFG__;
-var img=document.getElementById('im'),st=document.getElementById('st'),pp=document.getElementById('pp'),
-    bar=document.getElementById('bar'),cnt=document.getElementById('cnt'),ctl=document.getElementById('ctl');
-var frames=[],idx=0,timer=null,playing=false;
-// Nhãn thời gian: "● LIVE · 4 min ago" (tính theo đồng hồ trình duyệt, tự cập nhật) thay cho giờ tuyệt đối.
-function age(e,last){var m=Math.max(0,Math.round((Date.now()-e)/60000));
-  var t=m<1?'just now':(m<60?m+' min ago':Math.floor(m/60)+' h '+(m%60)+' min ago');
-  if(!last)return {t:t,c:''};
-  return m<20?{t:'● LIVE · '+t,c:'#4ade80'}:{t:'⚠ '+t,c:'#fbbf24'};}
-function label(i){var f=frames[i];if(f.e==null){st.style.color='';return f.l;}
-  var r=age(f.e,i===frames.length-1);st.style.color=r.c;return r.t;}
-setInterval(function(){if(frames.length)st.textContent=label(idx);},20000);
-function show(i){idx=i;img.src=frames[i].s;st.textContent=label(i);
-  bar.style.width=((i+1)/frames.length*100)+'%';cnt.textContent=(i+1)+'/'+frames.length;}
-function tick(){var n=(idx+1)%frames.length;show(n);timer=setTimeout(tick,n===frames.length-1?1600:450);}
-function play(){playing=true;pp.textContent='❚❚';clearTimeout(timer);timer=setTimeout(tick,450);}
-function pause(){playing=false;pp.textContent='▶';clearTimeout(timer);}
-pp.onclick=function(e){e.preventDefault();playing?pause():play();};
-function start(fr){
-  frames=fr; if(!frames.length)return;
-  if(frames.length<2){show(0);bar.style.width='100%';return;}
-  ctl.style.display='flex'; show(0); play();
-}
-function p2(n){return (n<10?'0':'')+n;}
-function toTs(ms){var d=new Date(ms);return ''+d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate())+p2(d.getUTCHours())+p2(d.getUTCMinutes())+p2(d.getUTCSeconds());}
-function parse(t){return Date.UTC(+t.slice(0,4),+t.slice(4,6)-1,+t.slice(6,8),+t.slice(8,10),+t.slice(10,12),+t.slice(12,14));}
-if(CFG.mode==='static'){ start(CFG.frames); }
-else{
-  // Weathernews: ảnh đặt tên theo thời điểm chụp (JST). Hiện ảnh mới nhất ngay, rồi dò ngược từng phút
-  // trong trình duyệt; ảnh nào tồn tại thì đưa vào vòng lặp.
-  var A=parse(CFG.anchor),total=CFG.minutes+1,done=0,hits=[],fin=false;
-  // Tự nhận biết mốc giờ trong tên file: nếu là UTC thì "tuổi" ảnh ~0-60 phút; nếu lệch ~-9h
-  // nghĩa là mốc đó là giờ JST (không phải UTC) → trừ 9h cho đúng.
-  var OFF=0,d0=Date.now()-A; if(d0<-4*3600000&&d0>-14*3600000)OFF=-9*3600000;
-  img.src=CFG.base+CFG.anchor+'.'+CFG.ext;
-  var r0=age(A+OFF,true); st.textContent=r0.t; st.style.color=r0.c;
-  function finish(){
-    if(fin)return; fin=true;
-    hits.sort(function(a,b){return a.t<b.t?-1:1;});
-    start(hits.slice(-CFG.max).map(function(h){return {s:h.s,e:parse(h.t)+OFF};}));
-  }
-  for(var k=0;k<=CFG.minutes;k++){
-    (function(t){
-      var im=new Image(); im.referrerPolicy='no-referrer';
-      var url=CFG.base+t+'.'+CFG.ext;
-      im.onload=function(){hits.push({t:t,s:url});if(++done===total)finish();};
-      im.onerror=function(){if(++done===total)finish();};
-      im.src=url;
-    })(toTs(A-k*60000));
-  }
-  setTimeout(finish,9000);
-}
-})();
-</script></body></html>"""
-
-def _cam_anim_doc(cfg, link, sub, title, stamp, btn_label, extra=""):
-    """Thẻ camera có animation (HTML đầy đủ cho components.html). cfg: static(frames) hoặc probe(Weathernews)."""
-    import json as _json
-    doc = _CAM_DOC_TMPL
-    for k, v in (("__CFG__", _json.dumps(cfg).replace("</", "<\\/")), ("__LCBTN__", _lc_btn),
-                 ("__LINK__", link), ("__SUB__", sub), ("__TITLE__", _lc_html_mod.escape(title)),
-                 ("__STAMP__", stamp), ("__BTNLABEL__", btn_label), ("__EXTRA__", extra)):
-        doc = doc.replace(k, v)
-    return doc
-
-def _is_mobile_ua():
-    try:
-        _ua = (st.context.headers.get("User-Agent") or "").lower()
-    except Exception:
-        return False
-    return ("iphone" in _ua) or ("android" in _ua and "mobile" in _ua)
-
-def _cam_show(content, kind="sky"):
-    if isinstance(content, str) and content.startswith("<!--ANIM-->"):
-        # Streamlit mới: st.iframe tự đo chiều cao nội dung (hết khoảng trống trên màn hình nhỏ)
-        if hasattr(st, "iframe"):
-            try:
-                st.iframe(content, height="content")
-                return
-            except Exception:
-                pass
-        # Streamlit cũ: chiều cao cố định, ngắn hơn trên điện thoại (ảnh hẹp → thẻ thấp hơn)
-        _h = (340 if kind == "sky" else 390) if _is_mobile_ua() else _CAM_H
-        _lc_components.html(content, height=_h)
-    else:
-        st.markdown(content, unsafe_allow_html=True)
-
-def _lc_card_html(cam_name, page_path, sub, img_url, ts):
-    link = "https://weathernews.jp" + page_path
-    m = re.search(r"/livecam/([0-9A-Za-z]+)/640/(\d{14})\.(jpg|webp)", img_url or "")
-    if m:
-        cfg = {"mode": "probe", "base": img_url[:img_url.rindex("/") + 1], "ext": m.group(3),
-               "anchor": m.group(2), "minutes": 50, "max": 10}
-    else:
-        cfg = {"mode": "static", "frames": [{"s": img_url, "l": _lc_ts_label(ts)}]}
-    return _cam_anim_doc(cfg, link, sub, cam_name, "" if cfg["mode"] == "probe" else (_lc_ts_label(ts) if ts else ""), "Open on Weathernews ↗")
-
-st.markdown(f'### 📹 Live Camera near "{_disp_name_html(st.session_state.location_name)}"', unsafe_allow_html=True)
-_lc_kind, _lc_pref = _lc_resolve()
-_lc_card = ("background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px 16px;"
-            "font-family:sans-serif;")
-_lc_btn = ("display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;"
-           "font-weight:700;font-size:13px;padding:7px 14px;border-radius:8px;")
-from contextlib import nullcontext as _nullctx
-_CAM_REFRESH_SEC = 120   # camera tự cập nhật mỗi 2 phút (Weathernews ~5 phút/ảnh, MLIT ~10 phút/ảnh)
-
-def _cam_spinner(msg):
-    # chỉ hiện spinner ở lần tải đầu; các lần tự refresh chạy ngầm cho đỡ nháy
-    if st.session_state.get("_cam_loaded"):
-        return _nullctx()
-    return st.spinner(msg)
-
-def _cam_fragment(fn):
-    frag = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
-    if frag is None:          # Streamlit cũ: không tự refresh được
-        return fn
-    try:
-        return frag(run_every=_CAM_REFRESH_SEC)(fn)
-    except TypeError:
-        return frag(fn)
-
-def _lc_build_sky():
-    _lc_out = None
-    try:
-        with _cam_spinner("Loading live camera..."):
-            if _lc_kind == "tokyo_center":
-                if "_lc_tokyo_pick" not in st.session_state:
-                    st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
-                _pick = next((c for c in _LC_TOKYO_CENTER if c[0] == st.session_state._lc_tokyo_pick),
-                             _LC_TOKYO_CENTER[0])
-                _pp = f"/onebox/livecam/kanto/tokyo/{_pick[0]}/"
-                _iu, _ts = _lc_latest_image(_pp)
-                if _iu:
-                    _lc_out = _lc_card_html(_pick[1], _pp, "Central Tokyo · random camera", _iu, _ts)
-            elif _lc_kind == "pref":
-                _near = _lc_pick_nearest(_lc_pref, st.session_state.lat, st.session_state.lon)
-                if _near:
-                    _cam, _km, _area = _near
-                    _iu, _ts = _lc_latest_image(_cam[2])
-                    if _iu:
-                        _where = (f"{_area} (~{_km:.0f} km from "
-                                  f"{_disp_name(st.session_state.location_name)})") if _area else \
-                                 f"{_lc_pref} · camera in the same prefecture"
-                        _lc_out = _lc_card_html(_cam[1], _cam[2], _where, _iu, _ts)
-    except Exception:
-        _lc_out = None
-
-    if _lc_out is None:   # không đọc được ảnh -> quay về thẻ link như trước
-        if _lc_kind == "tokyo_center":
-            _fb_path, _fb_txt = "kanto/tokyo/", "Tokyo live cameras"
-        elif _lc_kind == "pref":
-            _fb_path, _fb_txt = _LC_PREF[_lc_pref][0], f"{_lc_pref} ({_LC_PREF[_lc_pref][1]}) live cameras"
-        else:
-            _fb_path, _fb_txt = "", "All-Japan live cameras"
-        _lc_out = (f'<div style="{_lc_card}">'
-                   f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px;">'
-                   f'Could not load a camera image here — open it on Weathernews</div>'
-                   f'<div style="color:#e2e8f0;font-size:15px;font-weight:700;margin-bottom:10px;">{_fb_txt}</div>'
-                   f'<a href="{_LC_BASE}{_fb_path}" target="_blank" rel="noopener" style="{_lc_btn}">'
-                   f'Open ↗</a></div>')
-    return _lc_out
-
-# ── Bên phải: camera đường bộ MLIT (道路情報提供システム) — 1 camera gần nhất ──────────
-# Lấy từ trang danh sách tĩnh /roadinfo/sp/spImageList_<mã vùng>_1.html (HTML thường, không cần JS).
-# Mỗi camera có ảnh .../doro_gazo/pc/<yyyymmddhhmmss JST>/s_<id>.jpeg + tên (vd 札幌市小野幌).
-# Danh sách không có toạ độ -> lấy tên 市区町村 trong tên camera, geocode bằng GSI rồi chọn gần nhất.
-# MLIT ghi "各画像への直リンクはご遠慮ください" -> tải ảnh phía server (cache 5 phút), không hotlink.
-import streamlit.components.v1 as _lc_components
-import base64 as _rd_b64
-from urllib.parse import urljoin as _rd_urljoin
-
-_RD_BASE   = "https://www.road-info-prvs.mlit.go.jp/roadinfo/"
-_RD_LIST   = _RD_BASE + "sp/spImageList_{code}_1.html"
-_RD_DETAIL = _RD_BASE + "sp/spImageDetail_{cid}.html"
-# tỉnh -> các mã vùng cần đọc. CHỈ 81 (Hokkaido), 82 (Tohoku), 90 (Okinawa) đã xác nhận;
-# 83–89 là suy luận theo thứ tự các Cục — hãy mở thử spImageList_83_1.html... để kiểm tra.
-_RD_REGION = {}
-for _p in ("Hokkaido",):
-    _RD_REGION[_p] = ("81",)
-for _p in ("Aomori", "Iwate", "Akita", "Miyagi", "Yamagata", "Fukushima"):
-    _RD_REGION[_p] = ("82",)
-for _p in ("Tokyo", "Kanagawa", "Saitama", "Chiba", "Ibaraki", "Tochigi", "Gunma"):
-    _RD_REGION[_p] = ("83",)
-for _p in ("Niigata", "Toyama", "Ishikawa"):
-    _RD_REGION[_p] = ("84",)
-for _p in ("Shizuoka", "Aichi", "Gifu"):
-    _RD_REGION[_p] = ("85",)
-for _p in ("Osaka", "Hyogo", "Kyoto", "Shiga", "Nara", "Wakayama"):
-    _RD_REGION[_p] = ("86",)
-for _p in ("Hiroshima", "Okayama", "Yamaguchi", "Shimane", "Tottori"):
-    _RD_REGION[_p] = ("87",)
-for _p in ("Kagawa", "Tokushima", "Ehime", "Kochi"):
-    _RD_REGION[_p] = ("88",)
-for _p in ("Fukuoka", "Saga", "Nagasaki", "Oita", "Kumamoto", "Miyazaki", "Kagoshima"):
-    _RD_REGION[_p] = ("89",)
-_RD_REGION["Okinawa"] = ("90",)
-_RD_REGION.update({"Yamanashi": ("83", "85"), "Nagano": ("83", "84", "85"),
-                   "Fukui": ("84", "86"), "Mie": ("85", "86")})
-_RD_MAX_KM = 35   #xa hơn mức này thì coi như không có camera gần -> quay về bản đồ
-
-_RD_IMG_RE = re.compile(
-    r'<img[^>]+src="([^"]*?doro_gazo/pc/(\d{14})/s_([0-9A-Za-z]+)\.(?:jpe?g|png))"[^>]*>(.*?)(?=<img|\Z)',
-    re.S | re.I)
-
-@st.cache_data(ttl=120, show_spinner=False)
-def _rd_list(code):
-    """[(camera_id, tên, url ảnh nhỏ, 'yyyymmddhhmmss' JST)] của 1 vùng. Lỗi -> []."""
-    url = _RD_LIST.format(code=code)
-    try:
-        r = requests.get(url, headers=_LC_UA, timeout=12)
-        r.raise_for_status()
-        txt = r.content.decode("utf-8", errors="replace")
-    except Exception:
-        return []
-    out, seen = [], set()
-    for m in _RD_IMG_RE.finditer(txt):
-        src, ts, cid, tail = m.groups()
-        if cid in seen:
-            continue
-        lines = [re.sub(r"\s+", " ", x).strip()
-                 for x in _lc_html_mod.unescape(re.sub(r"<[^>]+>", "\n", tail)).split("\n")]
-        lines = [x for x in lines if x]
-        if not lines or re.match(r"^\d{4}/", lines[0]):
-            continue
-        seen.add(cid)
-        out.append((cid, lines[0], _rd_urljoin(url, src), ts))
-    return out
-
-@st.cache_data(ttl=2592000, show_spinner=False)
-def _rd_geocode(queries):
-    """{truy vấn: [(lat, lon, 'tỉnh+địa chỉ'), ...]} qua GSI (giữ thứ tự độ liên quan GSI trả về)."""
-    from concurrent.futures import ThreadPoolExecutor
-    def one(q):
-        try:
-            j = requests.get("https://msearch.gsi.go.jp/address-search/AddressSearch",
-                             params={"q": q}, timeout=8).json()
-            pts = [(float(g["geometry"]["coordinates"][1]), float(g["geometry"]["coordinates"][0]),
-                    str((g.get("properties") or {}).get("title", ""))) for g in j[:10]]
-            return q, pts
-        except Exception:
-            return q, []
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        return {k: v for k, v in ex.map(one, queries) if v}
-
-# Tỉnh (tiếng Nhật) thuộc mỗi vùng mã MLIT — dùng để loại các địa danh trùng tên ở vùng khác
-_RD_REGION_JA = {
-    "81": ("北海道",),
-    "82": ("青森県", "岩手県", "秋田県", "宮城県", "山形県", "福島県"),
-    "83": ("東京都", "神奈川県", "埼玉県", "千葉県", "茨城県", "栃木県", "群馬県", "山梨県", "長野県"),
-    "84": ("新潟県", "富山県", "石川県", "福井県", "長野県"),
-    "85": ("静岡県", "愛知県", "岐阜県", "三重県", "長野県", "山梨県"),
-    "86": ("大阪府", "兵庫県", "京都府", "滋賀県", "奈良県", "和歌山県", "三重県", "福井県"),
-    "87": ("広島県", "岡山県", "山口県", "島根県", "鳥取県"),
-    "88": ("香川県", "徳島県", "愛媛県", "高知県"),
-    "89": ("福岡県", "佐賀県", "長崎県", "大分県", "熊本県", "宮崎県", "鹿児島県"),
-    "90": ("沖縄県",),
-}
-# Nếu thấy camera đặt sai chỗ: thêm vào đây  "đoạn đầu tên camera": (vĩ độ, kinh độ)
-_RD_COORD_OVERRIDE = {
-    "上野原": (35.622, 139.108),     # 上野原 (Yamanashi), quốc lộ 20
-}
-_RD_PREF_RE = re.compile(r"^(北海道|東京都|京都府|大阪府|.{2,3}県)")
-
-def _rd_query(name):
-    """Khoá geocode cho 1 camera: 市区町村 nếu có; không thì dùng chính tên camera (đã làm sạch)."""
-    mn = _lc_muni(name)
-    if mn:
-        return mn
-    q = re.sub(r"[\(（].*?[\)）]", "", name)                 # bỏ '(仁木側)'
-    q = re.sub(r"(TN|ST|トンネル.*|カメラ\d*|\d+)$", "", q.strip())  # bỏ hậu tố TN / số
-    return q.strip() or None
-
-def _rd_fetch_img_impl(url):
-    """(bytes, mime) hoặc (None, None). Thử bản lớn (bỏ 's_') trước, rồi bản nhỏ."""
-    for u in (url.replace("/s_", "/", 1), url):
-        try:
-            r = requests.get(u, headers={**_LC_UA, "Referer": _RD_BASE}, timeout=12)
-            ct = r.headers.get("Content-Type", "").split(";")[0]
-            if r.status_code == 200 and ct.startswith("image"):
-                return r.content, ct
-        except Exception:
-            pass
-    return None, None
-
-@st.cache_data(ttl=120, show_spinner=False)
-def _rd_fetch_img(url):
-    return _rd_fetch_img_impl(url)
-
-def _rd_compress(b, mime):
-    """Thu nhỏ ≤800px, JPEG q72 để nhúng nhiều khung vào animation mà vẫn nhẹ."""
-    try:
-        import io
-        from PIL import Image as _PILImage
-        im = _PILImage.open(io.BytesIO(b)).convert("RGB")
-        im.thumbnail((800, 800))
-        buf = io.BytesIO()
-        im.save(buf, "JPEG", quality=72, optimize=True)
-        return buf.getvalue(), "image/jpeg"
-    except Exception:
-        return b, mime
-
-@st.cache_resource
-def _rd_frame_store():
-    return {}
-
-def _rd_get_frames(urls):
-    """Tải song song (thread thuần requests) các khung chưa có; ảnh cũ không đổi nên giữ lại.
-    Khung không tồn tại/ lỗi được thử lại sau 10 phút."""
-    import time as _t
-    from concurrent.futures import ThreadPoolExecutor
-    store = _rd_frame_store()
-    now = _t.time()
-    todo = [u for u in urls if u not in store or (store[u][1] is None and now - store[u][0] > 600)]
-    def one(u):
-        b, mime = _rd_fetch_img_impl(u)
-        return u, (_rd_compress(b, mime) if b else None)
-    if todo:
-        with ThreadPoolExecutor(max_workers=5) as ex:
-            for u, res in ex.map(one, todo):
-                store[u] = (now, res)
-        if len(store) > 200:
-            for k in sorted(store, key=lambda x: store[x][0])[:60]:
-                store.pop(k, None)
-    return [store[u][1] if u in store else None for u in urls]
-
-def _rd_frames(cam, b, mime, back=5):
-    """Danh sách khung (cũ -> mới) cho animation: cam[3] là thư mục thời gian (mỗi 10 phút, JST)."""
-    ts = cam[3]
-    def lab(t):
-        return f"{t[4:6]}/{t[6:8]} {t[8:10]}:{t[10:12]} JST"
-    def ems(t):   # mốc thời gian (JST) -> epoch ms, để trình duyệt tính "X min ago"
-        try:
-            return int(datetime.strptime(t, "%Y%m%d%H%M%S").replace(
-                tzinfo=timezone(timedelta(hours=9))).timestamp() * 1000)
-        except Exception:
-            return None
-    def uri(res):
-        return f"data:{res[1]};base64,{_rd_b64.b64encode(res[0]).decode()}"
-    stamps, urls = [], []
-    try:
-        t0 = datetime.strptime(ts, "%Y%m%d%H%M%S")
-        for k in range(back, 0, -1):
-            tk = (t0 - timedelta(minutes=10 * k)).strftime("%Y%m%d%H%M%S")
-            stamps.append(tk); urls.append(cam[2].replace(ts, tk))
-    except Exception:
-        pass
-    store = _rd_frame_store()
-    if cam[2] not in store or store[cam[2]][1] is None:     # khung mới nhất: dùng ảnh đã tải sẵn
-        import time as _t
-        store[cam[2]] = (_t.time(), _rd_compress(b, mime))
-    res = _rd_get_frames(urls)
-    frames = [{"s": uri(r), "l": lab(t), "e": ems(t)} for t, r in zip(stamps, res) if r]
-    frames.append({"s": uri(store[cam[2]][1]), "l": lab(ts), "e": ems(ts)})
-    return frames
-
-def _rd_nearest(pref, lat, lon, top=5):
-    """Tối đa `top` camera gần nhất: [(km, (id, tên, url, ts), khoá-vị-trí)]. Ghi lý do vào _rd_diag."""
-    global _rd_diag
-    cams = []
-    codes = _RD_REGION.get(pref, ())
-    for code in codes:
-        cams += _rd_list(code)
-    if not cams:
-        _rd_diag = (f"Could not load the MLIT road-camera list (region code {', '.join(codes) or '?'}).  \n"
-                    f"MLIT道路カメラの一覧を取得できませんでした（地域コード {', '.join(codes) or '?'}）。")
-        return []
-    allowed = tuple(sorted({x for c in codes for x in _RD_REGION_JA.get(c, ())}))
-    keys = tuple(sorted({q for q in (_rd_query(c[1]) for c in cams) if q}))
-    geo = _rd_geocode(keys) if keys else {}
-
-    def in_region(title):
-        m = _RD_PREF_RE.match(title or "")
-        return (not m) or (not allowed) or (m.group(1) in allowed)
-
-    user_ja = _lc_pref_full(pref) if pref in _LC_PREF else ""   # vd 'Kanagawa' -> '神奈川県'
-
-    def pref_of(title):
-        m = _RD_PREF_RE.match(title or "")
-        return m.group(1) if m else ""
-
-    ranked = []
-    for c in cams:
-        ov = next((v for k, v in _RD_COORD_OVERRIDE.items() if c[1].startswith(k)), None)
-        if ov:
-            ranked.append((_haversine_km(lat, lon, ov[0], ov[1]), c, "override"))
-            continue
-        q = _rd_query(c[1])
-        cands = [x for x in (geo.get(q) or []) if in_region(x[2])]
-        # bỏ kết quả "mờ" của GSI: tiêu đề phải thật sự chứa tên đã tìm (vd '神奈川県三浦市' chứa '三浦市')
-        strict = [x for x in cands if q and q in x[2]]
-        if strict:
-            cands = strict
-        if not cands:
-            continue
-        mine = [x for x in cands if pref_of(x[2]) == user_ja]   # ưu tiên địa danh nằm ĐÚNG tỉnh của người dùng
-        if _lc_muni(c[1]):      # có 市区町村: lấy điểm gần người dùng nhất, trong số ứng viên cùng tỉnh (nếu có)
-            la, lo, tt = min(mine or cands, key=lambda x: _haversine_km(lat, lon, x[0], x[1]))
-        else:                   # chỉ có địa danh: lấy kết quả GSI xếp liên quan nhất, ưu tiên cùng tỉnh
-            la, lo, tt = (mine or cands)[0]
-        d = _haversine_km(lat, lon, la, lo)
-        # địa danh nằm ở tỉnh khác chỉ được chấp nhận nếu rất gần (camera sát ranh giới tỉnh)
-        if pref_of(tt) != user_ja and d > 25:
-            continue
-        ranked.append((d, c, f"{q} → {tt}"))
-    ranked.sort(key=lambda x: x[0])
-    if not ranked:
-        _rd_diag = (f"Loaded {len(cams)} cameras, but none could be located on the map.  \n"
-                    f"{len(cams)}台のカメラを取得しましたが、位置を特定できませんでした。")
-    elif ranked[0][0] > _RD_MAX_KM:
-        _rd_diag = (f"Nearest camera: {ranked[0][1][1]} (~{ranked[0][0]:.0f} km) — farther than {_RD_MAX_KM} km, "
-                    f"so the map is shown instead.  \n"
-                    f"最寄りのカメラ: {ranked[0][1][1]}（約{ranked[0][0]:.0f} km）— {_RD_MAX_KM} kmより遠いため、地図を表示します。")
-    return ranked[:top]
-
-def _rd_build():
-    _rd_pref = "Tokyo" if _lc_kind == "tokyo_center" else (_lc_pref if _lc_kind == "pref" else None)
-    _rd = None   # (cam, km, muni, bytes, mime)
-    try:
-        if _rd_pref:
-            with _cam_spinner("Loading road camera..."):
-                for _km, _cam, _mn in _rd_nearest(_rd_pref, st.session_state.lat, st.session_state.lon):
-                    if _km > _RD_MAX_KM:
-                        break
-                    _b, _mime = _rd_fetch_img(_cam[2])
-                    if _b:
-                        _rd = (_cam, _km, _mn, _b, _mime)
-                        break
-    except Exception:
-        _rd = None
-    return _rd
-
-@_cam_fragment
-def _cam_render():
-    _sky_html = _lc_build_sky()
-    _rd = _rd_build()
-    st.session_state._cam_loaded = True
-    _road_url = (f"https://www.road-info-prvs.mlit.go.jp/roadinfo/pc/"
-                 f"?ido={st.session_state.lat:.5f}&keido={st.session_state.lon:.5f}&page=30&zoom=10")
-    _lc_lbl = "font-family:sans-serif;font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px;"
-    _lc_col_sky, _lc_col_road = st.columns(2)
-    with _lc_col_sky:
-        st.markdown(f'<div style="{_lc_lbl}">☁️ SKY CAMERA · Weathernews</div>', unsafe_allow_html=True)
-        _cam_show(_sky_html)
-    with _lc_col_road:
-        st.markdown(f'<div style="{_lc_lbl}">🛣️ ROAD CAMERA · MLIT 道路情報提供システム</div>',
-                    unsafe_allow_html=True)
-        if _rd:
-            _cam, _km, _mn, _b, _mime = _rd
-            _detail = _RD_DETAIL.format(cid=_cam[0])
-            _frames = _rd_frames(_cam, _b, _mime)
-            _sub = (f"{_lc_html_mod.escape(_cam[1])} (~{_km:.0f} km from "
-                    f"{_lc_html_mod.escape(_disp_name(st.session_state.location_name))})")
-            _extra = ""   # đã bỏ link "Map ↗"
-            _cam_show(_cam_anim_doc({"mode": "static", "frames": _frames}, _detail, _sub, _cam[1],
-                                    "", "Open on MLIT ↗", _extra), kind="road")
-        else:   # không lấy được camera gần -> quay về bản đồ như cũ
-            if _rd_diag:
-                st.caption(f"ℹ️ {_rd_diag}")
-            _lc_components.iframe(_road_url, height=380, scrolling=False)
-            st.markdown(
-                f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
-                f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
-                f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
-                unsafe_allow_html=True)
-
-_cam_render()
-# ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
-# Ảnh: {base}{prefix}{N}.{HH}Z{DD}{MON}{YYYY}.png  (N = 1..; HH = giờ UTC của thời điểm dự báo = giờ khởi đầu + N − 1)
-# Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
-_GPV_MODELS = {
-    "msm": {"label": "関東 39h", "title": "JMA MSM GPV · Kanto · Rain & Cloud (39h)",
-            "base": "http://weather-gpv.info/msm/", "prefix": "msm_cp_kt_", "step_h": 3, "tries": 7, "frames": 40},
-    "gsm": {"label": "東日本 264h", "title": "JMA GSM GPV · East Japan · Rain & Cloud (264h)",
-            "base": "http://s3.weather-gpv.info/gsm/", "prefix": "gsm_cp_e_", "step_h": 12, "tries": 5, "frames": None},
-    "gsmw": {"label": "西日本 264h", "title": "JMA GSM GPV · West Japan · Rain & Cloud (264h)",
-             "base": "http://weather-gpv.info/gsm/", "prefix": "gsm_cp_w_", "step_h": 12, "tries": 5, "frames": None},
-}
-_GPV_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36",
-                "Referer": "http://weather-gpv.info/"}
-_GPV_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-_GPV_GSM_CAP = 177        # 広域(264時間): N=1..133 cách 1h (+0..+132h), N=134..177 cách 3h (+135..+264h)
-
-def _gpv_off(model, n):
-    """Giờ dự báo (so với giờ khởi đầu) của khung n."""
-    if model == "msm" or n <= 133:
-        return n - 1
-    return 3 * n - 267          # GSM: N=134 → +135h, ..., N=177 → +264h
-
-def _gpv_n_from_hours(model, h):
-    """Khung gần nhất với h giờ sau giờ khởi đầu."""
-    if model == "msm" or h <= 132:
-        return int(round(h)) + 1
-    return int(round((h + 267) / 3.0))
-
-def _gpv_url(model, init_utc, n):
-    m = _GPV_MODELS[model]
-    v = init_utc + timedelta(hours=_gpv_off(model, n))
-    return f"{m['base']}{m['prefix']}{n}.{v:%H}Z{v:%d}{_GPV_MON[v.month - 1]}{v.year}.png"
-
-def _gpv_exists(model, init_utc, n):
-    try:
-        r = requests.get(_gpv_url(model, init_utc, n), headers=_GPV_HEADERS, timeout=6, stream=True)
-        ok = (r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"))
-        r.close()
-        return ok
-    except Exception:
-        return False
-
-def _gpv_find_max(exists, cap):
-    """Khung lớn nhất tồn tại trong 1..cap (giả định các khung liên tục: có khung k thì có khung < k)."""
-    if exists(cap):
-        return cap
-    lo, hi = 1, cap
-    while hi - lo > 1:
-        mid = (lo + hi) // 2
-        if exists(mid):
-            lo = mid
-        else:
-            hi = mid
-    return lo
-
-@st.cache_data(ttl=600, show_spinner=False)
-def _gpv_latest_init(model: str, _bucket: int):
-    """Lần chạy mới nhất đã có ảnh (MSM mỗi 3h, GSM mỗi 6h; UTC). Thử lùi dần."""
-    m = _GPV_MODELS[model]
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-    base = now - timedelta(hours=now.hour % m["step_h"])
-    for k in range(m["tries"]):
-        init = base - timedelta(hours=m["step_h"] * k)
-        if _gpv_exists(model, init, 1):
-            return init.isoformat()
-    return None
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def _gpv_nframes(model: str, init_iso: str):
-    m = _GPV_MODELS[model]
-    if m["frames"]:
-        return m["frames"]
-    init = datetime.fromisoformat(init_iso)
-    return _gpv_find_max(lambda n: _gpv_exists(model, init, n), _GPV_GSM_CAP)
-
-@st.cache_data(ttl=1800, max_entries=150, show_spinner=False)
-def _gpv_frame(model: str, init_iso: str, n: int):
-    """PNG bytes của khung n. Lỗi → raise (cache_data không lưu lỗi)."""
-    r = requests.get(_gpv_url(model, datetime.fromisoformat(init_iso), n), headers=_GPV_HEADERS, timeout=10)
-    r.raise_for_status()
-    if not r.headers.get("Content-Type", "").startswith("image"):
-        raise ValueError("not an image")
-    return r.content
-
-def _gpv_step(d):
-    st.session_state.gpv_n = max(1, min(st.session_state.get("gpv_max", 1), st.session_state.get("gpv_n", 1) + d))
-
-_gpv_fragment = (getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda f: f))
-
-@_gpv_fragment
-def _gpv_viewer():
-    import time as _t
-    _labels = {k: v["label"] for k, v in _GPV_MODELS.items()}
-    if st.session_state.get("gpv_model") not in _GPV_MODELS:
-        st.session_state.gpv_model = "msm"
-    model = st.session_state.gpv_model
-    st.markdown("### ☁️ GPV Weather")
-    with st.container(key="gpv_box"):
-        # hàng 1: chọn chế độ/vùng; hàng 2: ⬅️ [thanh trượt giờ] ➡️ — nằm trong cùng một khung, không xuống dòng trên iPhone
-        st.radio("gpv_mode", list(_GPV_MODELS), key="gpv_model", horizontal=True,
-                 format_func=lambda k: _labels[k], label_visibility="collapsed")
-        model = st.session_state.gpv_model
-        init_iso = _gpv_latest_init(model, int(_t.time() // 600))
-        if not init_iso:
-            st.caption("JMA GPV is unavailable right now.")
-            return
-        init = datetime.fromisoformat(init_iso)
-        nmax = _gpv_nframes(model, init_iso)
-        st.session_state.gpv_max = nmax
-        if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy mới → khung gần giờ hiện tại
-            st.session_state.gpv_sig = (model, init_iso)
-            _h = (datetime.utcnow() - init).total_seconds() / 3600.0
-            st.session_state.gpv_n = max(1, min(nmax, _gpv_n_from_hours(model, _h)))
-        st.session_state.gpv_n = max(1, min(nmax, st.session_state.get("gpv_n", 1)))
-        with st.container(key="gpv_nav"):
-            st.button("⬅️", key="gpv_prev", on_click=_gpv_step, args=(-1,))
-            st.button("➡️", key="gpv_next", on_click=_gpv_step, args=(1,))
-            st.select_slider("gpv_time", options=list(range(1, nmax + 1)), key="gpv_n",
-                             format_func=lambda n: (init + timedelta(hours=_gpv_off(model, n) + 9)).strftime("%m/%d (%a) %H:%M"),
-                             label_visibility="collapsed")
-    try:
-        _img = _gpv_frame(model, init_iso, int(st.session_state.gpv_n))
-        try:
-            st.image(_img, use_container_width=True)
-        except TypeError:
-            st.image(_img, use_column_width=True)
-    except Exception as _e:
-        st.caption(f"This frame is unavailable ({type(_e).__name__}).")
-
-st.markdown("---")
-st.markdown("""<style>
-/* GPV: 2 khung KHÁC NHAU, mỗi selector chỉ trúng đúng 1 khối (không dùng "> div >" vì sẽ trúng cả khối lồng bên trong).
-   Hỗ trợ cả 2 kiểu DOM của Streamlit: class nằm TRÊN stVerticalBlock, hoặc nằm trên wrapper bao ngoài nó. */
-/* Khung ngoài (radio + hàng điều hướng): viền bo + xếp cột */
-div.st-key-gpv_box[data-testid="stVerticalBlock"],
-div.st-key-gpv_box > [data-testid="stVerticalBlock"] {
-    display: flex !important; flex-direction: column !important; gap: 6px !important;
-    width: 100% !important; box-sizing: border-box !important;
-    background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px; padding: 6px 10px;
-}
-.st-key-gpv_box [data-testid="stElementContainer"] { margin: 0 !important; }
-/* Hàng điều hướng ⬅️ ➡️ [slider]: KHÔNG viền/padding, luôn 1 hàng (PC & iPhone) */
-div.st-key-gpv_nav[data-testid="stVerticalBlock"],
-div.st-key-gpv_nav > [data-testid="stVerticalBlock"] {
-    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
-    align-items: center !important; justify-content: flex-start !important; gap: 6px !important;
-    width: 100% !important; border: 0 !important; padding: 0 !important; background: none !important;
-}
-.st-key-gpv_nav [data-testid="stElementContainer"] { margin: 0 !important; width: auto !important; flex: 0 0 auto !important; }
-.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px !important; width: 44px !important; }
-.st-key-gpv_nav [data-testid="stButton"] button { width: 44px !important; min-width: 0 !important; padding: 0 !important; }
-.st-key-gpv_nav [data-testid="stElementContainer"]:has([data-testid="stSlider"]) {
-    flex: 0 0 260px !important; width: 260px !important; min-width: 0 !important; max-width: calc(100vw - 160px) !important;
-}
-.st-key-gpv_box [data-testid="stRadio"] label p { font-size: 13px; }
-</style>""", unsafe_allow_html=True)
-_gpv_viewer()
-
 # ── MOON + SUN + MILKY WAY ALTITUDE CHART ────────────────────────────────────
 st.markdown("---")
 st.markdown("### 📊 Milkyway Altitude")
@@ -7317,6 +5304,10 @@ st.plotly_chart(fig, use_container_width=True,
                         'showAxisDragHandles': False})
 
 # Legend note
+
+
+
+
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
