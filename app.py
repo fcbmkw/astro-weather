@@ -7089,9 +7089,51 @@ def _gpv_url(model, init_utc, n):
     v = init_utc + timedelta(hours=_gpv_off(model, n))
     return f"{m['base']}{m['prefix']}{n}.{v:%H}Z{v:%d}{_GPV_MON[v.month - 1]}{v.year}.png"
 
+import threading as _gthr
+import time as _gtime
+from concurrent.futures import ThreadPoolExecutor as _GPool
+
+@st.cache_resource
+def _gpv_runtime():
+    """Trạng thái dùng chung giữa các lần chạy lại script và giữa các phiên: cache ảnh, hồ luồng nền, session HTTP."""
+    return {"lock": _gthr.Lock(), "store": {}, "inflight": set(), "pool": _GPool(max_workers=3), "tls": _gthr.local()}
+
+_RT = _gpv_runtime()
+
+def _gpv_cget(key):
+    with _RT["lock"]:
+        v = _RT["store"].get(key)
+        if v and v[0] > _gtime.time():
+            return v[1]
+    return None
+
+def _gpv_cset(key, val, ttl, max_items=220):
+    with _RT["lock"]:
+        s = _RT["store"]
+        s[key] = (_gtime.time() + ttl, val)
+        if len(s) > max_items:                                   # dọn mục hết hạn, rồi mục sắp hết hạn nhất
+            now = _gtime.time()
+            for k in [k for k, v in s.items() if v[0] <= now]:
+                del s[k]
+            for k in sorted(s, key=lambda k: s[k][0])[:max(0, len(s) - max_items + 40)]:
+                del s[k]
+
+def _gpv_forget_init(model):
+    with _RT["lock"]:
+        for k in [k for k in _RT["store"] if k[0] in ("i", "n") and k[1] == model]:
+            del _RT["store"][k]
+
+def _gpv_http():
+    s = getattr(_RT["tls"], "s", None)
+    if s is None:                                                # mỗi luồng 1 session → tái dùng kết nối (nhanh hơn)
+        s = requests.Session()
+        s.headers.update(_GPV_HEADERS)
+        _RT["tls"].s = s
+    return s
+
 def _gpv_exists(model, init_utc, n):
     try:
-        r = requests.get(_gpv_url(model, init_utc, n), headers=_GPV_HEADERS, timeout=6, stream=True)
+        r = _gpv_http().get(_gpv_url(model, init_utc, n), timeout=6, stream=True)
         ok = (r.status_code == 200 and r.headers.get("Content-Type", "").startswith("image"))
         r.close()
         return ok
@@ -7111,34 +7153,97 @@ def _gpv_find_max(exists, cap):
             hi = mid
     return lo
 
-@st.cache_data(ttl=600, show_spinner=False)
-def _gpv_latest_init(model: str, _bucket: int):
-    """Lần chạy mới nhất đã có ảnh (MSM mỗi 3h, GSM mỗi 6h; UTC). Thử lùi dần."""
+def _gpv_latest_init(model):
+    """Lần chạy mới nhất đã có ảnh (MSM mỗi 3h, GSM mỗi 12h; UTC). Dò SONG SONG các ứng viên, lấy cái mới nhất có ảnh."""
+    k = ("i", model)
+    v = _gpv_cget(k)
+    if v is not None:
+        return v or None
     m = _GPV_MODELS[model]
     now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     base = now - timedelta(hours=now.hour % m["step_h"])
-    for k in range(m["tries"]):
-        init = base - timedelta(hours=m["step_h"] * k)
-        if _gpv_exists(model, init, 1):
-            return init.isoformat()
-    return None
+    cands = [base - timedelta(hours=m["step_h"] * i) for i in range(m["tries"])]
+    with _GPool(max_workers=len(cands)) as ex:
+        oks = list(ex.map(lambda c: _gpv_exists(model, c, 1), cands))
+    iso = next((c.isoformat() for c, ok in zip(cands, oks) if ok), "")
+    _gpv_cset(k, iso, 600 if iso else 60)
+    return iso or None
 
-@st.cache_data(ttl=1800, show_spinner=False)
-def _gpv_nframes(model: str, init_iso: str):
+def _gpv_nframes(model, init_iso):
     m = _GPV_MODELS[model]
     if m["frames"]:
         return m["frames"]
+    k = ("n", model, init_iso)
+    v = _gpv_cget(k)
+    if v is not None:
+        return v
     init = datetime.fromisoformat(init_iso)
-    return _gpv_find_max(lambda n: _gpv_exists(model, init, n), _GPV_GSM_CAP)
+    n = _gpv_find_max(lambda i: _gpv_exists(model, init, i), _GPV_GSM_CAP)
+    _gpv_cset(k, n, 1800)
+    return n
 
-@st.cache_data(ttl=1800, max_entries=150, show_spinner=False)
-def _gpv_frame(model: str, init_iso: str, n: int):
-    """PNG bytes của khung n. Lỗi → raise (cache_data không lưu lỗi)."""
-    r = requests.get(_gpv_url(model, datetime.fromisoformat(init_iso), n), headers=_GPV_HEADERS, timeout=10)
-    r.raise_for_status()
-    if not r.headers.get("Content-Type", "").startswith("image"):
-        raise ValueError("not an image")
-    return r.content
+def _gpv_frame(model, init_iso, n):
+    """PNG bytes của khung n (cache 30 phút, dùng chung mọi phiên). Lỗi tạm thời (5xx/429/timeout) → thử lại tối đa 3 lần."""
+    k = ("f", model, init_iso, n)
+    v = _gpv_cget(k)
+    if v is not None:
+        return v
+    url = _gpv_url(model, datetime.fromisoformat(init_iso), n)
+    last = None
+    for attempt in range(3):
+        try:
+            r = _gpv_http().get(url, timeout=10)
+            if r.status_code in (429, 500, 502, 503, 504):
+                last = requests.HTTPError(f"HTTP {r.status_code}", response=r)
+            else:
+                r.raise_for_status()                              # 404/403... → không thử lại
+                if not r.headers.get("Content-Type", "").startswith("image"):
+                    raise ValueError("not an image")
+                _gpv_cset(k, r.content, 1800)
+                return r.content
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last = e
+        if attempt < 2:
+            _gtime.sleep(0.4 * (attempt + 1))
+    raise last
+
+def _gpv_prefetch(model, init_iso, ns):
+    """Nền: tải sẵn các khung lân cận để bấm ⬅️/➡️ hoặc kéo thanh trượt gần như tức thì."""
+    for n in ns:
+        k = ("f", model, init_iso, n)
+        if _gpv_cget(k) is not None:
+            continue
+        with _RT["lock"]:
+            if k in _RT["inflight"]:
+                continue
+            _RT["inflight"].add(k)
+        def _job(model=model, init_iso=init_iso, n=n, k=k):
+            try:
+                _gpv_frame(model, init_iso, n)
+            except Exception:
+                pass
+            finally:
+                with _RT["lock"]:
+                    _RT["inflight"].discard(k)
+        _RT["pool"].submit(_job)
+
+def _gpv_warm(current_model):
+    """Nền: dò lần chạy mới nhất + tải sẵn khung gần giờ hiện tại của các chế độ KHÁC → đổi vùng/chế độ gần như tức thì."""
+    for mdl in _GPV_MODELS:
+        if mdl == current_model or _gpv_cget(("w", mdl)) is not None:
+            continue
+        _gpv_cset(("w", mdl), 1, 600)
+        def _job(mdl=mdl):
+            try:
+                iso = _gpv_latest_init(mdl)
+                if not iso:
+                    return
+                nmax = _gpv_nframes(mdl, iso)
+                h = (datetime.utcnow() - datetime.fromisoformat(iso)).total_seconds() / 3600.0
+                _gpv_frame(mdl, iso, max(1, min(nmax, _gpv_n_from_hours(mdl, h))))
+            except Exception:
+                pass
+        _RT["pool"].submit(_job)
 
 def _gpv_step(d):
     st.session_state.gpv_n = max(1, min(st.session_state.get("gpv_max", 1), st.session_state.get("gpv_n", 1) + d))
@@ -7175,10 +7280,11 @@ def _gpv_viewer():
         st.radio("gpv_mode", list(_GPV_MODELS), key="gpv_model", horizontal=True,
                  format_func=lambda k: _labels[k], label_visibility="collapsed")
         model = st.session_state.gpv_model
-        init_iso = _gpv_latest_init(model, int(_t.time() // 600))
+        init_iso = _gpv_latest_init(model)
         if not init_iso:
             st.caption("JMA GPV is unavailable right now.")
             return
+        _gpv_warm(model)
         init = datetime.fromisoformat(init_iso)
         nmax = _gpv_nframes(model, init_iso)
         st.session_state.gpv_max = nmax
@@ -7193,14 +7299,23 @@ def _gpv_viewer():
             st.select_slider("gpv_time", options=list(range(1, nmax + 1)), key="gpv_n",
                              format_func=lambda n: (init + timedelta(hours=_gpv_off(model, n) + 9)).strftime("%m/%d (%a) %H:%M"),
                              label_visibility="collapsed")
+    _n_show = int(st.session_state.gpv_n)
     try:
-        _img = _gpv_frame(model, init_iso, int(st.session_state.gpv_n))
+        _img = _gpv_frame(model, init_iso, _n_show)
+        st.session_state["_gpv_retry"] = False
         try:
             st.image(_img, use_container_width=True)
         except TypeError:
             st.image(_img, use_column_width=True)
+        _gpv_prefetch(model, init_iso, [n for n in (_n_show + 1, _n_show - 1, _n_show + 2) if 1 <= n <= nmax])
     except Exception as _e:
-        st.caption(f"This frame is unavailable ({type(_e).__name__}).")
+        if not st.session_state.get("_gpv_retry"):
+            # Có thể lần chạy mới vừa thay thế (ảnh cũ bị xoá) → xoá cache lần chạy, dò lại rồi thử 1 lần nữa
+            st.session_state["_gpv_retry"] = True
+            _gpv_forget_init(model)
+            st.rerun()
+        _code = getattr(getattr(_e, "response", None), "status_code", None)
+        st.caption(f"This frame is unavailable ({'HTTP ' + str(_code) if _code else type(_e).__name__}).")
 
 st.markdown("---")
 st.markdown("""<style>
