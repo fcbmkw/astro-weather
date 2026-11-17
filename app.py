@@ -7188,6 +7188,16 @@ def _gpv_frame(model, init_iso, n):
     v = _gpv_cget(k)
     if v is not None:
         return v
+    deadline = _gtime.time() + 8                                  # đang được tải nền → chờ (không tải trùng)
+    while _gtime.time() < deadline:
+        with _RT["lock"]:
+            busy = k in _RT["inflight"]
+        v = _gpv_cget(k)
+        if v is not None:
+            return v
+        if not busy:
+            break
+        _gtime.sleep(0.03)
     url = _gpv_url(model, datetime.fromisoformat(init_iso), n)
     last = None
     for attempt in range(3):
@@ -7227,23 +7237,55 @@ def _gpv_prefetch(model, init_iso, ns):
                     _RT["inflight"].discard(k)
         _RT["pool"].submit(_job)
 
-def _gpv_warm(current_model):
-    """Nền: dò lần chạy mới nhất + tải sẵn khung gần giờ hiện tại của các chế độ KHÁC → đổi vùng/chế độ gần như tức thì."""
-    for mdl in _GPV_MODELS:
-        if mdl == current_model or _gpv_cget(("w", mdl)) is not None:
-            continue
-        _gpv_cset(("w", mdl), 1, 600)
-        def _job(mdl=mdl):
+def _gpv_target_utc():
+    """Thời điểm đích = 18:00 JST của đêm đang xem trên bảng kết quả (target_date), đổi sang UTC."""
+    d = globals().get("target_date")
+    if d is None:
+        d = datetime.utcnow() + timedelta(hours=9)
+    return datetime(d.year, d.month, d.day) + timedelta(hours=18 - 9)
+
+def _gpv_pick(lat, lon, target_utc):
+    """(chế độ, lần chạy) phù hợp: theo vùng của vị trí; nếu là Kanto nhưng thời điểm đích vượt 39h của MSM → East Japan (264h)."""
+    mdl = _gpv_auto_model(lat, lon)
+    if mdl == "msm":
+        iso = _gpv_latest_init("msm")
+        if iso and (target_utc - datetime.fromisoformat(iso)).total_seconds() / 3600.0 <= _GPV_MODELS["msm"]["frames"] - 1:
+            return "msm", iso
+        mdl = "gsm"
+    return mdl, _gpv_latest_init(mdl)
+
+def _gpv_frame_for(mdl, iso, target_utc):
+    nmax = _gpv_nframes(mdl, iso)
+    h = (target_utc - datetime.fromisoformat(iso)).total_seconds() / 3600.0
+    return _gpv_frame(mdl, iso, max(1, min(nmax, _gpv_n_from_hours(mdl, h))))
+
+def _gpv_warm(loc_sig, target_utc, day_offset):
+    """Nền: tải sẵn khung 18:00 của các đêm 0..6 (theo bảng) cho vị trí hiện tại, và khung của các chế độ KHÁC ở thời điểm đích
+    → đổi đêm trên bảng hoặc đổi vùng trên Map gần như tức thì."""
+    key = ("w", loc_sig, target_utc.date().isoformat())
+    if _gpv_cget(key) is not None:
+        return
+    _gpv_cset(key, 1, 600)
+    base = target_utc - timedelta(days=day_offset)
+    def _nights():
+        for k in sorted(range(7), key=lambda k: abs(k - day_offset)):         # đêm gần đêm đang xem trước
             try:
-                iso = _gpv_latest_init(mdl)
-                if not iso:
-                    return
-                nmax = _gpv_nframes(mdl, iso)
-                h = (datetime.utcnow() - datetime.fromisoformat(iso)).total_seconds() / 3600.0
-                _gpv_frame(mdl, iso, max(1, min(nmax, _gpv_n_from_hours(mdl, h))))
+                tu = base + timedelta(days=k)
+                mdl, iso = _gpv_pick(loc_sig[0], loc_sig[1], tu)
+                if iso:
+                    _gpv_frame_for(mdl, iso, tu)
             except Exception:
                 pass
-        _RT["pool"].submit(_job)
+    def _others():
+        for mdl in _GPV_MODELS:
+            try:
+                iso = _gpv_latest_init(mdl)
+                if iso and (mdl != "msm" or (target_utc - datetime.fromisoformat(iso)).total_seconds() / 3600.0 <= 39):
+                    _gpv_frame_for(mdl, iso, target_utc)
+            except Exception:
+                pass
+    _RT["pool"].submit(_nights)
+    _RT["pool"].submit(_others)
 
 def _gpv_step(d):
     st.session_state.gpv_n = max(1, min(st.session_state.get("gpv_max", 1), st.session_state.get("gpv_n", 1) + d))
@@ -7266,11 +7308,15 @@ _gpv_fragment = (getattr(st, "fragment", None) or getattr(st, "experimental_frag
 def _gpv_viewer():
     import time as _t
     _labels = {k: v["label"] for k, v in _GPV_MODELS.items()}
-    # Đổi địa điểm → tự chọn chế độ theo vị trí (sau đó bạn vẫn đổi tay được; chỉ đặt lại khi đổi địa điểm)
+    # Đồng bộ với BẢNG KẾT QUẢ: đổi địa điểm hoặc đổi ngày/đêm → tự chọn chế độ theo vùng + thời điểm (18:00 của đêm đang xem).
+    # Kanto 39h chỉ phủ ~39h; đêm xa hơn → tự chuyển East Japan (264h). Sau đó vẫn đổi tay được (chỉ đặt lại khi đổi địa điểm/đêm).
     _loc_sig = (round(float(st.session_state.lat), 2), round(float(st.session_state.lon), 2))
-    if st.session_state.get("gpv_loc_sig") != _loc_sig:
-        st.session_state.gpv_loc_sig = _loc_sig
-        st.session_state.gpv_model = _gpv_auto_model(*_loc_sig)
+    _target_utc = _gpv_target_utc()
+    _sync_sig = (_loc_sig, _target_utc.date().isoformat())
+    if st.session_state.get("gpv_sync_sig") != _sync_sig:
+        st.session_state.gpv_sync_sig = _sync_sig
+        st.session_state.gpv_model = _gpv_pick(_loc_sig[0], _loc_sig[1], _target_utc)[0]
+        st.session_state.gpv_sig = None            # buộc đặt lại khung theo thời điểm đích
     if st.session_state.get("gpv_model") not in _GPV_MODELS:
         st.session_state.gpv_model = "msm"
     model = st.session_state.gpv_model
@@ -7284,13 +7330,13 @@ def _gpv_viewer():
         if not init_iso:
             st.caption("JMA GPV is unavailable right now.")
             return
-        _gpv_warm(model)
+        _gpv_warm(_loc_sig, _target_utc, int(st.session_state.get("day_offset", 0) or 0))
         init = datetime.fromisoformat(init_iso)
         nmax = _gpv_nframes(model, init_iso)
         st.session_state.gpv_max = nmax
-        if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy mới → khung gần giờ hiện tại
+        if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy / đêm → khung = 18:00 của đêm đang xem
             st.session_state.gpv_sig = (model, init_iso)
-            _h = (datetime.utcnow() - init).total_seconds() / 3600.0
+            _h = (_target_utc - init).total_seconds() / 3600.0
             st.session_state.gpv_n = max(1, min(nmax, _gpv_n_from_hours(model, _h)))
         st.session_state.gpv_n = max(1, min(nmax, st.session_state.get("gpv_n", 1)))
         with st.container(key="gpv_nav"):
