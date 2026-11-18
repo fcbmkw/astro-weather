@@ -445,9 +445,10 @@ def _moon_img_b64(date_obj, size=42, ring=False):
            '<defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fbfbf6"/>'
            '<stop offset=".82" stop-color="#e6e6df"/><stop offset="1" stop-color="#b8b8b1"/></radialGradient>'
            '<filter id="b" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.8"/></filter>'
-           f'{lit}</defs><circle cx="50" cy="50" r="48" fill="#94a3b8" opacity=".10"/>{body}'
-           + ('<circle cx="50" cy="50" r="46.5" fill="none" stroke="#cbd5e1" stroke-opacity=".9" stroke-width="3"/>' if ring else '')
-           + '</svg>')
+           f'{lit}</defs>'
+           + ('<circle cx="50" cy="50" r="48" fill="#1e293b"/>' if ring     # icon biểu đồ: nền đĩa TỐI → thấy cả khi trăng 0%
+              else '<circle cx="50" cy="50" r="48" fill="#94a3b8" opacity=".10"/>')
+           + body + '</svg>')
     return _b64.b64encode(svg.encode("utf-8")).decode("ascii")
 
 def _moon_icon(desc):
@@ -7289,7 +7290,11 @@ def _gpv_warm(loc_sig, target_utc, day_offset):
     _RT["pool"].submit(_nights)
     _RT["pool"].submit(_others)
 
+def _gpv_manual():
+    st.session_state.gpv_follow = False           # bạn đã chỉnh tay → ngừng tự theo giờ hiện tại
+
 def _gpv_step(d):
+    st.session_state.gpv_follow = False
     st.session_state.gpv_n = max(1, min(st.session_state.get("gpv_max", 1), st.session_state.get("gpv_n", 1) + d))
 
 def _gpv_auto_model(lat, lon):
@@ -7304,7 +7309,8 @@ def _gpv_auto_model(lat, lon):
         return "gsm" if lon >= 137.0 else "gsmw"
     return "gsm" if lon >= 138.0 else "gsmw"
 
-_gpv_fragment = (getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda f: f))
+_gpv_frag_deco = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
+_gpv_fragment = _gpv_frag_deco(run_every="10m") if _gpv_frag_deco else (lambda f: f)   # tự chạy lại mỗi 10 phút để thanh trượt theo giờ
 
 @_gpv_fragment
 def _gpv_viewer():
@@ -7326,7 +7332,7 @@ def _gpv_viewer():
     with st.container(key="gpv_box"):
         # hàng 1: chọn chế độ/vùng; hàng 2: ⬅️ [thanh trượt giờ] ➡️ — nằm trong cùng một khung, không xuống dòng trên iPhone
         st.radio("gpv_mode", list(_GPV_MODELS), key="gpv_model", horizontal=True,
-                 format_func=lambda k: _labels[k], label_visibility="collapsed")
+                 format_func=lambda k: _labels[k], label_visibility="collapsed", on_change=_gpv_manual)
         model = st.session_state.gpv_model
         init_iso = _gpv_latest_init(model)
         if not init_iso:
@@ -7336,17 +7342,22 @@ def _gpv_viewer():
         init = datetime.fromisoformat(init_iso)
         nmax = _gpv_nframes(model, init_iso)
         st.session_state.gpv_max = nmax
-        if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy / đêm → khung = 18:00 của đêm đang xem
+        _follow_night = int(st.session_state.get("day_offset", 0) or 0) == 0      # đêm 0 (đêm nay) → theo giờ hiện tại
+        _now_h = (datetime.utcnow() - init).total_seconds() / 3600.0
+        if st.session_state.get("gpv_sig") != (model, init_iso):   # đổi chế độ / lần chạy / đêm → đặt lại khung
             st.session_state.gpv_sig = (model, init_iso)
-            _h = (_target_utc - init).total_seconds() / 3600.0
+            st.session_state.gpv_follow = _follow_night
+            _h = _now_h if _follow_night else (_target_utc - init).total_seconds() / 3600.0   # đêm khác: 18:00 của đêm đó
             st.session_state.gpv_n = max(1, min(nmax, _gpv_n_from_hours(model, _h)))
+        if st.session_state.get("gpv_follow") and _follow_night:               # thanh trượt đi theo giờ thực (mỗi 10 phút kiểm tra)
+            st.session_state.gpv_n = max(1, min(nmax, _gpv_n_from_hours(model, _now_h)))
         st.session_state.gpv_n = max(1, min(nmax, st.session_state.get("gpv_n", 1)))
         with st.container(key="gpv_nav"):
             st.button("⬅️", key="gpv_prev", on_click=_gpv_step, args=(-1,))
             st.button("➡️", key="gpv_next", on_click=_gpv_step, args=(1,))
             st.select_slider("gpv_time", options=list(range(1, nmax + 1)), key="gpv_n",
                              format_func=lambda n: (init + timedelta(hours=_gpv_off(model, n) + 9)).strftime("%m/%d (%a) %H:%M"),
-                             label_visibility="collapsed")
+                             label_visibility="collapsed", on_change=_gpv_manual)
     _n_show = int(st.session_state.gpv_n)
     try:
         _img = _gpv_frame(model, init_iso, _n_show)
@@ -7543,10 +7554,10 @@ def _sky_chart(lat, lon, t0_iso, n_hours, utc_off_h, moon_b64):
         s_alt, m_alt = _sky_now_alts(lat, lon)
         box_h = (ymax - ymin) * 30 / 380.0                          # ~30px theo trục y
         box_w = n_hours * 3600 * 1000 * 30 / 260.0                  # hộp rộng dư (ms); sizing='contain' giữ icon tròn
-        for src, alt in ((f"data:image/svg+xml;base64,{_sun_img_b64()}", s_alt),
-                         (f"data:image/svg+xml;base64,{moon_b64}", m_alt)):
+        for src, alt, sc in ((f"data:image/svg+xml;base64,{_sun_img_b64()}", s_alt, 1.5),     # Sun to gấp 1.5 lần
+                             (f"data:image/svg+xml;base64,{moon_b64}", m_alt, 1.0)):
             fig.add_layout_image(dict(source=src, xref="x", yref="y", x=now_local.isoformat(), y=alt,
-                                      sizex=box_w, sizey=box_h, xanchor="center", yanchor="middle",
+                                      sizex=box_w * sc, sizey=box_h * sc, xanchor="center", yanchor="middle",
                                       sizing="contain", layer="above"))
 
     fig.update_layout(
