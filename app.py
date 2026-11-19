@@ -6802,6 +6802,8 @@ for _p in ("Fukuoka", "Saga", "Nagasaki", "Oita", "Kumamoto", "Miyazaki", "Kagos
 _RD_REGION["Okinawa"] = ("90",)
 _RD_REGION.update({"Yamanashi": ("83", "85"), "Nagano": ("83", "84", "85"),
                    "Fukui": ("84", "86"), "Mie": ("85", "86")})
+_rd_diag = ""
+_rd_dbg = ""
 _RD_MAX_KM = 35   #xa hơn mức này thì coi như không có camera gần -> quay về bản đồ
 
 _RD_IMG_RE = re.compile(
@@ -6986,7 +6988,7 @@ def _rd_frames(cam, b, mime, back=5):
 
 def _rd_nearest(pref, lat, lon, top=5):
     """Tối đa `top` camera gần nhất: [(km, (id, tên, url, ts), khoá-vị-trí)]. Ghi lý do vào _rd_diag."""
-    global _rd_diag
+    global _rd_diag, _rd_dbg
     cams = []
     codes = _RD_REGION.get(pref, ())
     for code in codes:
@@ -7084,6 +7086,17 @@ def _rd_nearest(pref, lat, lon, top=5):
                     f"[debug] resolved {len(ranked)}/{len(cams)} cameras, unresolved {len(unresolved)}; "
                     f"nearest: " + " | ".join(f"{r[1][1]} ~{r[0]:.0f}km [{r[2]}]" for r in ranked[:3]) +
                     "; unresolved sample: " + ", ".join(unresolved[:12]))
+    try:
+        from collections import Counter as _C
+        _pc = _C(re.sub(r"^(北海道|東京都|京都府|大阪府|.{2,3}県).*$", r"\1", r[2].split("→ ", 1)[-1]) for r in ranked)
+        _rd_dbg = (f"user pref={pref} ({user_ja}) | region codes={codes} | cameras in list={len(cams)} | "
+                   f"resolved={len(ranked)} | unresolved={len(unresolved)}\n"
+                   f"resolved by prefecture: {dict(_pc)}\n"
+                   f"top5: " + " | ".join(f"{r[1][1]} ~{r[0]:.0f}km [{r[2]}]" for r in ranked[:5]) + "\n"
+                   f"all camera names (first 80): " + ", ".join(c[1] for c in cams[:80]) + "\n"
+                   f"unresolved (first 40): " + ", ".join(unresolved[:40]))
+    except Exception as _e:
+        _rd_dbg = f"debug error: {_e}"
     return ranked[:top]
 
 def _rd_build():
@@ -7136,6 +7149,9 @@ def _cam_render():
                 f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
                 f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
                 unsafe_allow_html=True)
+        if _rd_dbg:
+            with st.expander("🔧 Road camera debug"):
+                st.code(_rd_dbg, language=None)
 
 _cam_render()
 # ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
@@ -7587,15 +7603,15 @@ _sky_fragment = st.fragment(run_every="5m") if hasattr(st, "fragment") else (lam
 
 @_sky_fragment
 def _sky_chart(lat, lon, utc_off_h):
-    """Biểu đồ độ cao theo THỜI GIAN THỰC. Dữ liệu 48h [now−12h, now+36h]; khung nhìn mặc định 12h [now−3h, now+9h].
+    """Biểu đồ độ cao theo THỜI GIAN THỰC. Dữ liệu 72h [now−24h, now+48h]; khung nhìn mặc định 12h [now−3h, now+9h].
     Kéo chuột / vuốt tay sang trái-phải để xem thời điểm khác. Chạy lại mỗi 5 phút: nếu chưa kéo thì khung tự trượt theo
     giờ thực, nếu đã kéo (uirevision) thì giữ nguyên vị trí đang xem. Icon Sun/Moon luôn nằm ở vạch "now"."""
     _STEP = 5                                   # phút / mẫu — khớp với chu kỳ rerun của fragment
     now_local = datetime.utcnow() + timedelta(hours=utc_off_h)
     now_local = now_local.replace(second=0, microsecond=0)
     now_local -= timedelta(minutes=now_local.minute % _STEP)
-    data_t0 = now_local - timedelta(hours=12)
-    data_h = 48
+    data_t0 = now_local - timedelta(hours=24)
+    data_h = 72
     view_a, view_b = now_local - timedelta(hours=3), now_local + timedelta(hours=9)
     moon_b64 = _moon_img_b64(now_local, ring=True, halo=True)
 
@@ -7613,8 +7629,8 @@ def _sky_chart(lat, lon, utc_off_h):
     t0, t_end = X[0], X[-1]
     fig = go.Figure()
 
-    # nền cam nhạt theo độ sáng của Mặt Trời (mỗi dải = 6 mẫu = 30 phút)
-    _bs = 6
+    # nền cam nhạt theo độ sáng của Mặt Trời (mỗi dải = 12 mẫu = 1 giờ)
+    _bs = 12
     for k in range(0, len(X), _bs):
         _op = _sun_bright_opacity(series["Sun"][min(k + _bs // 2, len(X) - 1)])
         if _op > 0.005:
@@ -7645,7 +7661,7 @@ def _sky_chart(lat, lon, utc_off_h):
         _mid += timedelta(days=1)
 
     allv = [v for vals in series.values() for v in vals]
-    ymin, ymax = -30.0, min(90.0, max(40.0, max(allv) + 8))
+    ymin, ymax = max(-95.0, min(allv) - 6), min(95.0, max(allv) + 8)      # tự co giãn để ôm trọn mọi đối tượng đang hiển thị
 
     # icon Sun / Moon ở vạch "now" (luôn nằm trong dữ liệu)
     s_alt, m_alt = _sky_now_alts(lat, lon)
@@ -7657,11 +7673,9 @@ def _sky_chart(lat, lon, utc_off_h):
                                   sizex=box_w * sc, sizey=box_h * sc, xanchor="center", yanchor="middle",
                                   sizing="contain", layer="above"))
 
-    _xaxis = dict(type="date", dtick=2 * 3600000, range=[view_a, view_b], gridcolor="rgba(71,85,105,0.3)")
-    try:   # giới hạn vùng được kéo: không cho kéo ra ngoài dữ liệu (cần plotly ≥ 5.?)
-        fig.update_layout(xaxis=dict(**_xaxis, fixedrange=False, minallowed=t0, maxallowed=t_end))
-    except Exception:
-        fig.update_layout(xaxis=dict(**_xaxis, fixedrange=False))
+    # KHÔNG đặt minallowed/maxallowed: khi kéo quá biên, plotly co hẹp khung thời gian (bị "phóng to"). Khung luôn giữ 12h.
+    fig.update_layout(xaxis=dict(type="date", dtick=2 * 3600000, range=[view_a, view_b],
+                                 gridcolor="rgba(71,85,105,0.3)", fixedrange=False))
     fig.update_layout(
         height=480, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.0)",
         font=dict(color="#94a3b8", size=12),
