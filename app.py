@@ -6865,6 +6865,31 @@ def _rd_query(name):
     q = re.sub(r"(TN|ST|トンネル.*|カメラ\d*|\d+)$", "", q.strip())  # bỏ hậu tố TN / số
     return q.strip() or None
 
+def _rd_clean(name):
+    q = re.sub(r"[\(（].*?[\)）]", "", name)
+    q = re.sub(r"(TN|ST|トンネル.*|カメラ\d*|\d+)$", "", q.strip())
+    return q.strip()
+
+def _rd_variants(name):
+    """Các truy vấn geocode bổ sung (cụ thể nhất trước) để phân biệt địa danh trùng tên.
+    vd '信濃町野尻貫の木' -> ['信濃町野尻貫の木', '信濃町野尻貫', '信濃町野尻']; '扇町屋南' -> ['扇町屋']."""
+    base = _rd_clean(_lc_muni(name) and _LC_PREF_PREFIX.sub("", name.strip()) or name)
+    mn = _lc_muni(name)
+    out = []
+    if mn:
+        for ln in (len(base), len(mn) + 3, len(mn) + 2, len(mn) + 1):
+            v = base[:ln]
+            if len(v) > len(mn) and v not in out:
+                out.append(v)
+    else:
+        for ln in range(len(base) - 1, 2, -1):
+            v = base[:ln]
+            if v not in out:
+                out.append(v)
+            if len(out) >= 3:
+                break
+    return out
+
 def _rd_fetch_img_impl(url):
     """(bytes, mime) hoặc (None, None). Thử bản lớn (bỏ 's_') trước, rồi bản nhỏ."""
     for u in (url.replace("/s_", "/", 1), url):
@@ -6973,25 +6998,58 @@ def _rd_nearest(pref, lat, lon, top=5):
         m = _RD_PREF_RE.match(title or "")
         return m.group(1) if m else ""
 
+    def norm(t):
+        return (t or "").replace("大字", "")
+
+    def strict_of(q, cands):
+        # tiêu đề GSI phải thật sự chứa chuỗi đã tìm (loại kết quả "mờ" như 神奈川区扇町 cho '扇町屋南')
+        return [x for x in cands if q and q in norm(x[2])]
+
+    def base_cands(q, g):
+        return strict_of(q, [x for x in (g.get(q) or []) if in_region(x[2])])
+
+    # Vòng 1: những camera mà truy vấn gốc còn mơ hồ (trùng tên ở nhiều tỉnh) hoặc không khớp → geocode thêm truy vấn dài hơn/ngắn hơn
+    extras = set()
+    for c in cams:
+        q = _rd_query(c[1])
+        S = base_cands(q, geo)
+        if not S or len({pref_of(x[2]) for x in S}) > 1:
+            extras.update(_rd_variants(c[1]))
+    geo_all = dict(geo)
+    if extras:
+        geo_all.update(_rd_geocode(tuple(sorted(extras))))
+
+    def resolve(c):
+        """(lat, lon, tiêu đề, khoá) hoặc None nếu không xác định chắc chắn được vị trí camera."""
+        q = _rd_query(c[1])
+        has_muni = bool(_lc_muni(c[1]))
+        S = base_cands(q, geo_all)
+        if not S or len({pref_of(x[2]) for x in S}) > 1:
+            for q2 in _rd_variants(c[1]):             # thử từ chuỗi dài/cụ thể nhất → ngắn dần
+                S2 = base_cands(q2, geo_all)
+                if S2 and len({pref_of(x[2]) for x in S2}) == 1:
+                    S, q = S2, q2
+                    break
+        if not S:
+            return None
+        if len({pref_of(x[2]) for x in S}) > 1:        # vẫn trùng tên ở nhiều tỉnh → bỏ, tránh gắn nhầm tỉnh
+            return None
+        if has_muni:
+            la, lo, tt = min(S, key=lambda x: _haversine_km(lat, lon, x[0], x[1]))
+        else:
+            la, lo, tt = S[0]
+        return la, lo, tt, q
+
     ranked = []
     for c in cams:
         ov = next((v for k, v in _RD_COORD_OVERRIDE.items() if c[1].startswith(k)), None)
         if ov:
             ranked.append((_haversine_km(lat, lon, ov[0], ov[1]), c, "override"))
             continue
-        q = _rd_query(c[1])
-        cands = [x for x in (geo.get(q) or []) if in_region(x[2])]
-        # bỏ kết quả "mờ" của GSI: tiêu đề phải thật sự chứa tên đã tìm (vd '神奈川県三浦市' chứa '三浦市')
-        strict = [x for x in cands if q and q in x[2]]
-        if strict:
-            cands = strict
-        if not cands:
+        res = resolve(c)
+        if not res:
             continue
-        mine = [x for x in cands if pref_of(x[2]) == user_ja]   # ưu tiên địa danh nằm ĐÚNG tỉnh của người dùng
-        if _lc_muni(c[1]):      # có 市区町村: lấy điểm gần người dùng nhất, trong số ứng viên cùng tỉnh (nếu có)
-            la, lo, tt = min(mine or cands, key=lambda x: _haversine_km(lat, lon, x[0], x[1]))
-        else:                   # chỉ có địa danh: lấy kết quả GSI xếp liên quan nhất, ưu tiên cùng tỉnh
-            la, lo, tt = (mine or cands)[0]
+        la, lo, tt, q = res
         d = _haversine_km(lat, lon, la, lo)
         # địa danh nằm ở tỉnh khác chỉ được chấp nhận nếu rất gần (camera sát ranh giới tỉnh)
         if pref_of(tt) != user_ja and d > 25:
@@ -7448,7 +7506,7 @@ def _sun_bright_opacity(sun_alt):
     return round(min(max((sun_alt + 13) / 23.0 * 0.50, 0.0), 0.50), 3)
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _sky_series(lat, lon, t0_iso, n_hours, utc_off_h, target_ids, step_min=10):
+def _sky_series(lat, lon, t0_iso, n_hours, utc_off_h, target_ids, step_min=5):
     """Độ cao Sun, Moon và các deep-sky đã chọn, mỗi 10 phút từ t0 (giờ địa phương) → đường cong mượt, đúng giờ."""
     obs = ephem.Observer()
     obs.lat, obs.lon = str(lat), str(lon)
@@ -7507,8 +7565,16 @@ def _sun_img_b64():
 _sky_fragment = st.fragment(run_every="5m") if hasattr(st, "fragment") else (lambda f: f)
 
 @_sky_fragment
-def _sky_chart(lat, lon, t0_iso, n_hours, utc_off_h, moon_b64):
-    """Biểu đồ độ cao. Chạy lại mỗi 5 phút (không tải lại cả trang) để icon Sun/Moon di chuyển theo giờ thực."""
+def _sky_chart(lat, lon, utc_off_h):
+    """Biểu đồ độ cao theo THỜI GIAN THỰC: cửa sổ 12h = [bây giờ − 3h, bây giờ + 9h], trượt dần sang trái.
+    Chạy lại mỗi 5 phút (không tải lại cả trang); icon Sun/Moon luôn nằm ở vạch "now"."""
+    _STEP = 5                                   # phút / mẫu — khớp với chu kỳ rerun của fragment
+    n_hours = 12
+    now_local = datetime.utcnow() + timedelta(hours=utc_off_h)
+    now_local = now_local.replace(second=0, microsecond=0)
+    now_local -= timedelta(minutes=now_local.minute % _STEP)
+    t0_iso = (now_local - timedelta(hours=3)).isoformat()
+    moon_b64 = _moon_img_b64(now_local, ring=True)
     ids = [x[0] for x in _SKY_TARGETS]
     names = {x[0]: x[1] for x in _SKY_TARGETS}
     _kw = dict(default=["M31"], key="sky_targets", max_selections=6, label_visibility="collapsed",
@@ -7518,16 +7584,18 @@ def _sky_chart(lat, lon, t0_iso, n_hours, utc_off_h, moon_b64):
     except TypeError:
         sel = st.multiselect("Deep-sky targets", ids, **_kw)
 
-    xs, series = _sky_series(lat, lon, t0_iso, n_hours, utc_off_h, tuple(sel))
+    xs, series = _sky_series(lat, lon, t0_iso, n_hours, utc_off_h, tuple(sel), _STEP)
     X = [datetime.fromisoformat(s) for s in xs]
     t0, t_end = X[0], X[-1]
     fig = go.Figure()
 
     # nền cam nhạt theo độ sáng của Mặt Trời (mỗi giờ 1 dải, tâm tại vạch giờ)
-    for i in range(int(n_hours) + 1):
-        _op = _sun_bright_opacity(series["Sun"][min(i * 6, len(X) - 1)])
+    _bs = 3                                     # mỗi dải = 3 mẫu = 15 phút
+    for k in range(0, len(X), _bs):
+        _op = _sun_bright_opacity(series["Sun"][min(k + _bs // 2, len(X) - 1)])
         if _op > 0.005:
-            fig.add_vrect(x0=max(t0, t0 + timedelta(hours=i - 0.5)), x1=min(t_end, t0 + timedelta(hours=i + 0.5)),
+            fig.add_vrect(x0=X[k] - timedelta(minutes=_STEP / 2),
+                          x1=min(t_end, X[k] + timedelta(minutes=_STEP * (_bs - 0.5))),
                           fillcolor="rgba(251,146,60,1.0)", opacity=_op, layer="below", line_width=0)
 
     # Moon, Sun: đường LIỀN
@@ -7544,12 +7612,12 @@ def _sky_chart(lat, lon, t0_iso, n_hours, utc_off_h, moon_b64):
                                  hovertemplate=tid + ": %{y:.1f}°<extra></extra>"))
 
     fig.add_hline(y=0, line=dict(color="#64748b", dash="dot", width=1.5))      # đường chân trời
+    fig.add_vline(x=now_local, line=dict(color="rgba(250,204,21,0.55)", dash="dot", width=1.5))   # vạch "now"
 
     allv = [v for vals in series.values() for v in vals]
     ymin, ymax = min(-20.0, min(allv) - 5), max(30.0, max(allv) + 8)
 
     # icon Sun / Moon tại giờ hiện tại (cập nhật mỗi 5 phút); chỉ hiện khi "bây giờ" nằm trong khoảng giờ của biểu đồ
-    now_local = datetime.utcnow() + timedelta(hours=utc_off_h)
     if t0 <= now_local <= t_end:
         s_alt, m_alt = _sky_now_alts(lat, lon)
         box_h = (ymax - ymin) * 30 / 380.0                          # ~30px theo trục y
@@ -7573,9 +7641,7 @@ def _sky_chart(lat, lon, t0_iso, n_hours, utc_off_h, moon_b64):
     st.plotly_chart(fig, use_container_width=True,
                     config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "showAxisDragHandles": False})
 
-_sky_chart(float(st.session_state.lat), float(st.session_state.lon),
-           datetime(*desired_slots[0][:4]).isoformat(), len(desired_slots) - 1,
-           float(loc_utc_offset_h), _moon_img_b64(target_date, ring=True))
+_sky_chart(float(st.session_state.lat), float(st.session_state.lon), float(loc_utc_offset_h))
 
 # Legend note
 
