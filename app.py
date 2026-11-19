@@ -7086,11 +7086,8 @@ def _rd_nearest(pref, lat, lon, top=5):
                     f"{len(cams)}台のカメラを取得しましたが、位置を特定できませんでした。")
     elif ranked[0][0] > _RD_MAX_KM:
         _rd_diag = (f"Nearest camera: {ranked[0][1][1]} (~{ranked[0][0]:.0f} km) — farther than {_RD_MAX_KM} km, "
-                    f"so the map is shown instead.  \n"
-                    f"最寄りのカメラ: {ranked[0][1][1]}（約{ranked[0][0]:.0f} km）— {_RD_MAX_KM} kmより遠いため、地図を表示します。  \n"
-                    f"[debug] resolved {len(ranked)}/{len(cams)} cameras, unresolved {len(unresolved)}; "
-                    f"nearest: " + " | ".join(f"{r[1][1]} ~{r[0]:.0f}km [{r[2]}]" for r in ranked[:3]) +
-                    "; unresolved sample: " + ", ".join(unresolved[:12]))
+                    f"so no road camera is shown.  \n"
+                    f"最寄りのカメラ: {ranked[0][1][1]}（約{ranked[0][0]:.0f} km）— {_RD_MAX_KM} kmより遠いため、表示しません。")
     try:
         from collections import Counter as _C
         _pc = _C(re.sub(r"^(北海道|東京都|京都府|大阪府|.{2,3}県).*$", r"\1", r[2].split("→ ", 1)[-1]) for r in ranked)
@@ -7148,12 +7145,8 @@ def _cam_render():
         else:   # không lấy được camera gần -> quay về bản đồ như cũ
             if _rd_diag:
                 st.caption(f"ℹ️ {_rd_diag}")
-            _lc_components.iframe(_road_url, height=380, scrolling=False)
-            st.markdown(
-                f'<div style="margin-top:6px;"><a href="{_road_url}" target="_blank" rel="noopener" '
-                f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
-                f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
-                unsafe_allow_html=True)
+            else:
+                st.caption("ℹ️ No road camera nearby. / 近くに道路カメラはありません。")
 
 _cam_render()
 # ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
@@ -7687,6 +7680,11 @@ def _sky_chart(lat, lon, utc_off_h):
                                                          gridcolor="rgba(71,85,105,0.18)", gridwidth=1, ticks="")))
     except Exception:   # plotly cũ chưa có minor grid
         fig.update_layout(xaxis=_ax)
+    try:   # plotly mới: đẩy nhãn trục vào trong khỏi mép; bản cũ bỏ qua
+        fig.update_layout(xaxis=dict(ticklabelstandoff=6), yaxis=dict(ticklabelstandoff=8))
+        _so = True
+    except Exception:
+        _so = False
     fig.update_layout(
         height=480, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.0)",
         font=dict(color="#94a3b8", size=12),
