@@ -7634,14 +7634,11 @@ def _sky_chart(lat, lon, utc_off_h):
     t0, t_end = X[0], X[-1]
     fig = go.Figure()
 
-    # nền cam nhạt theo độ sáng của Mặt Trời (mỗi dải = 12 mẫu = 1 giờ)
-    _bs = 12
-    for k in range(0, len(X), _bs):
-        _op = _sun_bright_opacity(series["Sun"][min(k + _bs // 2, len(X) - 1)])
-        if _op > 0.005:
-            fig.add_vrect(x0=X[k] - timedelta(minutes=_STEP / 2),
-                          x1=min(t_end, X[k] + timedelta(minutes=_STEP * (_bs - 0.5))),
-                          fillcolor="rgba(251,146,60,1.0)", opacity=_op, layer="below", line_width=0)
+    # nền cam theo độ sáng Mặt Trời: 1 heatmap mịn (mỗi mẫu 5 phút, nội suy) thay cho các dải theo giờ
+    _z = [_sun_bright_opacity(v) for v in series["Sun"]]
+    fig.add_trace(go.Heatmap(x=X, y=[-1000, 1000], z=[_z, _z], zmin=0, zmax=0.5, zsmooth="best",
+                             colorscale=[[0, "rgba(251,146,60,0)"], [1, "rgba(251,146,60,0.55)"]],
+                             showscale=False, hoverinfo="skip", xgap=0, ygap=0))
 
     # Moon, Sun: đường LIỀN
     fig.add_trace(go.Scatter(x=X, y=series["Moon"], mode="lines", name="🌙 Moon", hoverinfo="skip",
@@ -7657,13 +7654,17 @@ def _sky_chart(lat, lon, utc_off_h):
     fig.add_shape(type="line", xref="x", yref="paper", x0=now_local, x1=now_local, y0=0, y1=1,
                   line=dict(color="rgba(250,204,21,0.55)", dash="dot", width=1.5))   # vạch "now"
     # vạch nửa đêm + ngày, để biết đang xem ngày nào khi kéo sang hai bên
-    _mid = datetime(t0.year, t0.month, t0.day) + timedelta(days=1)
-    while _mid < t_end:
-        fig.add_shape(type="line", xref="x", yref="paper", x0=_mid, x1=_mid, y0=0, y1=1,
-                      line=dict(color="rgba(148,163,184,0.45)", dash="dash", width=1))
-        fig.add_annotation(x=_mid, xref="x", y=1, yref="paper", yanchor="bottom", showarrow=False,
-                           text=f"{_mid.month}/{_mid.day}", font=dict(color="#94a3b8", size=11))
-        _mid += timedelta(days=1)
+    _tk = datetime(t0.year, t0.month, t0.day)
+    while _tk < t_end:
+        if _tk >= t0 and _tk.hour % 6 == 0:
+            _m = _tk.hour == 0
+            fig.add_shape(type="line", xref="x", yref="paper", x0=_tk, x1=_tk, y0=0, y1=1, layer="below",
+                          line=dict(color="rgba(203,213,225,0.80)" if _m else "rgba(148,163,184,0.70)",
+                                    dash="solid", width=1.6 if _m else 1.2))
+            if _m:
+                fig.add_annotation(x=_tk, xref="x", y=1, yref="paper", yanchor="bottom", showarrow=False,
+                                   text=f"{_tk.month}/{_tk.day}", font=dict(color="#cbd5e1", size=11))
+        _tk += timedelta(hours=6)
 
     allv = [v for vals in series.values() for v in vals]
     ymin, ymax = max(-95.0, min(allv) - 6), min(95.0, max(allv) + 8)      # tự co giãn để ôm trọn mọi đối tượng đang hiển thị
