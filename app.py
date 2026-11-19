@@ -7154,9 +7154,6 @@ def _cam_render():
                 f'style="color:#93c5fd;font-size:12px;text-decoration:none;">Open full map ↗</a>'
                 f'<span style="color:#64748b;font-size:11px;"> · tap a camera pin to see the live image</span></div>',
                 unsafe_allow_html=True)
-        if _rd_dbg:
-            with st.expander("🔧 Road camera debug"):
-                st.code(_rd_dbg, language=None)
 
 _cam_render()
 # ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
@@ -7683,7 +7680,7 @@ def _sky_chart(lat, lon, utc_off_h):
     # tick0 = nửa đêm → nhãn giờ và đường kẻ dọc cùng neo vào các mốc giờ chẵn; đường kẻ phụ mỗi 15 phút.
     _tick0 = datetime(t0.year, t0.month, t0.day)
     _ax = dict(type="date", tickmode="linear", tick0=_tick0, dtick=2 * 3600000, tickformat="%H:%M",
-               ticks="outside", showgrid=True, gridcolor="rgba(71,85,105,0.45)", gridwidth=1,
+               ticks="", ticklabelposition="inside", showgrid=True, gridcolor="rgba(71,85,105,0.45)", gridwidth=1,
                range=[view_a, view_b], fixedrange=False)
     try:
         fig.update_layout(xaxis=dict(**_ax, minor=dict(tick0=_tick0, dtick=900000, showgrid=True,
@@ -7693,10 +7690,11 @@ def _sky_chart(lat, lon, utc_off_h):
     fig.update_layout(
         height=480, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.0)",
         font=dict(color="#94a3b8", size=12),
-        yaxis=dict(gridcolor="rgba(71,85,105,0.3)", title=None, zeroline=False, fixedrange=True, range=[ymin, ymax]),
+        yaxis=dict(gridcolor="rgba(71,85,105,0.3)", title=None, zeroline=False, fixedrange=True, range=[ymin, ymax],
+                   tickmode="linear", tick0=0, dtick=20, ticks="", ticklabelposition="inside", automargin=False),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     font=dict(color="#cbd5e1"), bgcolor="rgba(0,0,0,0)"),
-        margin=dict(l=50, r=20, t=40, b=40), hovermode=False, dragmode="pan",
+        margin=dict(l=4, r=4, t=40, b=4), hovermode=False, dragmode="pan",
         uirevision=f"sky-{lat:.3f}-{lon:.3f}")
     st.plotly_chart(fig, use_container_width=True,
                     config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False,
