@@ -6812,26 +6812,31 @@ _RD_IMG_RE = re.compile(
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _rd_list(code):
-    """[(camera_id, tên, url ảnh nhỏ, 'yyyymmddhhmmss' JST)] của 1 vùng. Lỗi -> []."""
-    url = _RD_LIST.format(code=code)
-    try:
-        r = requests.get(url, headers=_LC_UA, timeout=12)
-        r.raise_for_status()
-        txt = r.content.decode("utf-8", errors="replace")
-    except Exception:
-        return []
+    """[(camera_id, tên, url ảnh nhỏ, 'yyyymmddhhmmss' JST)] của 1 vùng, gộp các trang _1.._8 (tải song song). Lỗi -> []."""
+    from concurrent.futures import ThreadPoolExecutor
+    def page(n):
+        url = _RD_LIST.format(code=code).replace("_1.html", f"_{n}.html")
+        try:
+            r = requests.get(url, headers=_LC_UA, timeout=12)
+            r.raise_for_status()
+            return url, r.content.decode("utf-8", errors="replace")
+        except Exception:
+            return url, ""
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        pages = list(ex.map(page, range(1, 9)))
     out, seen = [], set()
-    for m in _RD_IMG_RE.finditer(txt):
-        src, ts, cid, tail = m.groups()
-        if cid in seen:
-            continue
-        lines = [re.sub(r"\s+", " ", x).strip()
-                 for x in _lc_html_mod.unescape(re.sub(r"<[^>]+>", "\n", tail)).split("\n")]
-        lines = [x for x in lines if x]
-        if not lines or re.match(r"^\d{4}/", lines[0]):
-            continue
-        seen.add(cid)
-        out.append((cid, lines[0], _rd_urljoin(url, src), ts))
+    for url, txt in pages:
+        for m in _RD_IMG_RE.finditer(txt):
+            src, ts, cid, tail = m.groups()
+            if cid in seen:
+                continue
+            lines = [re.sub(r"\s+", " ", x).strip()
+                     for x in _lc_html_mod.unescape(re.sub(r"<[^>]+>", "\n", tail)).split("\n")]
+            lines = [x for x in lines if x]
+            if not lines or re.match(r"^\d{4}/", lines[0]):
+                continue
+            seen.add(cid)
+            out.append((cid, lines[0], _rd_urljoin(url, src), ts))
     return out
 
 @st.cache_data(ttl=2592000, show_spinner=False)
@@ -7674,8 +7679,16 @@ def _sky_chart(lat, lon, utc_off_h):
                                   sizing="contain", layer="above"))
 
     # KHÔNG đặt minallowed/maxallowed: khi kéo quá biên, plotly co hẹp khung thời gian (bị "phóng to"). Khung luôn giữ 12h.
-    fig.update_layout(xaxis=dict(type="date", dtick=2 * 3600000, range=[view_a, view_b],
-                                 gridcolor="rgba(71,85,105,0.3)", fixedrange=False))
+    # tick0 = nửa đêm → nhãn giờ và đường kẻ dọc cùng neo vào các mốc giờ chẵn; đường kẻ phụ mỗi 15 phút.
+    _tick0 = datetime(t0.year, t0.month, t0.day)
+    _ax = dict(type="date", tickmode="linear", tick0=_tick0, dtick=2 * 3600000, tickformat="%H:%M",
+               ticks="outside", showgrid=True, gridcolor="rgba(71,85,105,0.45)", gridwidth=1,
+               range=[view_a, view_b], fixedrange=False)
+    try:
+        fig.update_layout(xaxis=dict(**_ax, minor=dict(tick0=_tick0, dtick=900000, showgrid=True,
+                                                         gridcolor="rgba(71,85,105,0.18)", gridwidth=1, ticks="")))
+    except Exception:   # plotly cũ chưa có minor grid
+        fig.update_layout(xaxis=_ax)
     fig.update_layout(
         height=480, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.0)",
         font=dict(color="#94a3b8", size=12),
@@ -7688,6 +7701,11 @@ def _sky_chart(lat, lon, utc_off_h):
                     config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False,
                             "showAxisDragHandles": False, "staticPlot": False})
 
+st.markdown("""<style>
+/* Sky Altitude: con trỏ bàn tay (grab) thay cho mũi tên 4 hướng khi kéo trái/phải */
+.js-plotly-plot .nsewdrag, .js-plotly-plot .drag, .js-plotly-plot .cursor-move { cursor: grab !important; }
+.js-plotly-plot .nsewdrag:active, .js-plotly-plot .drag:active { cursor: grabbing !important; }
+</style>""", unsafe_allow_html=True)
 _sky_chart(float(st.session_state.lat), float(st.session_state.lon), float(loc_utc_offset_h))
 
 # Legend note
