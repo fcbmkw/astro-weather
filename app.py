@@ -318,13 +318,49 @@ st.markdown("""
     .block-container { padding-top: 0.8rem; padding-bottom: 0.8rem; padding-left: 2rem; padding-right: 2rem; }
     iframe { width: 100% !important; }
     .stTable table { width: 100% !important; margin-bottom: 0px !important; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    .stApp { font-family: 'Inter', 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+    [data-testid="stMainBlockContainer"] { padding-top: 0.8rem !important; }
     .metric-card {
-        background-color: #1e293b;
+        background: linear-gradient(145deg, rgba(30,41,59,.96), rgba(15,23,42,.96));
         padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #334155;
+        border-radius: 14px;
+        border: 1px solid rgba(148,163,184,.18);
         margin-bottom: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+        position: relative; overflow: hidden;
+        transition: border-color .25s ease, box-shadow .25s ease;
     }
+    .metric-card::before {
+        content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+        background: linear-gradient(90deg, transparent, #38bdf8 35%, #a78bfa 65%, transparent); opacity: .75;
+    }
+    .metric-card::after {
+        content: ""; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px;
+        background: radial-gradient(circle, rgba(56,189,248,.14), transparent 70%);
+        pointer-events: none;
+    }
+    .metric-card:hover { border-color: rgba(56,189,248,.50);
+        box-shadow: 0 8px 24px rgba(0,0,0,.35), 0 0 22px rgba(56,189,248,.14), inset 0 1px 0 rgba(255,255,255,.06); }
+    * { scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+    .wx-card {
+        background: linear-gradient(180deg, #1f0e03, #140800);
+        border: 1px solid rgba(251,146,60,.38);
+        border-radius: 16px; overflow: hidden; margin-bottom: 8px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 24px rgba(234,88,12,.12), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .wx-card table.wx-table {
+        width: 100%; table-layout: fixed; border-collapse: collapse;
+        margin: 0 !important; border: none !important; font-size: 14px;
+        font-variant-numeric: tabular-nums;
+    }
+    .wx-card .wx-table th, .wx-card .wx-table td {
+        border: none !important;
+        border-bottom: 1px solid rgba(251,146,60,.14) !important;
+    }
+    .wx-card .wx-table tbody tr:last-child td { border-bottom: none !important; }
+    .wx-card .wx-table tbody tr { transition: background .15s ease; }
+    .wx-card .wx-table tbody tr:hover { background: rgba(251,146,60,.18) !important; }
     .source-card {
         background-color: #1e293b;
         border-radius: 10px;
@@ -356,6 +392,54 @@ st.markdown("""
     .source-card + div { margin-top: -10px !important; }
 </style>
 """, unsafe_allow_html=True)
+
+UI_AURORA = True   # False = quay về giao diện phẳng như cũ
+
+if UI_AURORA:
+    st.markdown("""
+<style>
+.stApp {
+    background:
+        radial-gradient(1100px 560px at 8% -8%,  rgba(56,189,248,.16), transparent 60%),
+        radial-gradient(900px 520px at 96% 2%,   rgba(167,139,250,.16), transparent 60%),
+        radial-gradient(900px 520px at 50% 112%, rgba(52,211,153,.09),  transparent 60%),
+        #060a14 !important;
+    background-attachment: fixed !important;
+}
+.stApp::before, .stApp::after {
+    content: ""; position: fixed; top: 0; left: 0; width: 2px; height: 2px;
+    background: transparent; pointer-events: none; z-index: 0;
+}
+.stApp::before { box-shadow: __S1__; animation: twinkle-a 5s ease-in-out infinite; }
+.stApp::after  { width: 3px; height: 3px; box-shadow: __S2__; animation: twinkle-b 7s ease-in-out infinite; }
+@keyframes twinkle-a { 0%,100% { opacity: .85; } 50% { opacity: .25; } }
+@keyframes twinkle-b { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
+.metric-card {
+    background: linear-gradient(145deg, rgba(30,41,59,.55), rgba(15,23,42,.42)) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid rgba(255,255,255,.09) !important;
+    box-shadow: 0 10px 32px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.10) !important;
+}
+.wx-card {
+    background: linear-gradient(180deg, rgba(40,18,6,.78), rgba(18,8,2,.86)) !important;
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 1px solid rgba(251,146,60,.45) !important;
+    box-shadow: 0 12px 36px rgba(0,0,0,.50), 0 0 34px rgba(251,146,60,.16), inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+.wx-card .wx-table thead tr { background: linear-gradient(90deg, rgba(234,88,12,.55), rgba(124,45,18,.55)) !important; }
+.stMarkdown h3 { letter-spacing: .02em; text-shadow: 0 0 22px rgba(56,189,248,.25); }
+hr { border-color: rgba(148,163,184,.18) !important; }
+div[data-testid="stChatInput"] > div {
+    background: rgba(15,23,42,.62) !important;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+div[class*="st-key-astro_ai_answer_box"] {
+    background: rgba(15,23,42,.55) !important;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.09) !important; border-radius: 12px !important;
+}
+</style>
+""".replace("__S1__", "663px 308px rgba(226,232,240,0.75),808px 98px rgba(226,232,240,0.75),148px 1097px rgba(226,232,240,0.75),192px 748px rgba(226,232,240,0.75),1193px 118px rgba(226,232,240,0.75),1863px 1039px rgba(226,232,240,0.75),439px 76px rgba(226,232,240,0.75),176px 888px rgba(226,232,240,0.75),856px 143px rgba(226,232,240,0.75),492px 185px rgba(226,232,240,0.75),1128px 869px rgba(226,232,240,0.75),121px 253px rgba(226,232,240,0.75),457px 126px rgba(226,232,240,0.75),1181px 812px rgba(226,232,240,0.75),101px 452px rgba(226,232,240,0.75),95px 272px rgba(226,232,240,0.75),593px 858px rgba(226,232,240,0.75),295px 241px rgba(226,232,240,0.75),1169px 631px rgba(226,232,240,0.75),1147px 370px rgba(226,232,240,0.75),211px 384px rgba(226,232,240,0.75),762px 199px rgba(226,232,240,0.75),1121px 128px rgba(226,232,240,0.75),1155px 122px rgba(226,232,240,0.75),1267px 421px rgba(226,232,240,0.75),1016px 1088px rgba(226,232,240,0.75),875px 643px rgba(226,232,240,0.75),953px 928px rgba(226,232,240,0.75),740px 613px rgba(226,232,240,0.75),508px 368px rgba(226,232,240,0.75),1431px 499px rgba(226,232,240,0.75),167px 614px rgba(226,232,240,0.75),1075px 1013px rgba(226,232,240,0.75),1792px 703px rgba(226,232,240,0.75),1493px 919px rgba(226,232,240,0.75),589px 149px rgba(226,232,240,0.75),241px 1048px rgba(226,232,240,0.75),856px 337px rgba(226,232,240,0.75),1550px 700px rgba(226,232,240,0.75),311px 1001px rgba(226,232,240,0.75),863px 80px rgba(226,232,240,0.75),1368px 158px rgba(226,232,240,0.75),1565px 642px rgba(226,232,240,0.75),696px 717px rgba(226,232,240,0.75),1217px 1017px rgba(226,232,240,0.75),1187px 934px rgba(226,232,240,0.75),140px 191px rgba(226,232,240,0.75),552px 970px rgba(226,232,240,0.75),1427px 133px rgba(226,232,240,0.75),124px 634px rgba(226,232,240,0.75),1325px 912px rgba(226,232,240,0.75),582px 790px rgba(226,232,240,0.75),1816px 710px rgba(226,232,240,0.75),46px 945px rgba(226,232,240,0.75),727px 344px rgba(226,232,240,0.75),1251px 239px rgba(226,232,240,0.75),1011px 120px rgba(226,232,240,0.75),446px 588px rgba(226,232,240,0.75),264px 507px rgba(226,232,240,0.75),814px 800px rgba(226,232,240,0.75),1877px 1016px rgba(226,232,240,0.75),165px 340px rgba(226,232,240,0.75),919px 822px rgba(226,232,240,0.75),1125px 569px rgba(226,232,240,0.75),1809px 280px rgba(226,232,240,0.75),1677px 881px rgba(226,232,240,0.75),1769px 570px rgba(226,232,240,0.75),1446px 850px rgba(226,232,240,0.75),734px 779px rgba(226,232,240,0.75),472px 309px rgba(226,232,240,0.75)").replace("__S2__", "169px 360px rgba(226,232,240,0.95),309px 475px rgba(226,232,240,0.95),1348px 477px rgba(226,232,240,0.95),24px 993px rgba(226,232,240,0.95),1702px 373px rgba(226,232,240,0.95),538px 577px rgba(226,232,240,0.95),8px 298px rgba(226,232,240,0.95),858px 1094px rgba(226,232,240,0.95),756px 652px rgba(226,232,240,0.95),257px 1055px rgba(226,232,240,0.95),1264px 110px rgba(226,232,240,0.95),935px 803px rgba(226,232,240,0.95),815px 817px rgba(226,232,240,0.95),807px 212px rgba(226,232,240,0.95),986px 820px rgba(226,232,240,0.95),127px 390px rgba(226,232,240,0.95),137px 427px rgba(226,232,240,0.95),902px 332px rgba(226,232,240,0.95),225px 696px rgba(226,232,240,0.95),1230px 107px rgba(226,232,240,0.95),209px 0px rgba(226,232,240,0.95),1160px 309px rgba(226,232,240,0.95)"), unsafe_allow_html=True)
 
 # ── SESSION STATE ────────────────────────────────────────────────────────────
 for k, v in [("lat", 35.6895), ("lon", 139.6917),
@@ -1765,7 +1849,7 @@ def _half_star_html(v):
     """4 ngôi sao; v bội của 0.5. Đầy = vàng; nửa sao = nửa TRÁI vàng, nửa PHẢI không màu (chỉ viền); rỗng = chỉ viền.
     Hai lớp dùng cùng glyph ★ (viền bằng text-stroke) nên clip 50% khớp đúng giữa ngôi sao."""
     S = "&#9733;"
-    gold  = "color:#facc15;-webkit-text-stroke:1.2px #facc15;"
+    gold  = "color:#facc15;-webkit-text-stroke:1.2px #facc15;text-shadow:0 0 8px rgba(250,204,21,.55);"
     empty = "color:transparent;-webkit-text-stroke:1.2px #cbd5e1;"
     box   = "display:inline-block;margin-right:2px;"
     parts = []
@@ -3045,33 +3129,6 @@ if st.session_state.map_tile not in ("satellite", "himawari", "windy"):
 # align-items: center chỉ canh giữa theo chiều NGANG chứ không phải dọc.
 # ==============================================================================
 
-# --- NÚT NEW CHAT — góc trên-phải màn hình, position:fixed ---
-st.markdown(
-    """
-    <style>
-    .st-key-astro_newchat_btn {
-        position: fixed !important;
-        top: 0.85rem !important;
-        right: 0.9rem !important;
-        z-index: 999999 !important;
-        width: 40px !important;
-    }
-    .st-key-astro_newchat_btn button {
-        width: 40px !important;
-        height: 40px !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-with st.container(key="astro_newchat_btn"):
-    if st.button("", key="astro_new_chat", icon=":material/edit_square:", help="New chat", use_container_width=True):
-        st.session_state.astro_ai_history = []
-        st.session_state.astro_ai_answer = None
-        st.session_state.astro_last_question = "Ask AI for the best places & times to shoot the Milky Way..."
-        st.session_state.astro_last_processed_query = None
-        st.rerun()
-
 # --- CSS: chatbox gọn (bản đã "vừa mắt"), chỉ thêm flex-direction: row để
 # sửa lệch nút gửi, ẩn toolbar Streamlit ---
 st.markdown(
@@ -3161,6 +3218,34 @@ st.markdown(
     div[class*="st-key-astro_ai_answer_box"] *:last-child {
         margin-bottom: 0 !important;
     }
+
+    /* New Chat: nút Streamlit gốc bị ẩn; nút hiển thị (.nc-btn) do JS chèn vào trong chatbox, cạnh nút gửi */
+    .st-key-astro_newchat_btn,
+    [data-testid="stElementContainer"]:has(> .st-key-astro_newchat_btn),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-astro_newchat_btn) { display: none !important; }
+    .nc-btn {
+        flex: 0 0 auto; width: 26px; height: 26px; margin: 0 4px 0 0; padding: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: none; border-radius: 8px; background: transparent; color: #94a3b8; cursor: pointer;
+        transition: color .2s ease, background .2s ease;
+    }
+    .nc-btn:hover { color: #38bdf8; background: rgba(56,189,248,.14); }
+    .nc-btn:active { transform: none; }
+    .nc-btn svg { width: 16px; height: 16px; fill: currentColor; pointer-events: none; }
+    div[data-testid="stChatInput"] textarea { padding-right: 8px !important; }
+    div[data-testid="stChatInput"] > div {
+        border-radius: 12px !important;
+        border: 1px solid rgba(148,163,184,.28) !important;
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    div[data-testid="stChatInput"] > div:focus-within {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 0 3px rgba(56,189,248,.18) !important;
+    }
+    /* Ẩn khung kết quả trống khi chưa có câu trả lời */
+    div[class*="st-key-astro_ai_answer_box"]:not(:has([data-testid="stMarkdownContainer"])):not(:has([data-testid="stCaptionContainer"])) {
+        display: none !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -3182,8 +3267,17 @@ def _astro_ai_close():
 
 _AI_X_HTML = ('<span class="mkw-x" data-close="chat" title="Close" style="float:right;margin:0 0 4px 8px;'
               'pointer-events:auto;cursor:pointer;color:#94a3b8;font-size:14px;line-height:1;">✕</span>')
-_ai_panel = st.container()
+_ai_panel = st.container(key="astro_ai_panel")
 with _ai_panel:
+    with st.container(key="astro_newchat_btn"):
+        if st.button("", key="astro_new_chat", icon=":material/edit_square:", help="New chat"):
+            st.session_state.astro_ai_history = []
+            st.session_state.astro_ai_answer = None
+            st.session_state.astro_last_question = "Ask AI for the best places & times to shoot the Milky Way..."
+            st.session_state.astro_last_processed_query = None
+            st.session_state._ai_rings = []
+            st.session_state._ai_panel = []
+            st.rerun()
     _ai_question = st.chat_input(
         placeholder=_placeholder_text,
         key="astro_ai_input",
@@ -5308,6 +5402,37 @@ _mkw_comp.html("""<script>
   };
   P.__mkwXh = h; D.addEventListener('click', h, true);
 }catch(err){ console.log('[mkw] bridge error', err); }})();
+(function(){try{
+  var P = window.parent, D = P.document;
+  if (P.__ncObs) { P.__ncObs.disconnect(); }
+  var ICON = '<svg viewBox="0 0 24 24"><path d="M5 3h8.5l-2 2H5v14h14v-6.5l2-2V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm14.6.4 1.9 1.9a1 1 0 0 1 0 1.4L12 15.2 9 16l.8-3L18.2 3.4a1 1 0 0 1 1.4 0z"/></svg>';
+  function hideOrig() {
+    var kb = D.querySelector('.st-key-astro_newchat_btn');
+    if (!kb) return;
+    var x = kb;
+    while (x.parentElement && x.parentElement.children.length === 1) { x = x.parentElement; }
+    x.style.setProperty('display', 'none', 'important');
+  }
+  function ensure() {
+    hideOrig();
+    var ci = D.querySelector('[data-testid="stChatInput"]');
+    if (!ci || ci.querySelector('.nc-btn')) return;
+    var send = ci.querySelector('button');
+    if (!send || !send.parentNode) return;
+    var b = D.createElement('button');
+    b.type = 'button'; b.className = 'nc-btn'; b.title = 'New chat'; b.innerHTML = ICON;
+    b.addEventListener('click', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      var t = D.querySelector('.st-key-astro_newchat_btn button');
+      if (t) t.click();
+    });
+    send.parentNode.insertBefore(b, send);
+  }
+  ensure();
+  var o = new P.MutationObserver(ensure);
+  o.observe(D.body, { childList: true, subtree: true });
+  P.__ncObs = o;
+}catch(err){ console.log('[nc] error', err); }})();
 </script>""", height=0)
 
 # ── LPM EXTERNAL LINK ─────────────────────────────────────────────────────────
@@ -5975,9 +6100,9 @@ with col_left:
                 icon, col = '\U0001f325\ufe0f', '#94a3b8'
             else:
                 icon, col = '\u2601\ufe0f', '#64748b'
-            return (f'<div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">'
-                    f'<span style="font-size:15px;line-height:1;">{icon}</span>'
-                    f'<span style="font-size:11px;color:{col};font-weight:600;">{pct_str}</span>'
+            return (f'<div style="display:flex;align-items:center;gap:3px;white-space:nowrap;">'
+                    f'<span style="font-size:18px;line-height:1;">{icon}</span>'
+                    f'<span style="font-size:14px;color:{col};font-weight:700;margin-left:2px;">{pct_str}</span>'
                     + (f'<details name="spreadwarn" style="display:inline-block;position:relative;">'
                        f'<summary '
                        f'style="display:inline-block;list-style:none;cursor:pointer;font-size:13px;color:#f59e0b;padding:0 2px;">\u26a0</summary>'
@@ -5993,7 +6118,7 @@ with col_left:
             if ws < 2:   icon,col = '','#94a3b8'
             elif ws < 5: icon,col = '','#60a5fa'
             else:        icon,col = '','#f97316'
-            return f'<span style="color:{col}">{icon} {ws_str}</span>'
+            return f'<span style="color:{col};white-space:nowrap;">{icon} {ws_str}</span>'
 
         # Sao mỗi giờ theo chế độ: model = mô hình | nk = Nippon Kishou (3 đêm đầu, sau đó dùng mô hình)
         # | both = trung bình hai bên (3 đêm đầu), sau đó chỉ mô hình. Mây/ẩm/gió luôn từ JMA+ECMWF.
@@ -6034,25 +6159,25 @@ with col_left:
             _sv = (_nk_v if _nk_v is not None else _own) if _smode == "nk" else _star_value(_own, _nk_v)
             stars = _half_star_html(_sv)
             rows_html += (
-                f'<tr style="background:{bg};border-bottom:1px solid rgba(234,88,12,0.18);">'
+                f'<tr style="background:{bg};">'
                 f'<td style="padding:8px 6px;font-weight:700;color:#fb923c;white-space:nowrap;">{time_lbl}</td>'
                 f'<td style="padding:8px 6px;overflow:visible;">{cloud_cell}</td>'
                 f'<td style="padding:8px 6px;color:#fb923c;font-size:13px;white-space:nowrap;">{humid_cell}</td>'
-                f'<td style="padding:8px 6px;color:#fb923c;">{wind_cell}</td>'
+                f'<td style="padding:8px 6px;color:#fb923c;white-space:nowrap;">{wind_cell}</td>'
                 f'<td style="padding:8px 4px;font-size:22px;line-height:1;letter-spacing:0;white-space:nowrap;">{stars}</td>'
                 f'</tr>'
             )
 
         table_html = f"""
-<div style="background:#1a0a00;border:1.5px solid rgba(234,88,12,0.45);border-radius:12px;overflow:hidden;margin-bottom:8px;box-shadow:0 0 20px rgba(234,88,12,0.10);">
-  <table style="width:100%;border-collapse:collapse;font-size:14px;font-family:'Segoe UI',sans-serif;table-layout:fixed;">
+<div class="wx-card">
+  <table class="wx-table">
     <thead>
-      <tr style="background:linear-gradient(90deg,rgba(154,52,18,0.90),rgba(120,40,10,0.75));border-bottom:2px solid rgba(234,88,12,0.55);">
-        <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:14%;">⏰</th>
-        <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:18%;">🌤️</th>
-        <th title="Temperature / Humidity" style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:21%;white-space:nowrap;">🌡️/💧</th>
-        <th style="padding:10px 6px;text-align:left;color:#fb923c;font-weight:700;width:16%;">💨</th>
-        <th title="{_star_tip if _nk_hits else ''}" style="padding:10px 4px;text-align:left;color:#fb923c;font-weight:700;width:31%;">📸</th>
+      <tr style="background:linear-gradient(90deg,rgba(154,52,18,0.95),rgba(110,36,10,0.80));">
+        <th style="padding:11px 8px;text-align:left;color:#fdba74;font-weight:700;width:13%;">⏰</th>
+        <th style="padding:11px 8px;text-align:left;color:#fdba74;font-weight:700;width:21%;">🌤️</th>
+        <th title="Temperature / Humidity" style="padding:11px 8px;text-align:left;color:#fdba74;font-weight:700;width:21%;white-space:nowrap;">🌡️/💧</th>
+        <th style="padding:11px 8px;text-align:left;color:#fdba74;font-weight:700;width:19%;">💨</th>
+        <th title="{_star_tip if _nk_hits else ''}" style="padding:11px 6px;text-align:left;color:#fdba74;font-weight:700;width:26%;">📸</th>
       </tr>
     </thead>
     <tbody>{rows_html}</tbody>
