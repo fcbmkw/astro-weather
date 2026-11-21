@@ -1483,8 +1483,9 @@ def _wx_prefetch(coords, workers=8):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_weather_raw(lat, lon):
-    pre = _wx_prefetch_store()["data"].pop((lat, lon), None)
-    if pre is not None:
+    _st = _wx_prefetch_store()
+    pre = _st["data"].pop((lat, lon), None)
+    if pre is not None and time.time() - _st["at"].get((lat, lon), 0) <= 3300:   # dữ liệu prefetch cũ → bỏ, tải lại
         return pre
     return _fetch_weather_raw_impl(lat, lon)
 
@@ -1864,10 +1865,50 @@ def _half_star_html(v):
     return "".join(parts)
 # ── END NK STAR FUNCS ─────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _wx_backfill_past(lat, lon):
+    """Open-Meteo mặc định chỉ trả dữ liệu từ 00:00 HÔM NAY. Hàm này lấy thêm 2 ngày đã qua
+    để bảng vẫn đủ 18:00→06:00 khi đêm đang xem bắt đầu từ hôm qua."""
+    url = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+           f"&hourly={_FIELDS}&models=jma_msm,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"
+           f"&past_days=2&forecast_days=1")
+    try:
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (AstroMapPro/7.0)"}, timeout=12)
+        if r.status_code == 200:
+            return r.json().get("hourly", {}) or {}
+    except Exception:
+        pass
+    return {}
+
+def _merge_past_hours(hourly, lat, lon):
+    """Ghép giờ quá khứ vào TRƯỚC dữ liệu forecast nếu đêm đang xem bắt đầu sớm hơn giờ đầu tiên của API."""
+    try:
+        if not hourly or not hourly.get("time") or _ep_label != "full":
+            return hourly
+        first = hourly["time"][0]
+        if target_date.strftime("%Y-%m-%dT18:00") >= first:
+            return hourly
+        past = _wx_backfill_past(lat, lon)
+        pt = past.get("time") or []
+        n = sum(1 for t in pt if t < first)
+        if n == 0:
+            return hourly
+        merged = {}
+        for k, v in hourly.items():
+            pv = past.get(k)
+            if isinstance(v, list):
+                merged[k] = (list(pv[:n]) if isinstance(pv, list) and len(pv) >= n else [None] * n) + list(v)
+            else:
+                merged[k] = v
+        return merged
+    except Exception:
+        return hourly
+
 # Chuyển hourly_data sang dạng hashable để cache key hoạt động
+_hourly_night = _merge_past_hours(hourly_data, st.session_state.lat, st.session_state.lon)
 _hourly_frozen = tuple(
     (k, tuple(v) if isinstance(v, list) else v)
-    for k, v in (hourly_data.items() if hourly_data else [])
+    for k, v in (_hourly_night.items() if _hourly_night else [])
 )
 
 # ── PREFETCH TẤT CẢ 7 ĐÊM ngay sau khi có hourly_data ────────────────────────
@@ -1968,6 +2009,7 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
     rain_hours = 0
     snow_hours = 0
     cloud_vals = []
+    star_vals = []        # sao theo giờ (0–4) của các slot tối thiên văn → trung bình cả đêm, khớp với bảng giờ
     # streak[i] = True nếu slot i là "giờ tốt" (trong khung tối thiên văn)
     good_flags = []
     for r, sa in zip(table_data, sun_alts):
@@ -1980,6 +2022,9 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
         temp_val  = r.get("_temp")
         cloud_pct = int(cloud_str.replace("%","")) if cloud_str.replace("%","").isdigit() else 100
         cloud_vals.append(cloud_pct)
+        _sn = r.get("_stars")
+        if isinstance(_sn, (int, float)):
+            star_vals.append(_sn)
 
         if precip >= 0.3:
             if temp_val is not None and temp_val < 2.0:
@@ -1996,7 +2041,7 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
                 "sub": "no astro-dark",
                 "color": "#94a3b8", "border": "rgba(148,163,184,0.55)",
                 "bg": "rgba(10,14,22,0.88)", "anim": "blink-warn",
-                "good_hours": 0, "total": 0}
+                "good_hours": 0, "total": 0, "star_avg": 0}
 
     # ── Tìm cửa sổ liên tiếp dài nhất có điều kiện tốt (longest good streak) ──
     best_streak = 0
@@ -2063,9 +2108,14 @@ def _build_night_verdict(table_data, sun_alts=None, moon_illum=None):
         bg    = "rgba(10,14,22,0.88)"; anim = "blink-warn"
         sub   = f"avg cloud {avg_cloud}%"
 
+    if stars == "✕" or not star_vals:
+        _star_avg = 0 if stars == "✕" else None
+    else:
+        _star_avg = round(sum(star_vals) / len(star_vals) * 2) / 2     # làm tròn 0.5
     return {"tier": tier, "icon": icon, "stars": stars, "sub": sub,
             "color": color, "border": border, "bg": bg, "anim": anim,
-            "good_hours": good_hours, "best_streak": best_streak, "total": total}
+            "good_hours": good_hours, "best_streak": best_streak, "total": total,
+            "star_avg": _star_avg}
 
 # ── Tier → short natural-language weather label (cho fallback "no result") ──
 # Dùng tier THỰC TẾ phổ biến nhất trong các verdict đã quét (không phải icon cố định).
@@ -2502,6 +2552,7 @@ def _serialize_scan_result(result):
             "lon": loc_coords[1],
             "sky_tier": verdict.get("tier"),          # PERFECT NIGHT / GOOD STARRY NIGHT / ...
             "stars": verdict.get("stars"),
+            "star_avg": verdict.get("star_avg"),
             "detail": verdict.get("sub"),              # vd "avg cloud 12%, 6h clear"
             "clear_hours": verdict.get("good_hours"),
             "moon_illumination_pct": round(moon_illum, 1) if moon_illum is not None else None,
@@ -2653,6 +2704,7 @@ def tool_check_location_tonight(location_name: str) -> dict:
         "region": region,
         "sky_tier": verdict.get("tier"),
         "stars": verdict.get("stars"),
+        "star_avg": verdict.get("star_avg"),
         "detail": verdict.get("sub"),
         "clear_hours": verdict.get("good_hours"),
         "moon_illumination_pct": round(result["moon_illum"], 1) if result["moon_illum"] is not None else None,
@@ -2681,7 +2733,11 @@ def _ai_panel_row(c):
         except Exception:
             bortle = None
     # sao: (mô hình + Nippon Kishou)/2 cho 3 đêm đầu, theo chế độ đang chọn ở bảng giờ (model | nk | both)
-    _own = str(c.get("stars") or "").count("⭐") if c.get("stars") else None
+    # sao của mô hình: trung bình sao theo giờ cả đêm (khớp bảng); thiếu thì đếm ký tự sao (★ hoặc ⭐) của verdict
+    _own = c.get("star_avg")
+    if _own is None and c.get("stars"):
+        _ss = str(c.get("stars"))
+        _own = _ss.count("⭐") + _ss.count("★")
     _sm = st.session_state.get("star_mode", "both")
     _nk = _nk_night_value(c.get("lat"), c.get("lon"), d) if (d and _sm != "model") else None
     if _own is None:
@@ -3232,7 +3288,24 @@ st.markdown(
     .nc-btn:hover { color: #38bdf8; background: rgba(56,189,248,.14); }
     .nc-btn:active { transform: none; }
     .nc-btn svg { width: 16px; height: 16px; fill: currentColor; pointer-events: none; }
-    div[data-testid="stChatInput"] textarea { padding-right: 8px !important; }
+    div[data-testid="stChatInput"] textarea {
+        padding-right: 8px !important;
+        color: #f8fafc !important; -webkit-text-fill-color: #f8fafc !important; caret-color: #f8fafc !important;
+    }
+    div[data-testid="stChatInput"] textarea::placeholder { color: #94a3b8 !important; -webkit-text-fill-color: #94a3b8 !important; opacity: 1 !important; }
+    div[class*="st-key-astro_ai_answer_box"] p,
+    div[class*="st-key-astro_ai_answer_box"] li,
+    div[class*="st-key-astro_ai_answer_box"] strong,
+    div[class*="st-key-astro_ai_answer_box"] em,
+    div[class*="st-key-astro_ai_answer_box"] h1,
+    div[class*="st-key-astro_ai_answer_box"] h2,
+    div[class*="st-key-astro_ai_answer_box"] h3,
+    div[class*="st-key-astro_ai_answer_box"] h4,
+    div[class*="st-key-astro_ai_answer_box"] span:not(.mkw-x),
+    div[class*="st-key-astro_ai_answer_box"] [data-testid="stMarkdownContainer"],
+    div[class*="st-key-astro_ai_answer_box"] [data-testid="stCaptionContainer"] { color: #f8fafc !important; }
+    div[class*="st-key-astro_ai_answer_box"] a { color: #38bdf8 !important; }
+    div[class*="st-key-astro_ai_answer_box"] code { color: #fde68a !important; background: rgba(148,163,184,.16) !important; }
     div[data-testid="stChatInput"] > div {
         border-radius: 12px !important;
         border: 1px solid rgba(148,163,184,.28) !important;
@@ -6183,6 +6256,12 @@ with col_left:
     <tbody>{rows_html}</tbody>
   </table>
 </div>"""
+        if len(weather_table_data) < 13:
+            st.markdown('<div style="background:#422006;border:1px solid #f97316;border-radius:8px;'
+                        'padding:6px 14px;margin-bottom:8px;font-size:13px;color:#fed7aa;">'
+                        f'⚠️ この夜のデータが一部取得できませんでした（{len(weather_table_data)}/13 時間）。'
+                        '「🔄 再試行」またはページ再読み込みをお試しください。</div>',
+                        unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
     else:
         # Hiển thị nguyên nhân thực tế thay vì hardcode "502 Bad Gateway"
