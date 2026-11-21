@@ -2778,6 +2778,7 @@ def _ai_mentioned_cands(answer_text, all_cands, max_n=5):
     """Các địa điểm AI THỰC SỰ nêu tên trong câu trả lời, lấy từ kết quả của MỌI lần gọi tool trong lượt này
     (không chỉ lần gọi cuối), theo thứ tự xuất hiện trong văn bản. Dùng để vẽ vòng tròn/bảng AI picks/ghim map khớp với lời AI."""
     txt = re.sub(r"\s+", " ", str(answer_text or "")).lower()
+    txt_sq = re.sub(r"[^a-z0-9]", "", txt)          # bản "dán liền" để khớp tên viết khác dấu cách/gạch nối/dấu nháy
     found = {}
     for c in all_cands:
         if "lat" not in c:
@@ -2791,6 +2792,11 @@ def _ai_mentioned_cands(answer_text, all_cands, max_n=5):
             m = re.search(r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])", txt)
             if m:
                 pos.append(m.start())
+        if not pos:
+            for k in {short.lower(), latin.lower()}:
+                ksq = re.sub(r"[^a-z0-9]", "", k)
+                if len(ksq) >= 6 and ksq in txt_sq:
+                    pos.append(txt_sq.find(ksq))
         if not pos:
             continue
         found[(round(c["lat"], 3), round(c["lon"], 3))] = (min(pos), c)   # cùng địa điểm gọi nhiều lần → lấy kết quả mới nhất
@@ -2962,7 +2968,14 @@ def ask_astro_ai(user_question: str):
     # Ưu tiên đúng các địa điểm AI nêu tên trong câu trả lời (từ mọi lần gọi tool); không khớp được tên nào → như cũ
     _named = [] if (pick_idx == -1 and show_idx is None) else _ai_mentioned_cands(answer_text, all_cands)
     if _named:
-        _shown = _named
+        # Gộp với danh sách tool trả về: AI nêu tên hơi khác (gạch nối, rút gọn...) thì vẫn không làm rớt địa điểm khỏi bảng.
+        _key = lambda c: (round(c["lat"], 3), round(c["lon"], 3))
+        _shown_keys = {_key(c) for c in _shown}
+        if _shown and all(_key(c) in _shown_keys for c in _named):
+            pass                                  # mọi địa điểm AI nêu đều thuộc kết quả tool → giữ nguyên thứ hạng của tool
+        else:
+            _have = {_key(c) for c in _named}
+            _shown = (_named + [c for c in _shown if _key(c) not in _have])[:5]
     st.session_state._ai_rings = [[c.get("matched_name") or c.get("location_name") or "", c["lat"], c["lon"]]
                                   for c in _shown]
     st.session_state._ai_panel = [_ai_panel_row(c) for c in _shown]
