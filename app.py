@@ -1846,6 +1846,19 @@ def _star_value(own, nk):
     """own: 0–4 (mô hình); nk: 0–4 hoặc None. Có cả hai → chia đôi (kết quả bội của 0.5)."""
     return own if nk is None else (own + nk) / 2
 
+def _display_star_value(verdict, lat, lon, d):
+    """Số sao HIỂN THỊ của một đêm (cùng công thức với bảng AI picks): sao mô hình (trung bình theo giờ)
+    trộn với Nippon Kishou theo chế độ star_mode (model | nk | both). Dùng để XẾP HẠNG khớp với số sao người dùng thấy."""
+    own = verdict.get("star_avg")
+    if own is None:
+        _ss = str(verdict.get("stars") or "")
+        own = _ss.count("⭐") + _ss.count("★")
+    mode = st.session_state.get("star_mode", "both")
+    nk = _nk_night_value(lat, lon, d) if mode != "model" else None
+    if nk is None:
+        return own
+    return nk if mode == "nk" else (own + nk) / 2
+
 def _half_star_html(v):
     """4 ngôi sao; v bội của 0.5. Đầy = vàng; nửa sao = nửa TRÁI vàng, nửa PHẢI không màu (chỉ viền); rỗng = chỉ viền.
     Hai lớp dùng cùng glyph ★ (viền bằng text-stroke) nên clip 50% khớp đúng giữa ngôi sao."""
@@ -2393,10 +2406,10 @@ def _run_best_scan(region="kanto", limit=3):
     # Guarantee: at least 1 weekend (Fri/Sat/Sun) slot in top3 if any exists.
     # Strategy: first fill normally from sorted list, then if no weekend found,
     # swap the worst non-weekend slot for the best available weekend candidate.
-    top3 = []
+    _short = []
     seen_coords = []
     for cand in candidates:
-        _, _, _, _, d, day_off, loc_name, loc_coords, verdict, moon_illum = cand
+        _rk, _we, _stk, _gh, d, day_off, loc_name, loc_coords, verdict, moon_illum = cand
         # Dedupe location: skip nếu trong vòng 60km với địa điểm đã chọn
         too_close = any(
             _haversine_km(loc_coords[0], loc_coords[1], sc[0], sc[1]) < 60
@@ -2405,9 +2418,13 @@ def _run_best_scan(region="kanto", limit=3):
         if too_close:
             continue
         seen_coords.append(loc_coords)
-        top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum))
-        if len(top3) >= limit:
+        _sv = _display_star_value(verdict, loc_coords[0], loc_coords[1], d)
+        _short.append((_sv, _rk, _we, _stk, _gh, (d, day_off, loc_name, loc_coords, verdict, moon_illum)))
+        if len(_short) >= 12:
             break
+    # Xếp theo số sao hiển thị (mô hình + Nippon Kishou) → tier → cuối tuần → streak → giờ tốt
+    _short.sort(key=lambda x: x[:5], reverse=True)
+    top3 = [x[5] for x in _short[:limit]]
 
     # Guarantee at least 1 weekend in top3
     if top3:
@@ -2494,8 +2511,9 @@ def _run_tonight_scan(region="kanto", limit=3):
 
     candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
 
-    # Pick top 3, dedupe by location <60km
-    top3 = []
+    # Shortlist 12 địa điểm (dedupe <60km) theo tier/streak, rồi XẾP LẠI theo số sao hiển thị
+    # (sao mô hình + Nippon Kishou) để thứ hạng #1/#2/#3 khớp với số sao người dùng nhìn thấy.
+    _short = []
     seen_coords = []
     for cand in candidates:
         rank, streak, good_hours, loc_name, loc_coords, verdict, moon_illum = cand
@@ -2506,9 +2524,12 @@ def _run_tonight_scan(region="kanto", limit=3):
         if too_close:
             continue
         seen_coords.append(loc_coords)
-        top3.append((d, day_off, loc_name, loc_coords, verdict, moon_illum, False))
-        if len(top3) >= limit:
+        _sv = _display_star_value(verdict, loc_coords[0], loc_coords[1], d)
+        _short.append((_sv, rank, streak, good_hours, (d, day_off, loc_name, loc_coords, verdict, moon_illum, False)))
+        if len(_short) >= 12:
             break
+    _short.sort(key=lambda x: x[:4], reverse=True)
+    top3 = [x[4] for x in _short[:limit]]
 
     if not top3:
         return {"_fallback": True, "_fallback_label": _summarize_fallback_tiers(_fallback_tiers)} if _fallback_tiers else None
