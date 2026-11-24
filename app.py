@@ -698,13 +698,27 @@ def _sqm_to_bortle(sqm_est):
     elif sqm_est >= 17.80: return 8
     return 9
 
+def _sqm_to_bortle_half(sqm_est):
+    """Bortle thập phân, bước 0.5 (1.0 … 9.0), nội suy tuyến tính theo SQM trong từng cấp.
+    Mốc tối của cấp n = n.0, mốc sáng = (n+1).0. Làm tròn tới 0.5 gần nhất."""
+    if sqm_est >= 21.99:
+        return 1.0
+    if sqm_est < 17.80:
+        return 9.0
+    _lows = {1: 21.99, 2: 21.89, 3: 21.69, 4: 20.49, 5: 19.50, 6: 18.94, 7: 18.38, 8: 17.80}
+    n = _sqm_to_bortle(sqm_est)
+    dark_edge, bright_edge = _lows[n - 1], _lows[n]
+    x = n + (dark_edge - sqm_est) / (dark_edge - bright_edge)
+    return max(1.0, min(9.0, round(x * 2) / 2))
+
 def calculate_accurate_bortle(lat, lon):
     """Ưu tiên số liệu thật từ World Atlas 2015; không có thì dùng mô hình ước tính cũ."""
     _sq = _sqm_from_atlas(round(float(lat), 4), round(float(lon), 4))
     if _sq is not None:
         _sq = max(16.0, min(22.1, _sq))
-        return _sqm_to_bortle(_sq), _sq
-    return _calculate_bortle_fallback(lat, lon)
+        return _sqm_to_bortle_half(_sq), _sq
+    _bc_old, _sq = _calculate_bortle_fallback(lat, lon)
+    return _sqm_to_bortle_half(_sq), _sq     # luôn quy đổi Bortle từ SQM bằng cùng một bảng
 
 def _calculate_bortle_fallback(lat, lon):
     """Estimate Bortle class and SQM (mag/arcsec²) from coordinates.
@@ -2712,7 +2726,7 @@ def tool_scan_tonight(region: str = "kanto", top_n: int = 3) -> dict:
 
 
 def tool_check_location_darkness(location_name: str) -> dict:
-    """Tra cứu độ tối bầu trời (thang Bortle 1-9, 1 = tối nhất/đẹp nhất) của MỘT
+    """Tra cứu độ tối bầu trời (thang Bortle 1.0-9.0 theo bước 0.5, 1 = tối nhất/đẹp nhất) của MỘT
     địa điểm cụ thể đã có trong database, theo tên hoặc từ khoá gần đúng.
     CHỈ dùng khi user hỏi về 1 địa điểm cụ thể đã biết tên VÀ chỉ hỏi về mức
     ô nhiễm ánh sáng — KHÔNG dùng cho câu hỏi liên quan thời tiết đêm nay (dùng
@@ -5306,7 +5320,7 @@ if _ai_rows:
             _bits.append(f'🌙 {float(_r["moon"]):.0f}%')
         if _r.get("bortle") is not None:
             try:
-                _bits.append(f'Bortle {float(_r["bortle"]):g}')
+                _bits.append(f'Bortle {float(_r["bortle"]):.1f}')
             except (TypeError, ValueError):
                 pass
         if _r.get("nk") is not None:
@@ -5953,7 +5967,7 @@ with col_right:
     _sq_left = (
         f'''<div style="flex:1;min-width:0;">
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
-                <div style="font-size:20px;font-weight:bold;color:#38bdf8;margin-top:5px;line-height:1.2;">Bortle Class {bortle_class}</div>
+                <div style="font-size:20px;font-weight:bold;color:#38bdf8;margin-top:5px;line-height:1.2;">Bortle Class {bortle_class:.1f}</div>
                 <div style="font-size:12px;color:#e2e8f0;margin-top:3px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
             </div>''' if _in_japan else "")
     _sky_temp_card(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3), _sq_left)
@@ -6555,8 +6569,9 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
         lb = f"background:{label_bg};color:#0f172a;padding:0 3px;" if label_bg else ""
         return f'<div style="{lab}{stick}{lb}">{label}</div>' + "".join(cells)
 
-    p = [f'<div id="sc" style="overflow-x:auto;cursor:grab;user-select:none;"><div style="width:max(233.34%,1773px);box-sizing:border-box;background:#000;border:1px solid #334155;'
-         f'border-radius:10px;padding:8px 10px;">'
+    # Khung ngoài (viền + chú thích cuối) ĐỨNG YÊN; chỉ lưới #sc bên trong cuộn ngang.
+    p = [f'<div style="box-sizing:border-box;background:#000;border:1px solid #334155;border-radius:10px;padding:8px 10px;">'
+         f'<div id="sc" style="overflow-x:auto;cursor:grab;user-select:none;"><div style="width:max(233.34%,1773px);box-sizing:border-box;">'
          f'<div style="display:grid;grid-template-columns:104px repeat({n},minmax(0,1fr));column-gap:1px;row-gap:1px;">']
 
     # Header: ngày + giờ
@@ -6657,7 +6672,8 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
         b0 = datetime(day.year, day.month, day.day, h)
         bg = "#fb923c" if (sel_a <= b0 < sel_b) else "transparent"
         p.append(f'<div style="height:3px;background:{bg};"></div>')
-    p.append('</div>')  # grid
+    p.append('</div></div>')  # grid + wide; cuộn kết thúc ở đây
+    p.append('</div>')  # đóng #sc
 
     p.append('<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;'
              'font-size:10px;color:#94a3b8;font-family:sans-serif;">'
@@ -6669,7 +6685,7 @@ def _csc_build_html(hourly, lat, lon, utc_off_s, target_dt, now_local):
              '<span><span style="color:#fb923c;">&#9632;</span> selected night</span>'
              '<span style="color:#64748b;">· drag ↔ to see days 4–7</span>'
              '</div>')
-    p.append('</div></div>')
+    p.append('</div>')  # đóng khung ngoài (sau chú thích)
     _sel_idx = next((i for i, (d, day, h) in enumerate(cols)
                      if sel_a <= datetime(day.year, day.month, day.day, h) < sel_b), 0)
     return "".join(p), _sel_idx, n
@@ -6720,7 +6736,7 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden)tick
         '#sc{scrollbar-width:thin;scrollbar-color:#475569 #0f172a;}'
         '#sc::-webkit-scrollbar{height:8px;}#sc::-webkit-scrollbar-thumb{background:#475569;border-radius:4px;}'
         '</style></head><body>' + _csc_html + '<script>' + _csc_js + '</script></body></html>')
-    _csc_components.html(_csc_doc, height=255)
+    _csc_components.html(_csc_doc, height=272)
 else:
     st.caption("Clear Sky Forecast: weather data unavailable.")
 
