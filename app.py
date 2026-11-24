@@ -643,7 +643,66 @@ def calculate_zenith_ra_dec(lat, lon):
     dec_d, dec_m = int(lat), int((lat % 1) * 60)
     return f"{ra_h:02d}h {ra_m:02d}m", f"{dec_d:+03d}° {dec_m:02d}'"
 
+# ── World Atlas 2015 (Falchi et al. 2016) — tra SQM/Bortle THẬT từ GeoTIFF ────
+# File GeoTIFF (đã cắt riêng cho Nhật) đọc OFFLINE bằng rasterio. Đặt cùng thư mục
+# với app_jp.py (hoặc thư mục chạy). Thiếu file / thiếu rasterio / ngoài vùng phủ
+# → tự động rơi về mô hình ước tính cũ (_calculate_bortle_fallback).
+# Citation: Falchi F. et al., Sci. Adv. 2, e1600377 (2016), DOI 10.1126/sciadv.1600377
+_ATLAS_TIF_NAME = "World_Atlas_2015_japan.tif"
+_ATLAS_NATURAL_MCD = 0.171168465     # nền trời tự nhiên (mcd/m²)
+_ATLAS_REF_MCD = 1.08e8              # 0 mag/arcsec² tính theo mcd/m²
+
+def _atlas_tif_path():
+    here = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+    for d in (here, os.getcwd()):
+        p = os.path.join(d, _ATLAS_TIF_NAME)
+        if os.path.exists(p):
+            return p
+    return None
+
+@functools.lru_cache(maxsize=8192)
+def _sqm_from_atlas(lat_r, lon_r):
+    """SQM (mag/arcsec²) từ World Atlas 2015 tại (lat, lon) đã làm tròn; None nếu không tra được."""
+    path = _atlas_tif_path()
+    if path is None:
+        return None
+    try:
+        import rasterio
+        import numpy as np
+        with rasterio.open(path) as ds:
+            b = ds.bounds
+            if not (b.left <= lon_r <= b.right and b.bottom <= lat_r <= b.top):
+                return None
+            v = next(ds.sample([(lon_r, lat_r)], masked=True))[0]
+            if v is None or v is np.ma.masked:
+                return None
+            v = float(v)
+            if not math.isfinite(v) or v < 0:
+                return None
+        return round(-2.5 * math.log10((v + _ATLAS_NATURAL_MCD) / _ATLAS_REF_MCD), 2)
+    except Exception:
+        return None
+
+def _sqm_to_bortle(sqm_est):
+    if   sqm_est >= 21.76: return 1
+    elif sqm_est >= 21.60: return 2
+    elif sqm_est >= 21.30: return 3
+    elif sqm_est >= 20.30: return 4
+    elif sqm_est >= 19.41: return 5
+    elif sqm_est >= 18.50: return 6
+    elif sqm_est >= 18.00: return 7
+    elif sqm_est >= 17.62: return 8
+    return 9
+
 def calculate_accurate_bortle(lat, lon):
+    """Ưu tiên số liệu thật từ World Atlas 2015; không có thì dùng mô hình ước tính cũ."""
+    _sq = _sqm_from_atlas(round(float(lat), 4), round(float(lon), 4))
+    if _sq is not None:
+        _sq = max(16.0, min(22.1, _sq))
+        return _sqm_to_bortle(_sq), _sq
+    return _calculate_bortle_fallback(lat, lon)
+
+def _calculate_bortle_fallback(lat, lon):
     """Estimate Bortle class and SQM (mag/arcsec²) from coordinates.
 
     Methodology:
