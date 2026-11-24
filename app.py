@@ -684,14 +684,18 @@ def _sqm_from_atlas(lat_r, lon_r):
         return None
 
 def _sqm_to_bortle(sqm_est):
-    if   sqm_est >= 21.76: return 1
-    elif sqm_est >= 21.60: return 2
-    elif sqm_est >= 21.30: return 3
-    elif sqm_est >= 20.30: return 4
-    elif sqm_est >= 19.41: return 5
-    elif sqm_est >= 18.50: return 6
-    elif sqm_est >= 18.00: return 7
-    elif sqm_est >= 17.62: return 8
+    # Bảng quy đổi SQM → Bortle thường dùng cho dữ liệu bản đồ (khớp với kết quả
+    # hiển thị trên lightpollutionmap.info / .app: vd SQM 21.81 → Bortle 3, 21.66 → 4).
+    #   1: ≥21.99 | 2: 21.89–21.99 | 3: 21.69–21.89 | 4: 20.49–21.69
+    #   5: 19.50–20.49 | 6: 18.94–19.50 | 7: 18.38–18.94 | 8: 17.80–18.38 | 9: <17.80
+    if   sqm_est >= 21.99: return 1
+    elif sqm_est >= 21.89: return 2
+    elif sqm_est >= 21.69: return 3
+    elif sqm_est >= 20.49: return 4
+    elif sqm_est >= 19.50: return 5
+    elif sqm_est >= 18.94: return 6
+    elif sqm_est >= 18.38: return 7
+    elif sqm_est >= 17.80: return 8
     return 9
 
 def calculate_accurate_bortle(lat, lon):
@@ -1514,21 +1518,8 @@ def _calculate_bortle_fallback(lat, lon):
 
     sqm_est = max(17.5, min(22.3, round(sqm_est, 2)))
 
-    # Convert SQM → Bortle class
-    # Thresholds theo Wikipedia / Bortle 2001 / Sky & Telescope:
-    #   Class 1:  21.76–22.0   Class 2: 21.6–21.75  Class 3: 21.3–21.6
-    #   Class 4:  20.8–21.3    Class 4.5: 20.3–20.8 Class 5: 19.25–20.3
-    #   Class 6:  18.5–19.25   Class 7: 18.0–18.5
-    #   Class 8+: < 18.0
-    if   sqm_est >= 21.76: bc = 1
-    elif sqm_est >= 21.60: bc = 2
-    elif sqm_est >= 21.30: bc = 3
-    elif sqm_est >= 20.30: bc = 4   # gộp 4 và 4.5
-    elif sqm_est >= 19.41: bc = 5
-    elif sqm_est >= 18.50: bc = 6
-    elif sqm_est >= 18.00: bc = 7
-    elif sqm_est >= 17.62: bc = 8
-    else:                  bc = 9
+    # Convert SQM → Bortle class (dùng chung bảng với _sqm_to_bortle ở trên)
+    bc = _sqm_to_bortle(sqm_est)
 
     return bc, sqm_est
 
