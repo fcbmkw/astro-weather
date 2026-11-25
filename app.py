@@ -473,14 +473,14 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Nippon Kishou chỉ có 3 đêm đầu: từ đêm thứ 4 tự chuyển option sang JMA+ECMWF (MODEL);
-# quay lại 3 đêm đầu thì trả về lựa chọn NK / NK+MODEL trước đó.
+# Nippon Kishou chỉ có 3 đêm đầu: từ đêm thứ 4 tự chuyển sang JMA+ECMWF (model);
+# quay lại 3 đêm đầu thì tự chuyển về NK+JMA+ECMWF (both). User chọn tay → không tự đổi nữa.
 if st.session_state.day_offset >= 3:
     if st.session_state.star_mode in ("nk", "both"):
-        st.session_state["_nk_pref"] = st.session_state.star_mode
         st.session_state.star_mode = "model"
+        st.session_state["_nk_pref"] = True
 elif st.session_state.get("_nk_pref"):
-    st.session_state.star_mode = st.session_state["_nk_pref"]
+    st.session_state.star_mode = "both"
     st.session_state["_nk_pref"] = None
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -6237,6 +6237,12 @@ with col_left:
         _dyn_parts.append(
             f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_DAY_TXT.get(_c, '#bfdbfe')} !important;}}"
         )
+    for _i, (_lb, _dd) in enumerate(zip(_DAY_BTN_LABELS, _DAY_BTN_DATES)):
+        if "月" not in _lb:
+            _dyn_parts.append(
+                f".st-key-nav1 .st-key-dbtn_{_i} button p::before{{content:\"{_dd.month}月{_dd.day}日\";display:block;"
+                "font-size:.68em;font-weight:600;opacity:.8;line-height:1;margin-bottom:3px;}"
+            )
     _dyn_parts.append(
         f".st-key-nav1 .st-key-dbtn_{_sel_i} button{{"
         "background:linear-gradient(180deg,#fdba74 0%,#fb923c 35%,#ea580c 70%,#c2410c 100%) !important;"
@@ -6295,7 +6301,7 @@ with col_left:
 div.st-key-nav_box[data-testid="stVerticalBlock"] { display: block !important; }
 div.st-key-nav_box[data-testid="stVerticalBlock"] {
     background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px;
-    padding: 4px 4px 6px 4px; box-sizing: border-box; width: 100% !important; row-gap: 0 !important;
+    padding: 3px 4px 4px 4px; box-sizing: border-box; width: 100% !important; row-gap: 0 !important;
 }
 .st-key-nav1,
 .st-key-nav1 > div,
@@ -6311,15 +6317,16 @@ div.st-key-nav1[data-testid="stVerticalBlock"],
     padding: 0 !important; margin: 0 !important;
     container-type: inline-size;
 }
+.st-key-nav1 [data-testid="stElementContainer"] { height: auto !important; min-height: 0 !important; }
 .st-key-nav1 [data-testid="stElementContainer"],
 .st-key-nav1 [data-testid="stLayoutWrapper"] { margin: 0 !important; width: 100% !important; min-width: 0 !important; }
 .st-key-nav1 [data-testid="stButton"] { width: 100% !important; }
 .st-key-nav1 [data-testid="stButton"] button {
-    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 32px !important;
+    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 36px !important;
     padding: 0 !important; border-radius: 8px !important;
     background: linear-gradient(180deg, rgba(59,130,246,.20), rgba(30,64,175,.14)) !important;
     border: 1px solid rgba(96,165,250,.38) !important; border-bottom: 2px solid rgba(8,15,40,.85) !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,.35) !important;
+    box-shadow: 0 3px 0 rgba(2,6,23,.85), 0 5px 7px rgba(0,0,0,.40) !important;
     line-height: 1 !important; white-space: nowrap !important; overflow: hidden !important;
     position: relative; cursor: pointer;
     transition: transform .12s ease, box-shadow .12s ease, filter .15s ease !important;
@@ -6342,7 +6349,7 @@ div.st-key-nav1[data-testid="stVerticalBlock"],
 .st-key-nav1 [data-testid="stButton"] button:focus { outline: none !important; }
 .st-key-nav1 [data-testid="stButton"] button:active {
     transform: translateY(1px) !important; filter: brightness(.95) !important;
-    border-bottom-width: 1px !important; box-shadow: none !important;
+    box-shadow: 0 1px 0 rgba(2,6,23,.85) !important;
 }
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
