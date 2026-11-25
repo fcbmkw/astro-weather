@@ -6328,8 +6328,8 @@ div.st-key-nav1[data-testid="stVerticalBlock"],
     width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 36px !important;
     padding: 0 !important; border-radius: 8px !important;
     background: linear-gradient(180deg, rgba(59,130,246,.20), rgba(30,64,175,.14)) !important;
-    border: 1px solid rgba(96,165,250,.38) !important; border-bottom: 2px solid rgba(8,15,40,.85) !important;
-    box-shadow: 0 3px 0 rgba(2,6,23,.85), 0 5px 7px rgba(0,0,0,.40) !important;
+    border: 1px solid rgba(96,165,250,.45) !important;
+    box-shadow: 0 3px 0 #1e3a8a, 0 5px 6px rgba(0,0,0,.55) !important;
     line-height: 1 !important; white-space: nowrap !important; overflow: hidden !important;
     position: relative; cursor: pointer;
     transition: transform .12s ease, box-shadow .12s ease, filter .15s ease !important;
@@ -6352,7 +6352,7 @@ div.st-key-nav1[data-testid="stVerticalBlock"],
 .st-key-nav1 [data-testid="stButton"] button:focus { outline: none !important; }
 .st-key-nav1 [data-testid="stButton"] button:active {
     transform: translateY(1px) !important; filter: brightness(.95) !important;
-    box-shadow: 0 1px 0 rgba(2,6,23,.85) !important;
+    box-shadow: 0 1px 0 #1e3a8a !important;
 }
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
