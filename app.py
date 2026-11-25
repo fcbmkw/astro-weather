@@ -699,7 +699,7 @@ def _sqm_to_bortle(sqm_est):
     return 9
 
 def _sqm_to_bortle_half(sqm_est):
-    """Bortle thập phân, bước 0.5 (1.0 … 9.0), nội suy tuyến tính theo SQM trong từng cấp.
+    """Bortle thập phân, bước 0.1 (1.0 … 9.0), nội suy tuyến tính theo SQM trong từng cấp.
     Mốc tối của cấp n = n.0, mốc sáng = (n+1).0. Làm tròn tới 0.5 gần nhất."""
     if sqm_est >= 21.99:
         return 1.0
@@ -724,7 +724,7 @@ def calculate_accurate_bortle(lat, lon):
 # Dán đoạn này NGAY SAU hàm calculate_accurate_bortle(...) hiện có (trước _calculate_bortle_fallback).
 # CSV tạo bằng export_lpm2025_template.py, đặt cùng thư mục với app. Dòng nào chưa điền sqm thì bỏ qua
 # → điểm đó (và mọi điểm ngẫu nhiên khác trên bản đồ) vẫn dùng World Atlas 2015 như cũ.
-_LPM2025_CSV = "lpm_2025_overrides_jp.csv"     # app_vn: "lpm_2025_overrides_vn.csv"
+_LPM2025_CSV = "lpm_2025_overrides_jp.csv"
 _LPM2025_TOL = 0.0015                          # ~150 m quanh toạ độ địa điểm
 
 @functools.lru_cache(maxsize=1)
@@ -1778,6 +1778,54 @@ date_options = [
     for i in range(7)
 ]
 
+# ── 7 nút chọn ngày: nhãn + màu chữ (T2–T6 trắng, T7 vàng, CN & ngày lễ đỏ) ────────
+from datetime import date as _dt_date
+
+@functools.lru_cache(maxsize=16)
+def _jp_holidays(year):
+    """Ngày lễ quốc gia Nhật (国民の祝日) của một năm, gồm 振替休日 và 国民の休日. Chính xác cho 2020–2099."""
+    hol = set()
+    def nth_monday(month, n):
+        d = _dt_date(year, month, 1)
+        d += timedelta(days=(7 - d.weekday()) % 7)
+        return d + timedelta(weeks=n - 1)
+    for m, dd in [(1, 1), (2, 11), (2, 23), (4, 29), (5, 3), (5, 4), (5, 5), (8, 11), (11, 3), (11, 23)]:
+        hol.add(_dt_date(year, m, dd))
+    hol.update([nth_monday(1, 2), nth_monday(7, 3), nth_monday(9, 3), nth_monday(10, 2)])   # 成人/海/敬老/スポーツ
+    k = year - 1980
+    hol.add(_dt_date(year, 3, int(20.8431 + 0.242194 * k - k // 4)))      # 春分の日
+    hol.add(_dt_date(year, 9, int(23.2488 + 0.242194 * k - k // 4)))      # 秋分の日
+    for d in sorted(hol):                                                  # 振替休日: lễ rơi vào CN → ngày kế tiếp chưa là lễ
+        if d.weekday() == 6:
+            x = d + timedelta(days=1)
+            while x in hol:
+                x += timedelta(days=1)
+            hol.add(x)
+    d = _dt_date(year, 1, 2)                                               # 国民の休日: ngày kẹp giữa hai ngày lễ
+    while d.year == year:
+        if d not in hol and d.weekday() != 6 and (d - timedelta(days=1)) in hol and (d + timedelta(days=1)) in hol:
+            hol.add(d)
+        d += timedelta(days=1)
+    return frozenset(hol)
+
+_DAYCOL_NORMAL, _DAYCOL_SAT, _DAYCOL_RED = "#f1f5f9", "#facc15", "#f87171"
+
+def _day_btn_color(d):
+    if d in _jp_holidays(d.year) or d.weekday() == 6:
+        return _DAYCOL_RED
+    return _DAYCOL_SAT if d.weekday() == 5 else _DAYCOL_NORMAL
+
+_btn_today = _now_jst.date()
+def _day_btn_label(d):
+    if d == _btn_today:                          return "今日"
+    if d == _btn_today + timedelta(days=1):      return "明日"
+    if d < _btn_today:                           return "今夜"      # 00:00–05:59: vẫn đang trong đêm bắt đầu từ hôm qua
+    return f"{d.month}月{d.day:02d}日"
+
+_DAY_BTN_DATES  = [_night_base_jst.date() + timedelta(days=i) for i in range(7)]
+_DAY_BTN_LABELS = [_day_btn_label(d) for d in _DAY_BTN_DATES]
+_DAY_BTN_COLORS = [_day_btn_color(d) for d in _DAY_BTN_DATES]
+
 target_date = (_night_base_jst + timedelta(days=st.session_state.day_offset)).replace(tzinfo=None)
 next_date   = target_date + timedelta(days=1)
 
@@ -2773,7 +2821,7 @@ def tool_scan_tonight(region: str = "kanto", top_n: int = 3) -> dict:
 
 
 def tool_check_location_darkness(location_name: str) -> dict:
-    """Tra cứu độ tối bầu trời (thang Bortle 1.0-9.0 theo bước 0.5, 1 = tối nhất/đẹp nhất) của MỘT
+    """Tra cứu độ tối bầu trời (thang Bortle 1.0-9.0 theo bước 0.1, 1 = tối nhất/đẹp nhất) của MỘT
     địa điểm cụ thể đã có trong database, theo tên hoặc từ khoá gần đúng.
     CHỈ dùng khi user hỏi về 1 địa điểm cụ thể đã biết tên VÀ chỉ hỏi về mức
     ô nhiễm ánh sáng — KHÔNG dùng cho câu hỏi liên quan thời tiết đêm nay (dùng
@@ -6188,6 +6236,14 @@ with col_right:
 
 
 with col_left:
+    # CSS động cho 7 nút ngày: màu chữ từng nút (T2–T6 trắng, T7 vàng, CN/lễ đỏ) + nút đang chọn (cam)
+    _sel_i = max(0, min(6, int(st.session_state.day_offset)))
+    _dyn_btn_css = "<style>" + "".join(
+        f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_c} !important;}}"
+        for _i, _c in enumerate(_DAY_BTN_COLORS)
+    ) + (f".st-key-nav1 .st-key-dbtn_{_sel_i} button{{background:rgba(154,52,18,0.62) !important;"
+         "border:1.5px solid rgba(234,88,12,0.9) !important;box-shadow:0 0 8px rgba(234,88,12,0.28) !important;}"
+         "</style>")
     # Inject CSS:
     # 1. Orange styling for date selectbox (nav2)
     # 2. Compact styling for location selectbox (nav3) — smaller font, tighter padding
@@ -6195,42 +6251,6 @@ with col_left:
 <style>
 /* ── Pull col_left content closer to map ── */
 .st-key-nav_box { margin-top: -58px !important; }
-
-/* ── Date selectbox: shrink to fit content ── */
-[data-testid="stSelectbox"]:has(select[id*="sel_date"]) {
-    width: fit-content !important;
-    /* đủ rộng cho "11月13日夜(金) → 11月14日朝(土)"; màn hình hẹp thì tự co lại */
-    min-width: min(285px, calc(100vw - 150px)) !important;
-}
-[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] {
-    width: 100% !important;
-    min-width: 0 !important;
-}
-[data-testid="stSelectbox"]:has(select[id*="sel_date"]) div[data-baseweb="select"] > div:first-child {
-    background: rgba(154,52,18,0.60) !important;
-    border: 1.5px solid rgba(234,88,12,0.75) !important;
-    box-shadow: 0 0 8px rgba(234,88,12,0.18) !important;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-}
-[data-testid="stSelectbox"]:has(select[id*="sel_date"]) span {
-    color: #fb923c !important;
-    font-weight: 700 !important;
-    font-size: 12px !important;
-}
-
-/* Streamlit mới dùng react-aria ComboBox (không còn <select>/baseweb) → chọn theo key "sel_date".
-   Ô nhập cần ≥ ~220px để hiện đủ "11月13日夜(金) → 11月14日朝(土)"; màn hình hẹp thì tự co lại. */
-.st-key-sel_date input {
-    min-width: 235px !important;
-}
-@media (max-width: 480px) {
-    /* iPhone: nút ⬅️➡️ nhỏ lại + gap hẹp để cả 3 phần nằm trên 1 hàng */
-    .st-key-nav1 [data-testid="stVerticalBlock"] { gap: 4px !important; }
-    .st-key-nav1 [data-testid="stButton"] button { width: 34px !important; }
-    .st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 34px !important; }
-    .st-key-sel_date input { min-width: calc(100vw - 196px) !important; font-size: clamp(9.5px, 2.7vw, 10.5px) !important; }
-}
 
 /* LPM button is now a floating map control (bottomright) */
 
@@ -6268,59 +6288,55 @@ with col_left:
     flex: 0 0 auto;
 }
 
-/* --- nav_row1: ⬅️ date ➡️ — không bao giờ wrap, co lại theo nội dung --- */
+/* ── 7 nút chọn ngày: luôn 1 hàng (PC & iPhone), chia đều bề rộng, chữ co theo bề rộng khung ── */
+.st-key-nav_box > div > [data-testid="stVerticalBlock"] { display: block !important; }
 .st-key-nav1,
 .st-key-nav1 > div,
 .st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"],
-.st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"] > div { width: auto !important; }
+.st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"] > div { width: 100% !important; }
 .st-key-nav1 [data-testid="stVerticalBlock"] {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    gap: 6px !important;
-    width: auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 3px !important;
+    width: 100% !important;
+    container-type: inline-size;
 }
-.st-key-nav1 [data-testid="stElementContainer"] { margin: 0 !important; flex: 0 0 auto; }
+.st-key-nav1 [data-testid="stElementContainer"] { margin: 0 !important; width: auto !important; min-width: 0 !important; }
+.st-key-nav1 [data-testid="stButton"] { width: 100% !important; }
 .st-key-nav1 [data-testid="stButton"] button {
-    width: 44px !important; min-width: 0 !important; padding: 0 !important;
+    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 34px !important;
+    padding: 0 !important; border-radius: 8px !important;
+    border: 1px solid #334155 !important; background: rgba(255,255,255,0.04) !important;
+    line-height: 1 !important; white-space: nowrap !important; overflow: hidden !important;
 }
-.st-key-nav1 [data-testid="stElementContainer"]:has([data-testid="stButton"]) { flex: 0 0 44px; }
-.st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) { flex: 0 1 auto; }
-.st-key-nav1 [data-testid="stElementContainer"]:has(select[id*="sel_date"]) [data-testid="stSelectbox"] {
-    width: fit-content !important;
+.st-key-nav1 [data-testid="stButton"] button p {
+    margin: 0 !important; line-height: 1 !important; white-space: nowrap !important;
+    font-weight: 700 !important; letter-spacing: -0.2px !important;
+    font-size: clamp(8px, 2.6vw, 12px) !important;
+}
+@supports (width: 1cqw) {
+    .st-key-nav1 [data-testid="stButton"] button p { font-size: clamp(8px, 2.8cqw, 12px) !important; }
+}
+.st-key-nav1 button:hover, .st-key-nav1 button:focus, .st-key-nav1 button:active {
+    border-color: #94a3b8 !important; background: rgba(255,255,255,0.09) !important;
+    box-shadow: none !important; outline: none !important;
 }
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
 
 
-</style>""", unsafe_allow_html=True)
+</style>""" + _dyn_btn_css, unsafe_allow_html=True)
 
-    # Nav controls — chỉ còn nav1: ⬅️  date  ➡️
+    # Nav controls — 7 nút ngày (đêm 0 … đêm 6) trên 1 hàng
+    def _pick_day(i):
+        st.session_state.day_offset = i
+        st.session_state.sel_date = date_options[i]
+
     nav_box = st.container(key="nav_box")
     with nav_box:
         with st.container(key="nav1"):
-            def _go_prev():
-                if st.session_state.day_offset > 0:
-                    st.session_state.day_offset -= 1
-                    st.session_state.sel_date = date_options[st.session_state.day_offset]
-
-            def _go_next():
-                if st.session_state.day_offset < 6:
-                    st.session_state.day_offset += 1
-                    st.session_state.sel_date = date_options[st.session_state.day_offset]
-
-            st.button("⬅️", key="btn_prev", on_click=_go_prev)
-
-            sel_label = st.selectbox("ngay", date_options, index=st.session_state.day_offset,
-                                     label_visibility="collapsed",
-                                     key="sel_date")
-            new_off = date_options.index(sel_label)
-            if new_off != st.session_state.day_offset:
-                st.session_state.day_offset = new_off
-                st.rerun()
-
-            st.button("➡️", key="btn_next", on_click=_go_next)
+            for _i, _lb in enumerate(_DAY_BTN_LABELS):
+                st.button(_lb, key=f"dbtn_{_i}", on_click=_pick_day, args=(_i,))
 
 
 
