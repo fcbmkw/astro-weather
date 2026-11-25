@@ -6237,12 +6237,13 @@ with col_left:
         _dyn_parts.append(
             f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_DAY_TXT.get(_c, '#bfdbfe')} !important;}}"
         )
+    _WD = "月火水木金土日"
     for _i, (_lb, _dd) in enumerate(zip(_DAY_BTN_LABELS, _DAY_BTN_DATES)):
-        if "月" not in _lb:
-            _dyn_parts.append(
-                f".st-key-nav1 .st-key-dbtn_{_i} button p::before{{content:\"{_dd.month}月{_dd.day}日\";display:block;"
-                "font-size:.68em;font-weight:600;opacity:.8;line-height:1;margin-bottom:3px;}"
-            )
+        _sub = f"({_WD[_dd.weekday()]})" if "月" in _lb else f"{_dd.month}月{_dd.day}日({_WD[_dd.weekday()]})"
+        _dyn_parts.append(
+            f".st-key-nav1 .st-key-dbtn_{_i} button p::after{{content:\"{_sub}\";display:block;"
+            "font-size:.68em;font-weight:600;opacity:.85;line-height:1;margin-top:3px;}"
+        )
     _dyn_parts.append(
         f".st-key-nav1 .st-key-dbtn_{_sel_i} button{{"
         "background:linear-gradient(180deg,#fdba74 0%,#fb923c 35%,#ea580c 70%,#c2410c 100%) !important;"
@@ -6301,7 +6302,7 @@ with col_left:
 div.st-key-nav_box[data-testid="stVerticalBlock"] { display: block !important; }
 div.st-key-nav_box[data-testid="stVerticalBlock"] {
     background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px;
-    padding: 3px 4px 4px 4px; box-sizing: border-box; width: 100% !important; row-gap: 0 !important;
+    padding: 4px 4px 0 4px; box-sizing: border-box; width: 100% !important; row-gap: 0 !important;
 }
 .st-key-nav1,
 .st-key-nav1 > div,
@@ -6314,10 +6315,12 @@ div.st-key-nav1[data-testid="stVerticalBlock"],
     grid-auto-flow: row !important;
     gap: 5px !important;
     width: 100% !important;
-    padding: 0 !important; margin: 0 !important;
+    padding: 0 0 5px 0 !important; margin: 0 !important;
+    background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    overflow: visible !important;
     container-type: inline-size;
 }
-.st-key-nav1 [data-testid="stElementContainer"] { height: auto !important; min-height: 0 !important; }
+.st-key-nav1 [data-testid="stElementContainer"], .st-key-nav1 [data-testid="stButton"], .st-key-nav1 [data-testid="stLayoutWrapper"] { height: auto !important; min-height: 0 !important; overflow: visible !important; }
 .st-key-nav1 [data-testid="stElementContainer"],
 .st-key-nav1 [data-testid="stLayoutWrapper"] { margin: 0 !important; width: 100% !important; min-width: 0 !important; }
 .st-key-nav1 [data-testid="stButton"] { width: 100% !important; }
