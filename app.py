@@ -473,6 +473,16 @@ for k, v in [("lat", 35.6895), ("lon", 139.6917),
     if k not in st.session_state:
         st.session_state[k] = v
 
+# Nippon Kishou chỉ có 3 đêm đầu: từ đêm thứ 4 tự chuyển option sang JMA+ECMWF (MODEL);
+# quay lại 3 đêm đầu thì trả về lựa chọn NK / NK+MODEL trước đó.
+if st.session_state.day_offset >= 3:
+    if st.session_state.star_mode in ("nk", "both"):
+        st.session_state["_nk_pref"] = st.session_state.star_mode
+        st.session_state.star_mode = "model"
+elif st.session_state.get("_nk_pref"):
+    st.session_state.star_mode = st.session_state["_nk_pref"]
+    st.session_state["_nk_pref"] = None
+
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 def _strip_loc_num(name: str) -> str:
     """Bỏ số thứ tự ở đầu tên địa danh: '15. Kamikochi...' → 'Kamikochi...'"""
@@ -6048,6 +6058,7 @@ with col_right:
                 <span style="color:#94a3b8;font-size:13px;font-weight:bold;">🌌 SKY QUALITY</span>
                 <div style="font-size:20px;font-weight:bold;color:#38bdf8;margin-top:5px;line-height:1.2;">Bortle Class {bortle_class:.1f}</div>
                 <div style="font-size:12px;color:#e2e8f0;margin-top:3px;">SQM: <b>{sqm_val}</b> mag/arcsec²</div>
+                <div style="font-size:10px;color:#94a3b8;margin-top:1px;">(World Atlas data)</div>
             </div>''' if _in_japan else "")
     _sky_temp_card(round(float(st.session_state.lat), 3), round(float(st.session_state.lon), 3), _sq_left)
 
@@ -6128,12 +6139,9 @@ with col_right:
             st.session_state.star_mode = _MODE_OF[chosen]
         else:
             st.session_state.weather_source = chosen
+        st.session_state["_nk_pref"] = None
         st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
         st.rerun()
-
-    if (st.session_state.weather_source == _BLEND and not _nk_ok
-            and st.session_state.get("star_mode", "both") in ("nk", "both")):
-        st.caption("ℹ️ Nippon Kishou covers the first 3 nights only — this night uses the JMA+ECMWF star rating.")
 
     # ── BEST TODAY — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────────
     # Mỗi vùng: liệt kê các địa điểm có thời tiết đêm nay OK (PERFECT / GOOD STARRY NIGHT).
@@ -6223,26 +6231,18 @@ with col_left:
     # CSS động cho 7 nút ngày: màu chữ từng nút (T2–T6 trắng, T7 vàng, CN/lễ đỏ) + nút đang chọn (cam)
     _sel_i = max(0, min(6, int(st.session_state.day_offset)))
     _dyn_btn_css = None
-    _DAY_STYLE = {
-        _DAYCOL_NORMAL: ("rgba(100,116,139,.55)", "rgba(203,213,225,.38)", "#f8fafc", "rgba(203,213,225,.55)"),
-        _DAYCOL_SAT:    ("rgba(180,120,6,.60)",   "rgba(250,204,21,.75)",  "#fef08a", "rgba(250,204,21,.85)"),
-        _DAYCOL_RED:    ("rgba(185,28,28,.62)",   "rgba(248,113,113,.75)", "#fecaca", "rgba(248,113,113,.85)"),
-    }
+    _DAY_TXT = {_DAYCOL_NORMAL: "#bfdbfe", _DAYCOL_SAT: "#facc15", _DAYCOL_RED: "#f87171"}
     _dyn_parts = []
     for _i, _c in enumerate(_DAY_BTN_COLORS):
-        _tint, _bdr, _txt, _glow = _DAY_STYLE.get(_c, _DAY_STYLE[_DAYCOL_NORMAL])
         _dyn_parts.append(
-            f".st-key-nav1 .st-key-dbtn_{_i} button{{"
-            f"background:linear-gradient(180deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.05) 48%,rgba(0,0,0,.28) 100%),{_tint} !important;"
-            f"border:1px solid {_bdr} !important;border-bottom-color:rgba(0,0,0,.6) !important;"
-            f"box-shadow:0 3px 0 rgba(0,0,0,.6),0 6px 12px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.32),inset 0 -2px 4px rgba(0,0,0,.25) !important;}}"
-            f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_txt} !important;text-shadow:0 1px 0 rgba(0,0,0,.65),0 0 9px {_glow} !important;}}"
+            f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_DAY_TXT.get(_c, '#bfdbfe')} !important;}}"
         )
     _dyn_parts.append(
         f".st-key-nav1 .st-key-dbtn_{_sel_i} button{{"
         "background:linear-gradient(180deg,#fdba74 0%,#fb923c 35%,#ea580c 70%,#c2410c 100%) !important;"
         "border:1px solid #fed7aa !important;border-bottom-color:#7c2d12 !important;"
         "box-shadow:0 3px 0 #7c2d12,0 7px 16px rgba(234,88,12,.55),0 0 20px rgba(251,146,60,.50),inset 0 1px 0 rgba(255,255,255,.65),inset 0 -2px 5px rgba(124,45,18,.45) !important;}"
+        f".st-key-nav1 .st-key-dbtn_{_sel_i} button::before{{opacity:1 !important;}}"
         f".st-key-nav1 .st-key-dbtn_{_sel_i} button p{{color:#ffffff !important;text-shadow:0 1px 0 rgba(124,45,18,.95),0 0 8px rgba(255,237,213,.8) !important;}}"
     )
     _dyn_btn_css = "<style>" + "".join(_dyn_parts) + "</style>"
@@ -6295,7 +6295,7 @@ with col_left:
 div.st-key-nav_box[data-testid="stVerticalBlock"] { display: block !important; }
 div.st-key-nav_box[data-testid="stVerticalBlock"] {
     background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px;
-    padding: 6px 6px 9px 6px; box-sizing: border-box; width: 100% !important;
+    padding: 4px 4px 6px 4px; box-sizing: border-box; width: 100% !important; row-gap: 0 !important;
 }
 .st-key-nav1,
 .st-key-nav1 > div,
@@ -6308,38 +6308,41 @@ div.st-key-nav1[data-testid="stVerticalBlock"],
     grid-auto-flow: row !important;
     gap: 5px !important;
     width: 100% !important;
-    padding: 0 0 5px 0 !important;
+    padding: 0 !important; margin: 0 !important;
     container-type: inline-size;
 }
 .st-key-nav1 [data-testid="stElementContainer"],
 .st-key-nav1 [data-testid="stLayoutWrapper"] { margin: 0 !important; width: 100% !important; min-width: 0 !important; }
 .st-key-nav1 [data-testid="stButton"] { width: 100% !important; }
 .st-key-nav1 [data-testid="stButton"] button {
-    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 36px !important;
-    padding: 0 !important; border-radius: 10px !important;
+    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 32px !important;
+    padding: 0 !important; border-radius: 8px !important;
+    background: linear-gradient(180deg, rgba(59,130,246,.20), rgba(30,64,175,.14)) !important;
+    border: 1px solid rgba(96,165,250,.38) !important; border-bottom: 2px solid rgba(8,15,40,.85) !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.35) !important;
     line-height: 1 !important; white-space: nowrap !important; overflow: hidden !important;
     position: relative; cursor: pointer;
     transition: transform .12s ease, box-shadow .12s ease, filter .15s ease !important;
 }
 .st-key-nav1 [data-testid="stButton"] button::before {
     content: ""; position: absolute; left: 6%; right: 6%; top: 1px; height: 42%;
-    border-radius: 8px 8px 14px 14px;
+    border-radius: 8px 8px 14px 14px; opacity: 0;
     background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(255,255,255,0));
     pointer-events: none;
 }
 .st-key-nav1 [data-testid="stButton"] button p {
     margin: 0 !important; line-height: 1 !important; white-space: nowrap !important;
-    font-weight: 800 !important; letter-spacing: -0.3px !important;
+    font-weight: 800 !important; letter-spacing: -0.3px !important; color: #bfdbfe;
     font-size: clamp(8px, 2.3vw, 12px) !important; position: relative; z-index: 1;
 }
 @supports (width: 1cqw) {
     .st-key-nav1 [data-testid="stButton"] button p { font-size: clamp(8px, 2.6cqw, 12px) !important; }
 }
-.st-key-nav1 [data-testid="stButton"] button:hover { transform: translateY(-1px) !important; filter: brightness(1.18) !important; outline: none !important; }
+.st-key-nav1 [data-testid="stButton"] button:hover { transform: translateY(-1px) !important; filter: brightness(1.25) !important; border-color: rgba(147,197,253,.7) !important; outline: none !important; }
 .st-key-nav1 [data-testid="stButton"] button:focus { outline: none !important; }
 .st-key-nav1 [data-testid="stButton"] button:active {
-    transform: translateY(2px) !important; filter: brightness(.95) !important;
-    box-shadow: 0 1px 0 rgba(0,0,0,.55), inset 0 2px 5px rgba(0,0,0,.45) !important;
+    transform: translateY(1px) !important; filter: brightness(.95) !important;
+    border-bottom-width: 1px !important; box-shadow: none !important;
 }
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
