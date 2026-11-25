@@ -18,10 +18,10 @@ import os
 import functools
 from google import genai
 from google.genai import types as genai_types
- 
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 _astro_ai_client = genai.Client(api_key=GEMINI_API_KEY)
- 
+
 # Cùng danh sách model fallback như app_ai.py — sửa ở đây nếu bạn đổi model.
 ASTRO_AI_MODEL_CANDIDATES = [
     "gemini-3.6-flash",
@@ -95,7 +95,7 @@ LOCATION_DATABASE = {
     "62. Akiyoshidai Karst 秋吉台, Yamaguchi": [34.2576, 131.3070],
     "63. Shikoku Karst 四国カルスト, Ehime": [33.3804, 132.9536],
     "64. Ashizuri Cape 足摺岬, Kochi": [32.7196, 133.0182],
-    "65. Sata Cape 佐多岬, Kagoshima": [30.9924, 130.6595], 
+    "65. Sata Cape 佐多岬, Kagoshima": [30.9924, 130.6595],
     "66. Aso Kusasenri 草千里ヶ浜, Kumamoto": [32.8845, 131.0808],
     "67. Daikanbo 大観峰, Kumamoto": [32.99963, 131.0671],
     "68. Ikitsuki Island 生月島, Nagasaki": [33.3720, 129.3988],
@@ -131,7 +131,7 @@ LOCATION_DATABASE = {
     "98. Gassan Hachigome 月山八合目, Yamagata": [38.5484, 140.0264],
     "99. Toriumi Observatory 鳥海山鉾立, Akita": [39.0933, 140.0497],
     "100. Cape Tappi 龍飛崎, Aomori": [41.2570, 140.3495],
-    
+
     "101. Cape Notoro 能取岬, Hokkaido": [44.0174, 144.2740],
     "102. Lake Mashu 摩周湖, Hokkaido": [43.5763, 144.5360],
     "103. Bihoro Pass 美幌峠, Hokkaido": [43.7398, 144.2570],
@@ -191,7 +191,7 @@ LOCATION_DATABASE = {
     "157. Lake Hibara 桧原湖, Fukushima": [37.6902, 140.0605],
     "158. Cape Shiriya 尻屋崎, Aomori": [41.4295, 141.4726],
     "159. Lake Ogawara 小川原湖, Aomori": [40.8068, 141.2933],
-    "160. Cape Nosappu 納沙布岬, Hokkaido": [43.3845, 145.8178],    
+    "160. Cape Nosappu 納沙布岬, Hokkaido": [43.3845, 145.8178],
     "161. Cape Chikyu 地球岬, Hokkaido": [42.3158, 140.9803],
     "162. Lake Onneto オンネトー, Hokkaido": [43.2752, 143.3190],
     "163. Shirogane Blue Pond 青い池, Hokkaido": [43.4934, 142.6188],
@@ -854,7 +854,7 @@ def _calculate_bortle_fallback(lat, lon):
         (36.6144, 140.6802): (5, 20.80),   # 26 Higashinamekawa    light green (coastal urban) → 4.5/5
         # ── Tokyo ─────────────────────────────────────────────────────────────
         (35.7920, 139.0475): (5, 20.70),   # 27 Okutama            light green (Tokyo glow) → 4.5/5
-        
+
         # ── Chiba ─────────────────────────────────────────────────────────────
         (35.7077, 140.8685): (4, 21.20),   # 28 Inubosaki
         (35.5002, 140.4315): (4.5, 21.00), # 29 Kujukuri
@@ -1031,7 +1031,7 @@ def _calculate_bortle_fallback(lat, lon):
         (38.9615, 140.7886): (3.0, 21.80), # 172 Mt. Kurikoma, Miyagi
         (37.8820, 139.9940): (3.0, 21.80), # 173 Tengendai, Yamagata
         (37.6008, 140.0722): (3.0, 21.75), # 174 Bandai-san, Fukushima
-        
+
         # ── 175-250: Dữ liệu Bortle và SQM bổ sung ────────────────────────────
         (43.0560, 144.2560): (2.0, 21.80), # 175 Akan Intl Crane Center
         (43.4380, 144.0950): (2.5, 21.70), # 176 Lake Akan
@@ -1300,7 +1300,7 @@ def _calculate_bortle_fallback(lat, lon):
         (35.1815, 136.9066, "Nagoya",      17.80),
         # ── Other major cities ─────────────────────────────────────────────────
         (34.7650, 137.3923, "Toyohashi",   19.40),
-        (35.4128, 136.7586, "Gifu",        19.30),        
+        (35.4128, 136.7586, "Gifu",        19.30),
         (43.0621, 141.3544, "Sapporo",     18.50),
         (33.5904, 130.4017, "Fukuoka",     18.50),
         (33.8834, 130.8751, "Kitakyushu",  18.80),
@@ -1334,7 +1334,7 @@ def _calculate_bortle_fallback(lat, lon):
         (39.7186, 140.1023, "Akita-c",     20.10),
         (40.8244, 140.7400, "Aomori-c",    20.30),
         (26.2124, 127.6792, "Naha",        19.50),
-        
+
         # ── Hokkaido ──────────────────────────────────────────────────────────
         (42.9849, 144.3814, "Kushiro",      20.40),
         (44.0206, 144.2730, "Abashiri",     20.60),
@@ -1467,7 +1467,7 @@ def _calculate_bortle_fallback(lat, lon):
         (26.2122, 127.6873, "Naha-Airport", 19.30),
         (24.3448, 124.1572, "Ishigaki",     20.80),
         (24.8056, 125.2811, "Miyakojima",   20.90),
-        
+
         # ── 100 địa điểm bổ sung
         (43.7680, 142.3650, "Asahikawa",        20.40),
         (42.5220, 140.9700, "Noboribetsu",      20.20),
@@ -1592,9 +1592,9 @@ def _calculate_bortle_fallback(lat, lon):
 _FIELDS = "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_2m,wind_speed_10m,temperature_2m,precipitation"
 _ENDPOINTS = [
     # (label, url_suffix)
-    ("full",     f"&hourly={_FIELDS}&models=jma_msm,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
-    ("no_jma",   f"&hourly={_FIELDS}&models=ecmwf_ifs025&wind_speed_unit=ms&timezone=auto"),
-    ("jma_only", f"&hourly={_FIELDS}&models=jma_msm&wind_speed_unit=ms&timezone=auto"),
+    ("full",     f"&hourly={_FIELDS}&models=jma_msm,ecmwf_ifs025&wind_speed_unit=ms&timezone=auto&forecast_days=8"),
+    ("no_jma",   f"&hourly={_FIELDS}&models=ecmwf_ifs025&wind_speed_unit=ms&timezone=auto&forecast_days=8"),
+    ("jma_only", f"&hourly={_FIELDS}&models=jma_msm&wind_speed_unit=ms&timezone=auto&forecast_days=8"),
 ]
 
 @st.cache_resource
@@ -1627,7 +1627,7 @@ def _wx_prefetch(coords, workers=8):
 def _fetch_weather_raw(lat, lon):
     _st = _wx_prefetch_store()
     pre = _st["data"].pop((lat, lon), None)
-    if pre is not None and time.time() - _st["at"].get((lat, lon), 0) <= 3300:   # dữ liệu prefetch cũ → bỏ, tải lại
+    if pre is not None and len(pre[0].get("time", [])) >= 190 and time.time() - _st["at"].get((lat, lon), 0) <= 3300:   # dữ liệu prefetch cũ → bỏ, tải lại
         return pre
     return _fetch_weather_raw_impl(lat, lon)
 
@@ -2356,7 +2356,6 @@ def _summarize_fallback_tiers(tier_counter):
             seen.add(p); uniq.append(p)
     return " & ".join(uniq)
 
-
 # ── GREAT NIGHT SCAN — quét 27 địa điểm yêu thích × 7 ngày tới ───────────────
 # Điều kiện thông báo (AND):
 #   1) Moon illumination < 32%
@@ -2784,7 +2783,6 @@ def _serialize_scan_result(result):
 
     return {"found": True, "best": best, "alternatives": alternatives}
 
-
 def tool_scan_best_weekend(region: str = "kanto", top_n: int = 3) -> dict:
     """Tìm địa điểm và ngày chụp ảnh sao TỐT NHẤT trong 7 ngày tới, ưu tiên cuối tuần
     (Thứ 6/7/Chủ Nhật). Dùng khi user hỏi mơ hồ về thời gian: 'cuối tuần này',
@@ -2804,7 +2802,6 @@ def tool_scan_best_weekend(region: str = "kanto", top_n: int = 3) -> dict:
     """
     return _serialize_scan_result(_run_best_scan(region=region, limit=max(1, min(5, int(top_n or 3)))))
 
-
 def tool_scan_tonight(region: str = "kanto", top_n: int = 3) -> dict:
     """Kiểm tra điều kiện chụp ảnh sao ĐÊM NAY (chỉ đêm nay, không phải ngày khác)
     cho 1 vùng địa lý. Dùng khi user hỏi cụ thể 'tối nay', 'đêm nay'.
@@ -2818,7 +2815,6 @@ def tool_scan_tonight(region: str = "kanto", top_n: int = 3) -> dict:
         dict cùng cấu trúc như tool_scan_best_weekend, nhưng chỉ xét đêm nay.
     """
     return _serialize_scan_result(_run_tonight_scan(region=region, limit=max(1, min(5, int(top_n or 3)))))
-
 
 def tool_check_location_darkness(location_name: str) -> dict:
     """Tra cứu độ tối bầu trời (thang Bortle 1.0-9.0 theo bước 0.1, 1 = tối nhất/đẹp nhất) của MỘT
@@ -2843,7 +2839,6 @@ def tool_check_location_darkness(location_name: str) -> dict:
     return {"found": True, "matched_name": name, "lat": lat, "lon": lon,
             "bortle_class": bortle, "sqm": sqm}
 
-
 def _infer_region_from_loc_name(loc_name: str) -> str:
     """Suy ra region key (kanto, kansai, ...) từ tên địa điểm, dựa theo tỉnh
     (phần sau dấu phẩy cuối cùng trong tên, vd '..., Kanagawa' -> kanto)."""
@@ -2852,7 +2847,6 @@ def _infer_region_from_loc_name(loc_name: str) -> str:
         if pref in prefs:
             return rk
     return "kanto"  # fallback an toàn nếu không khớp tỉnh nào
-
 
 def _night_verdict_for_single_loc(lat, lon, day_off=0):
     """Tính verdict thời tiết đêm cho 1 toạ độ cụ thể (không quét cả vùng).
@@ -2876,7 +2870,6 @@ def _night_verdict_for_single_loc(lat, lon, day_off=0):
     if not verdict:
         return None
     return {"verdict": verdict, "moon_illum": moon_illum}
-
 
 def tool_check_location_tonight(location_name: str) -> dict:
     """Kiểm tra điều kiện chụp ảnh sao ĐÊM NAY tại MỘT địa điểm cụ thể theo tên
@@ -2922,7 +2915,6 @@ def tool_check_location_tonight(location_name: str) -> dict:
         "is_good": tier_rank >= 1,
         "nippon_kishou_star_index": _nk_night_value(lat, lon, _night_base_jst),
     }
-
 
 _EN_WD_AI = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -3085,7 +3077,7 @@ def ask_astro_ai(user_question: str):
 
     answer_text = None
     last_err = None
- 
+
     for model in ASTRO_AI_MODEL_CANDIDATES:
         for attempt in range(2):  # tối đa 1 lần thử lại cho mỗi model nếu dính 429
             try:
@@ -3113,7 +3105,7 @@ def ask_astro_ai(user_question: str):
                 break  # lỗi khác 429, hoặc đã retry rồi -> chuyển sang model kế tiếp
         if answer_text is not None:
             break
- 
+
     if answer_text is None:
         if last_err and ("429" in str(last_err) or "RESOURCE_EXHAUSTED" in str(last_err)):
             return ("⏳ The AI is rate-limited (Gemini free tier: only 5–15 "
@@ -3397,7 +3389,7 @@ _TILE_SAT_URL  = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
 
 if st.session_state.map_tile not in ("satellite", "himawari", "windy"):
     st.session_state.map_tile = "himawari"
- 
+
 # ==============================================================================
 # KHỐI C (v7 — bản sửa đúng) — xoá sạch KHỐI C cũ, dán nguyên khối này vào,
 # ngay trước dòng "m = folium.Map(".
@@ -3554,13 +3546,11 @@ _placeholder_text = st.session_state.get(
     "Ask AI: best Milky Way spots & times...",
 )
 
-
 def _astro_ai_close():
     """Nút ✕ của khung kết quả AI: xoá câu trả lời + vòng tròn/bảng AI trên bản đồ."""
     st.session_state.astro_ai_answer = None
     st.session_state._ai_rings = []
     st.session_state._ai_panel = []
-
 
 _AI_X_HTML = ('<span class="mkw-x" data-close="chat" title="Close" style="float:right;margin:0 0 4px 8px;'
               'pointer-events:auto;cursor:pointer;color:#94a3b8;font-size:14px;line-height:1;">✕</span>')
@@ -3711,7 +3701,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
     if (_windyFrame) { _windyFrame.src = _buildWindySrc(lat, lon, zoom); }
   };
 
-
   // ── Light Map: lightpollutionmap.app Embed chính thức (iframe) ──────────────
   function _buildLpmSrc(lat, lon, zoom) {
     return 'https://lightpollutionmap.app/embed/'
@@ -3799,7 +3788,6 @@ _COMBINED_CTRL_TEMPLATE = Template("""
         var lng = 300 + idx * 10 + (nn - 1);
         map.fire('click', { latlng: L.latLng(89.35, lng) });
       };
-
 
       // ── Row 2: Windy | Satellite | Himawari ─────────────────────────────────
       var tileRow = L.DomUtil.create('div', '', col);
@@ -4499,9 +4487,6 @@ _loc_js_list = _json.dumps([
     for name, coords in LOCATION_DATABASE.items()
 ])
 _kanji_alias_js = _json.dumps(_KANJI_ALIAS, ensure_ascii=False)
-
-
-
 
 _SEARCH_CTRL_TEMPLATE = Template("""
 {% macro script(this, kwargs) %}
@@ -5822,7 +5807,6 @@ if map_data:
         st.session_state._scan_scanning = True
         st.rerun()
 
-
     # ── Priority 1: star marker click (via tooltip) ───────────────────────────
     # last_clicked luôn NULL với DivIcon, chỉ dùng tooltip để detect click ngôi sao.
     # Tooltip HTML chỉ chứa _strip_loc_num(bname) → match theo tên stripped.
@@ -6124,11 +6108,9 @@ with col_right:
     _BLEND = "🔀 Blend (JMA+ECMWF)"
     _MODE_OF = {"MODEL": "model", "NK": "nk", "NK+MODEL": "both"}
     _nk_ok = st.session_state.day_offset < 3      # Nippon Kishou chỉ có dữ liệu 3 đêm đầu
-    source_options = ["JMA", "EU (ECMWF)", "MODEL"] + (["NK", "NK+MODEL"] if _nk_ok else [])
+    source_options = ["JMA", "EU (ECMWF)", "MODEL", "NK", "NK+MODEL"]   # NK luôn chọn được; đêm 4–7 tự dùng sao của mô hình
     if st.session_state.weather_source == _BLEND:
         _pm = st.session_state.get("star_mode", "both")
-        if not _nk_ok and _pm in ("nk", "both"):
-            _pm = "model"      # từ đêm 4: tự chuyển sang JMA+ECMWF (lựa chọn gốc vẫn được giữ khi quay lại đêm 1–3)
         cur_src = {"model": "MODEL", "nk": "NK", "both": "NK+MODEL"}.get(_pm, "NK+MODEL")
     else:
         cur_src = st.session_state.weather_source if st.session_state.weather_source in source_options else "JMA"
@@ -6149,6 +6131,9 @@ with col_right:
         st.session_state._source_auto = False  # user chọn tay → không auto-switch nữa
         st.rerun()
 
+    if (st.session_state.weather_source == _BLEND and not _nk_ok
+            and st.session_state.get("star_mode", "both") in ("nk", "both")):
+        st.caption("ℹ️ Nippon Kishou covers the first 3 nights only — this night uses the JMA+ECMWF star rating.")
 
     # ── BEST TODAY — thay vị trí 7-DAY FORECAST cũ (cùng kích thước) ─────────
     # Mỗi vùng: liệt kê các địa điểm có thời tiết đêm nay OK (PERFECT / GOOD STARRY NIGHT).
@@ -6234,16 +6219,33 @@ with col_right:
 
     _th_ph.markdown(_th_html(st.session_state.get("_th_last")), unsafe_allow_html=True)
 
-
 with col_left:
     # CSS động cho 7 nút ngày: màu chữ từng nút (T2–T6 trắng, T7 vàng, CN/lễ đỏ) + nút đang chọn (cam)
     _sel_i = max(0, min(6, int(st.session_state.day_offset)))
-    _dyn_btn_css = "<style>" + "".join(
-        f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_c} !important;}}"
-        for _i, _c in enumerate(_DAY_BTN_COLORS)
-    ) + (f".st-key-nav1 .st-key-dbtn_{_sel_i} button{{background:rgba(154,52,18,0.62) !important;"
-         "border:1.5px solid rgba(234,88,12,0.9) !important;box-shadow:0 0 8px rgba(234,88,12,0.28) !important;}"
-         "</style>")
+    _dyn_btn_css = None
+    _DAY_STYLE = {
+        _DAYCOL_NORMAL: ("rgba(100,116,139,.55)", "rgba(203,213,225,.38)", "#f8fafc", "rgba(203,213,225,.55)"),
+        _DAYCOL_SAT:    ("rgba(180,120,6,.60)",   "rgba(250,204,21,.75)",  "#fef08a", "rgba(250,204,21,.85)"),
+        _DAYCOL_RED:    ("rgba(185,28,28,.62)",   "rgba(248,113,113,.75)", "#fecaca", "rgba(248,113,113,.85)"),
+    }
+    _dyn_parts = []
+    for _i, _c in enumerate(_DAY_BTN_COLORS):
+        _tint, _bdr, _txt, _glow = _DAY_STYLE.get(_c, _DAY_STYLE[_DAYCOL_NORMAL])
+        _dyn_parts.append(
+            f".st-key-nav1 .st-key-dbtn_{_i} button{{"
+            f"background:linear-gradient(180deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.05) 48%,rgba(0,0,0,.28) 100%),{_tint} !important;"
+            f"border:1px solid {_bdr} !important;border-bottom-color:rgba(0,0,0,.6) !important;"
+            f"box-shadow:0 3px 0 rgba(0,0,0,.6),0 6px 12px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.32),inset 0 -2px 4px rgba(0,0,0,.25) !important;}}"
+            f".st-key-nav1 .st-key-dbtn_{_i} button p{{color:{_txt} !important;text-shadow:0 1px 0 rgba(0,0,0,.65),0 0 9px {_glow} !important;}}"
+        )
+    _dyn_parts.append(
+        f".st-key-nav1 .st-key-dbtn_{_sel_i} button{{"
+        "background:linear-gradient(180deg,#fdba74 0%,#fb923c 35%,#ea580c 70%,#c2410c 100%) !important;"
+        "border:1px solid #fed7aa !important;border-bottom-color:#7c2d12 !important;"
+        "box-shadow:0 3px 0 #7c2d12,0 7px 16px rgba(234,88,12,.55),0 0 20px rgba(251,146,60,.50),inset 0 1px 0 rgba(255,255,255,.65),inset 0 -2px 5px rgba(124,45,18,.45) !important;}"
+        f".st-key-nav1 .st-key-dbtn_{_sel_i} button p{{color:#ffffff !important;text-shadow:0 1px 0 rgba(124,45,18,.95),0 0 8px rgba(255,237,213,.8) !important;}}"
+    )
+    _dyn_btn_css = "<style>" + "".join(_dyn_parts) + "</style>"
     # Inject CSS:
     # 1. Orange styling for date selectbox (nav2)
     # 2. Compact styling for location selectbox (nav3) — smaller font, tighter padding
@@ -6288,42 +6290,59 @@ with col_left:
     flex: 0 0 auto;
 }
 
-/* ── 7 nút chọn ngày: luôn 1 hàng (PC & iPhone), chia đều bề rộng, chữ co theo bề rộng khung ── */
-.st-key-nav_box > div > [data-testid="stVerticalBlock"] { display: block !important; }
+/* ── 7 nút chọn ngày: 1 hàng duy nhất (PC & iPhone), nút kiểu 3D ── */
+.st-key-nav_box > div > [data-testid="stVerticalBlock"],
+div.st-key-nav_box[data-testid="stVerticalBlock"] { display: block !important; }
+div.st-key-nav_box[data-testid="stVerticalBlock"] {
+    background: rgba(255,255,255,0.03); border: 1px solid #1e293b; border-radius: 10px;
+    padding: 6px 6px 9px 6px; box-sizing: border-box; width: 100% !important;
+}
 .st-key-nav1,
 .st-key-nav1 > div,
 .st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"],
 .st-key-nav1 [data-testid="stVerticalBlockBorderWrapper"] > div { width: 100% !important; }
+div.st-key-nav1[data-testid="stVerticalBlock"],
 .st-key-nav1 [data-testid="stVerticalBlock"] {
     display: grid !important;
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-    gap: 3px !important;
+    grid-auto-flow: row !important;
+    gap: 5px !important;
     width: 100% !important;
+    padding: 0 0 5px 0 !important;
     container-type: inline-size;
 }
-.st-key-nav1 [data-testid="stElementContainer"] { margin: 0 !important; width: auto !important; min-width: 0 !important; }
+.st-key-nav1 [data-testid="stElementContainer"],
+.st-key-nav1 [data-testid="stLayoutWrapper"] { margin: 0 !important; width: 100% !important; min-width: 0 !important; }
 .st-key-nav1 [data-testid="stButton"] { width: 100% !important; }
 .st-key-nav1 [data-testid="stButton"] button {
-    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 34px !important;
-    padding: 0 !important; border-radius: 8px !important;
-    border: 1px solid #334155 !important; background: rgba(255,255,255,0.04) !important;
+    width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: 36px !important;
+    padding: 0 !important; border-radius: 10px !important;
     line-height: 1 !important; white-space: nowrap !important; overflow: hidden !important;
+    position: relative; cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease, filter .15s ease !important;
+}
+.st-key-nav1 [data-testid="stButton"] button::before {
+    content: ""; position: absolute; left: 6%; right: 6%; top: 1px; height: 42%;
+    border-radius: 8px 8px 14px 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(255,255,255,0));
+    pointer-events: none;
 }
 .st-key-nav1 [data-testid="stButton"] button p {
     margin: 0 !important; line-height: 1 !important; white-space: nowrap !important;
-    font-weight: 700 !important; letter-spacing: -0.2px !important;
-    font-size: clamp(8px, 2.6vw, 12px) !important;
+    font-weight: 800 !important; letter-spacing: -0.3px !important;
+    font-size: clamp(8px, 2.3vw, 12px) !important; position: relative; z-index: 1;
 }
 @supports (width: 1cqw) {
-    .st-key-nav1 [data-testid="stButton"] button p { font-size: clamp(8px, 2.8cqw, 12px) !important; }
+    .st-key-nav1 [data-testid="stButton"] button p { font-size: clamp(8px, 2.6cqw, 12px) !important; }
 }
-.st-key-nav1 button:hover, .st-key-nav1 button:focus, .st-key-nav1 button:active {
-    border-color: #94a3b8 !important; background: rgba(255,255,255,0.09) !important;
-    box-shadow: none !important; outline: none !important;
+.st-key-nav1 [data-testid="stButton"] button:hover { transform: translateY(-1px) !important; filter: brightness(1.18) !important; outline: none !important; }
+.st-key-nav1 [data-testid="stButton"] button:focus { outline: none !important; }
+.st-key-nav1 [data-testid="stButton"] button:active {
+    transform: translateY(2px) !important; filter: brightness(.95) !important;
+    box-shadow: 0 1px 0 rgba(0,0,0,.55), inset 0 2px 5px rgba(0,0,0,.45) !important;
 }
 
 /* nav2 (location+LPM) removed — now shown as floating label on map */
-
 
 </style>""" + _dyn_btn_css, unsafe_allow_html=True)
 
@@ -6337,10 +6356,6 @@ with col_left:
         with st.container(key="nav1"):
             for _i, _lb in enumerate(_DAY_BTN_LABELS):
                 st.button(_lb, key=f"dbtn_{_i}", on_click=_pick_day, args=(_i,))
-
-
-
-
 
     # Table — custom styled HTML card
     if weather_table_data:
