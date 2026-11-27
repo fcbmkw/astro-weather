@@ -5158,6 +5158,16 @@ for loc_name, loc_coords in LOCATION_DATABASE.items():
 
 _ASTRO_SEL_JS = """
 (function(){
+  // Bộ đếm số lần JS map được chạy (= số lần map bị dựng lại). Mở trang với ?astrodbg=1 để hiện badge góc map.
+  try {
+    var _P0 = window.parent; _P0.__astroMounts = (_P0.__astroMounts || 0) + 1;
+    if ((_P0.location.search || '').indexOf('astrodbg=1') >= 0) {
+      var _b = document.createElement('div');
+      _b.textContent = 'map mounts: ' + _P0.__astroMounts;
+      _b.style.cssText = 'position:absolute;right:6px;bottom:24px;z-index:99999;background:rgba(0,0,0,0.8);color:#4ade80;font:11px monospace;padding:2px 6px;border-radius:4px;pointer-events:none;';
+      document.body.appendChild(_b); window.__astroDbg = _b;
+    }
+  } catch (e) {}
   window.__astroMk = {};
   var _cm = null, _tipMk = null, _tipT = null;
   function setStar(el, on){
@@ -5179,6 +5189,7 @@ _ASTRO_SEL_JS = """
     try {
       if (!sel) return;
       var key = sel.k || '';
+      if (window.__astroDbg) { window.__astroDbg.textContent = 'mounts: ' + window.parent.__astroMounts + ' | sel: ' + (key || 'free') + ' | apply#' + (window.__astroN = (window.__astroN || 0) + 1); }
       var els = document.querySelectorAll('.astro-star');
       for (var i = 0; i < els.length; i++) {
         var on = !!key && els[i].getAttribute('data-k') === key;
@@ -5221,8 +5232,16 @@ _ASTRO_SEL_JS = """
   }, 60);
 })();
 """
-m.get_root().script.add_child(folium.Element(
-    _ASTRO_SEL_JS.replace("__MAP__", m.get_name()).replace("__REG__", "".join(_astro_mk_reg))))
+class _AstroSelJS(MacroElement):
+    """JS chọn-địa-điểm chạy trong map. PHẢI là phần tử con của map (MacroElement có macro script):
+    streamlit-folium chỉ lấy JS từ m._children, KHÔNG lấy get_root().script."""
+    def __init__(self, js_body):
+        super().__init__()
+        self._name = '_AstroSelJS'
+        self._template = Template("{% macro script(this, kwargs) %}{{ this.js_body }}{% endmacro %}")
+        self.js_body = js_body
+
+_AstroSelJS(_ASTRO_SEL_JS.replace("__MAP__", m.get_name()).replace("__REG__", "".join(_astro_mk_reg))).add_to(m)
 
 is_bookmark = any(abs(c[0]-st.session_state.lat)<0.001 and abs(c[1]-st.session_state.lon)<0.001
                   for c in LOCATION_DATABASE.values())
@@ -5310,6 +5329,29 @@ if _ai_ring_locs:
 # QUAN TRỌNG: KHÔNG đưa "zoom"/"center" vào returned_objects.
 # Nếu có → mỗi pan/zoom map trả data về Python → Streamlit rerun → map refresh.
 # Chỉ return những gì cần xử lý click. Zoom/center được lưu qua _need_fly flag.
+# ── KHOÁ COMPONENT ỔN ĐỊNH: map chỉ bị tạo lại khi các đầu vào CẤU TRÚC của map đổi ───────────
+# streamlit-folium dùng hash của toàn bộ JS làm key component → bất kỳ thay đổi JS nào (kể cả ngoài ý muốn)
+# đều làm map reload. Ở đây hash chỉ gồm: tâm/zoom khởi tạo, tile, kết quả scan, vòng tròn AI.
+# Chọn sao / đổi địa điểm KHÔNG nằm trong đó (đã được JS trong map tự xử lý qua cầu nối __astroSel).
+st.session_state._astro_map_sig = repr((
+    st.session_state.map_center, st.session_state.zoom, st.session_state.map_tile,
+    repr(st.session_state.get("_scan_result")), repr(st.session_state.get("_ai_rings")),
+    st.session_state.get("_scan_best"), st.session_state.get("_scan_tonight"),
+))
+try:
+    import streamlit_folium as _stf
+    if not getattr(_stf, "_astro_hash_patched", False):
+        _orig_gjh = _stf.generate_js_hash
+        def _astro_gjh(js_string, key=None, return_on_hover=False):
+            _sig = st.session_state.get("_astro_map_sig")
+            if _sig is not None and key == "astro_map_main":
+                import hashlib as _hl
+                return _hl.sha256((str(_sig) + str(key) + str(return_on_hover)).encode()).hexdigest()
+            return _orig_gjh(js_string, key, return_on_hover)
+        _stf.generate_js_hash = _astro_gjh
+        _stf._astro_hash_patched = True
+except Exception:
+    pass
 _map_key = "astro_map_main"
 _stfolium_kwargs = dict(
     width='stretch', height=575, key=_map_key,
