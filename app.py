@@ -2088,6 +2088,18 @@ def _half_star_html(v):
     return "".join(parts)
 # ── END NK STAR FUNCS ─────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _current_temp(lat3: float, lon3: float):
+    """Nhiệt độ 2 m hiện tại tại toạ độ (lỗi → raise, cache_data không lưu lỗi)."""
+    r = requests.get("https://api.open-meteo.com/v1/forecast",
+                     params={"latitude": lat3, "longitude": lon3,
+                             "current": "temperature_2m,apparent_temperature,weather_code,is_day", "timezone": "auto"},
+                     timeout=6)
+    r.raise_for_status()
+    c = r.json()["current"]
+    return {"t": float(c["temperature_2m"]), "feels": c.get("apparent_temperature"), "time": str(c.get("time", "")),
+            "code": c.get("weather_code"), "day": c.get("is_day", 1)}
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _wx_backfill_past(lat, lon):
     """Open-Meteo mặc định chỉ trả dữ liệu từ 00:00 HÔM NAY. Hàm này lấy thêm 2 ngày đã qua
@@ -3575,6 +3587,34 @@ if _ai_question and _ai_question.strip():
             st.session_state._skip_prefetch  = True
         st.rerun()
 # ------------------------------------------------------------------------------ (hết KHỐI C v7)
+
+# ── TẢI SONG SONG dữ liệu của địa điểm đang chọn ───────────────────────────────────────
+# Trước đây thời tiết → nhiệt độ → Nippon Kishou được gọi LẦN LƯỢT (thời gian cộng dồn).
+# Nay bắt đầu cùng lúc, ngay trước khi dựng map; đoạn dưới gọi lại đúng hàm đó sẽ lấy từ cache
+# (nếu chưa tải xong thì cache_data cho chờ, không gọi API lần hai).
+def _run_in_thread(fn, *args):
+    import threading
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+    def _job():
+        try:
+            fn(*args)
+        except Exception:
+            pass          # lỗi: chỗ dùng thật sẽ tự gọi lại và xử lý như cũ
+    th = threading.Thread(target=_job, daemon=True)
+    add_script_run_ctx(th)
+    th.start()
+
+def _prefetch_selected_location():
+    la, lo = st.session_state.lat, st.session_state.lon
+    la3, lo3 = round(float(la), 3), round(float(lo), 3)
+    _run_in_thread(_fetch_weather_raw, la, lo)
+    _run_in_thread(_current_temp, la3, lo3)
+    if (st.session_state.weather_source == "🔀 Blend (JMA+ECMWF)"
+            and st.session_state.get("star_mode", "both") != "model"
+            and st.session_state.day_offset < 3):
+        _run_in_thread(_nk_raw, la3, lo3)
+
+_prefetch_selected_location()
 
 # ── Folium map — location/zoom từ session state (key cố định → không recreate) ──
 # prefer_location=False: KHÔNG reset vị trí camera khi rerun — chỉ set lần đầu.
@@ -5364,6 +5404,9 @@ map_data = st_folium(m, **_stfolium_kwargs)
 
 # ── TOP-CENTER MAP LABEL — NIGHT VERDICT: giữ chỗ ngay dưới map (điền nội dung sau khi có thời tiết) ──
 _verdict_slot = st.empty()
+# Slot rỗng không chiếm khoảng cách (gap) → bảng bên dưới bị kéo lên rồi đẩy xuống. Vì vậy lấp ngay bằng nhãn lần trước.
+_VERDICT_BLANK = '<div style="height:0;"></div>'
+_verdict_slot.markdown(st.session_state.get("_verdict_html", _VERDICT_BLANK), unsafe_allow_html=True)
 
 # ── SCAN RESULT BANNER — overlay bottom-left của map ────────────────────────
 # Dùng cùng cơ chế margin-top âm như top-center label (đã được xác nhận hoạt động).
@@ -6032,7 +6075,11 @@ if _verdict:
   </div>
 </div>
 </div>"""
+    st.session_state._verdict_html = _html_label
     _verdict_slot.markdown(_html_label, unsafe_allow_html=True)
+else:
+    st.session_state._verdict_html = _VERDICT_BLANK
+    _verdict_slot.markdown(_VERDICT_BLANK, unsafe_allow_html=True)
 
 
 # ── SKY QUALITY (Transparency/Seeing/Dew Risk) — tính trước khi vào layout ───
@@ -6134,18 +6181,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 # ── TEMPERATURE hiện tại (Open-Meteo "current": cập nhật mỗi 15 phút, cả ngày lẫn đêm) ────────────────────
-@st.cache_data(ttl=600, show_spinner=False)
-def _current_temp(lat3: float, lon3: float):
-    """Nhiệt độ 2 m hiện tại tại toạ độ (lỗi → raise, cache_data không lưu lỗi)."""
-    r = requests.get("https://api.open-meteo.com/v1/forecast",
-                     params={"latitude": lat3, "longitude": lon3,
-                             "current": "temperature_2m,apparent_temperature,weather_code,is_day", "timezone": "auto"},
-                     timeout=6)
-    r.raise_for_status()
-    c = r.json()["current"]
-    return {"t": float(c["temperature_2m"]), "feels": c.get("apparent_temperature"), "time": str(c.get("time", "")),
-            "code": c.get("weather_code"), "day": c.get("is_day", 1)}
-
 def _wx_icon(code, is_day=1):
     """Mã thời tiết WMO (Open-Meteo weather_code) → emoji (ngày/đêm)."""
     try:
@@ -7314,7 +7349,7 @@ def _cam_fragment(fn):
 def _lc_build_sky():
     _lc_out = None
     try:
-        with _cam_spinner("Loading live camera..."):
+        with _nullctx():
             if _lc_kind == "tokyo_center":
                 if "_lc_tokyo_pick" not in st.session_state:
                     st.session_state._lc_tokyo_pick = random.choice(_LC_TOKYO_CENTER)[0]
@@ -7582,8 +7617,14 @@ def _rd_nearest(pref, lat, lon, top=5):
     global _rd_diag, _rd_dbg
     cams = []
     codes = _RD_REGION.get(pref, ())
-    for code in codes:
-        cams += _rd_list(code)
+    if codes:
+        from concurrent.futures import ThreadPoolExecutor
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        _ctx = get_script_run_ctx()
+        with ThreadPoolExecutor(max_workers=len(codes),
+                                initializer=lambda: add_script_run_ctx(ctx=_ctx)) as ex:
+            for part in ex.map(_rd_list, codes):
+                cams += part
     if not cams:
         _rd_diag = (f"Could not load the MLIT road-camera list (region code {', '.join(codes) or '?'}).  \n"
                     f"MLIT道路カメラの一覧を取得できませんでした（地域コード {', '.join(codes) or '?'}）。")
@@ -7692,7 +7733,7 @@ def _rd_build():
     _rd = None   # (cam, km, muni, bytes, mime)
     try:
         if _rd_pref:
-            with _cam_spinner("Loading road camera..."):
+            with _nullctx():
                 for _km, _cam, _mn in _rd_nearest(_rd_pref, st.session_state.lat, st.session_state.lon):
                     if _km > _RD_MAX_KM:
                         break
@@ -7706,8 +7747,15 @@ def _rd_build():
 
 @_cam_fragment
 def _cam_render():
-    _sky_html = _lc_build_sky()
-    _rd = _rd_build()
+    # Sky camera và road camera tải SONG SONG (trước đây lần lượt)
+    from concurrent.futures import ThreadPoolExecutor
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+    _ctx = get_script_run_ctx()
+    with _cam_spinner("Loading cameras..."):
+        with ThreadPoolExecutor(max_workers=2, initializer=lambda: add_script_run_ctx(ctx=_ctx)) as _ex:
+            _f_sky = _ex.submit(_lc_build_sky)
+            _f_road = _ex.submit(_rd_build)
+            _sky_html, _rd = _f_sky.result(), _f_road.result()
     st.session_state._cam_loaded = True
     _road_url = (f"https://www.road-info-prvs.mlit.go.jp/roadinfo/pc/"
                  f"?ido={st.session_state.lat:.5f}&keido={st.session_state.lon:.5f}&page=30&zoom=10")
@@ -7734,7 +7782,7 @@ def _cam_render():
             else:
                 st.caption("ℹ️ No road camera nearby. / 近くに道路カメラはありません。")
 
-_cam_render()
+_cam_slot = st.container()     # giữ chỗ đúng vị trí; nội dung nạp ở CUỐI script để không chặn các phần bên dưới
 # ── JMA GPV (weather-gpv.info): 雨量・雲量 — khung cuối trang ─────────────────────────────────────
 # Ảnh: {base}{prefix}{N}.{HH}Z{DD}{MON}{YYYY}.png  (N = 1..; HH = giờ UTC của thời điểm dự báo = giờ khởi đầu + N − 1)
 # Server tải ảnh (http) rồi st.image → trang https không bị chặn mixed-content.
@@ -8036,19 +8084,24 @@ def _gpv_viewer():
                              label_visibility="collapsed", on_change=_gpv_manual)
     _n_show = int(st.session_state.gpv_n)
     try:
-        _img = _gpv_frame(model, init_iso, _n_show)
-        st.session_state["_gpv_retry"] = False
+        try:
+            _img = _gpv_frame(model, init_iso, _n_show)
+        except Exception:
+            # Lần chạy mới có thể vừa thay thế (ảnh cũ bị xoá) → dò lại và thử 1 lần NGAY TẠI CHỖ.
+            # Không dùng st.rerun(): nó làm cả trang chạy lại lần nữa.
+            _gpv_forget_init(model)
+            _new_iso = _gpv_latest_init(model)
+            if not _new_iso or _new_iso == init_iso:
+                raise
+            init_iso = _new_iso
+            _n_show = max(1, min(_gpv_nframes(model, init_iso), _n_show))
+            _img = _gpv_frame(model, init_iso, _n_show)
         try:
             st.image(_img, use_container_width=True)
         except TypeError:
             st.image(_img, use_column_width=True)
         _gpv_prefetch(model, init_iso, [n for n in (_n_show + 1, _n_show - 1, _n_show + 2) if 1 <= n <= nmax])
     except Exception as _e:
-        if not st.session_state.get("_gpv_retry"):
-            # Có thể lần chạy mới vừa thay thế (ảnh cũ bị xoá) → xoá cache lần chạy, dò lại rồi thử 1 lần nữa
-            st.session_state["_gpv_retry"] = True
-            _gpv_forget_init(model)
-            st.rerun()
         _code = getattr(getattr(_e, "response", None), "status_code", None)
         st.caption(f"This frame is unavailable ({'HTTP ' + str(_code) if _code else type(_e).__name__}).")
 
@@ -8295,6 +8348,10 @@ _sky_chart(float(st.session_state.lat), float(st.session_state.lon), float(loc_u
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="footer-copyright">© Copyright: fcbzune</div>', unsafe_allow_html=True)
+
+# ── CAMERA: nạp sau khi bảng, Clear Sky Chart, GPV và Sky Altitude đã hiện ─────
+with _cam_slot:
+    _cam_render()
 
 # ── TODAY HIGHLIGHT: tính sau cùng để trang hiện ra trước ─────────────────────
 if "_th_render" in globals():
